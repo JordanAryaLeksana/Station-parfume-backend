@@ -1,5 +1,5 @@
 
-package error
+package httperror
 
 import (
 	"github.com/gin-gonic/gin"

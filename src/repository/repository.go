@@ -6,6 +6,17 @@ import (
 )
 
 
+const (
+	Exclusive = "exclusive"
+	Regular   = "regular"
+)
+
+var AllowedParfumeTypes = map[string]bool{
+	Exclusive: true,
+	Regular:   true,
+}
+
+
 //orderStatus
 const (
 	OrderStatusPending    = "pending"
@@ -97,6 +108,7 @@ type Parfume struct {
 	Description string    `gorm:"not null" json:"description"`
 	Price       float64   `gorm:"not null" json:"price"`
 	Image       string    `gorm:"not null" json:"image"`
+	Type       string    `gorm:"not null;type:varchar(10)" json:"type"` // exclusive, regular
 	Category    string    `gorm:"not null;type:varchar(10)" json:"category"`
 	BrandID     uint      `gorm:"not null" json:"brand_id"`
 	Brand       Brand     `gorm:"foreignKey:BrandID" json:"brand"`
