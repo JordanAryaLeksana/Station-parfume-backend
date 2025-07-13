@@ -86,7 +86,7 @@ type User struct {
 	Password  string         `json:"password"`
 	Picture   string         `gorm:"" json:"picture"`
 	Provider  string         `json:"provider"`
-	Sub       string         `gorm:"uniqueIndex" json:"sub"`
+	Sub       *string         `gorm:"uniqueIndex" json:"sub"`
 	Role      string         `gorm:"type:varchar(10);default:'user'" json:"role"`
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`

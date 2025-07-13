@@ -7,42 +7,46 @@ import (
 	"fmt"
 	"github.com/go-playground/validator/v10"
 	"golang.org/x/crypto/bcrypt"
+	"time"
+	
 )
 
 var validate = validator.New()
 
 func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
+	fmt.Println("✅ Memulai service CreateUser")
+	fmt.Println("📧 Email input:", input.Email)
 
 	if err := validate.Struct(input); err != nil {
 		return nil, fmt.Errorf("validation error: %v", err)
 	}
-	var user repository.User
+	fmt.Println("🔍 Validasi input berhasil");
+	fmt.Println(input.Password)
+	start := time.Now()
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	fmt.Printf("🕒 Hashing selesai dalam %v\n", time.Since(start))
 
-	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err == nil {
-		return nil, fmt.Errorf("user already exists with email: %s", user.Email)
-	}
-
-	var newUser = repository.User{
-		Name:     input.Name,
-		Email:    input.Email,
-		Password: input.Password,
-		Role:     input.Role,
-		Picture:  input.Picture,
-		Provider: input.Provider,
-		Sub:      input.Sub,
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.MaxCost)
 	if err != nil {
+		fmt.Println("❌ Error hashing password:", err)
 		return nil, err
 	}
-	newUser.Password = string(hashedPassword)
+	fmt.Println("🔐 Password hashed successfully")
+	newUser := repository.User{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: string(hashedPassword),
+		// Password: input.Password,
+		Role:     input.Role,
+		Picture:  input.Picture,
+		Sub: nil,
+	}
 
 	if err := config.DB.Create(&newUser).Error; err != nil {
 		return nil, err
 	}
 
-	var userReponse = models.UserDTOResponse{
+	userResponse := models.UserDTOResponse{
+		ID:       newUser.ID,
 		Name:     newUser.Name,
 		Email:    newUser.Email,
 		Role:     newUser.Role,
@@ -51,8 +55,7 @@ func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
 		Sub:      newUser.Sub,
 	}
 
-	return &userReponse, nil
-
+	return &userResponse, nil
 }
 
 func GetAllUsers() ([]models.UserDTOResponse, error) {
@@ -63,6 +66,7 @@ func GetAllUsers() ([]models.UserDTOResponse, error) {
 	var userResponses []models.UserDTOResponse
 	for _, user := range users {
 		userResponses = append(userResponses, models.UserDTOResponse{
+			ID: 	 user.ID,
 			Name:     user.Name,
 			Email:    user.Email,
 			Role:     user.Role,
@@ -85,8 +89,9 @@ func GetUserById(id string) (*models.UserDTOResponse, error) {
 	}
 
 	var userResponse = models.UserDTOResponse{
+		ID:       user.ID,
 		Name:     user.Name,
-		Email:    user.Email,
+		Email:    user.Email,	
 		Role:     user.Role,
 		Picture:  user.Picture,
 		Provider: user.Provider,
@@ -104,7 +109,7 @@ func UpdateUser(id string, request *models.UserDTORequest) (*models.UserDTORespo
 	if err := config.DB.First(&user, id).Error; err != nil {
 		return nil, fmt.Errorf("user not found with id:%s", id)
 	}
-	var hashedPassword, err = bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.MaxCost)
+	var hashedPassword, err = bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %v", err)
 	}
@@ -117,12 +122,11 @@ func UpdateUser(id string, request *models.UserDTORequest) (*models.UserDTORespo
 		Password: request.Password,
 		Role:     request.Role,
 		Picture:  request.Picture,
-		Provider: request.Provider,
-		Sub:      request.Sub,
 	}
 
 	updatedUser.Password = string(hashedPassword)
 	var userReponse = models.UserDTOResponse{
+		ID:       updatedUser.ID,
 		Name:     updatedUser.Name,
 		Email:    updatedUser.Email,
 		Role:     updatedUser.Role,

@@ -2,24 +2,28 @@ package controller
 
 import (
 	httperror "backend/src/middlewares/Error"
-	"backend/src/modules/user/services"
 	"backend/src/modules/user/models"
+	"backend/src/modules/user/services"
+	"fmt"
 	"github.com/gin-gonic/gin"
 )
 
 func CreateUser(c *gin.Context) {
 	var input models.UserDTORequest
+	fmt.Println("Creating user...")
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid input data")
+		fmt.Printf("Error binding JSON: %v\n", err)
 		return
 	}
 
 	userResponse, err := services.CreateUser(&input)
 	if err != nil {
 		httperror.InternalServerError(c, err.Error())
+		fmt.Println("Error creating user:", err)
 		return
 	}
-
+	fmt.Printf("User created successfully: %+v\n", userResponse)
 	c.JSON(201, gin.H{
 		"message": "User Created",
 		"user":    userResponse,
