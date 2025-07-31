@@ -1,13 +1,32 @@
 package models
 
+
+type AuthGoogleRequest struct {
+	IDToken string `json:"id_token" binding:"required"`
+}
+
+type AuthGoogleResponse struct {
+	ID       uint    `json:"id"`
+	Name     string  `json:"name"`
+	Email    string  `json:"email"`
+	Role     string  `json:"role"`
+	Picture  string  `json:"picture"`
+	Provider string  `json:"provider"`
+	Sub      *string `json:"sub"`
+}
+
 type LoginRequest struct {
-	Email   string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6,max=100"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Role  string `json:"role"`
+	ID       uint    `json:"id"`
+	Name     string  `json:"name"`
+	Email    string  `json:"email"`
+	Role     string  `json:"role"`
+	Picture  string  `json:"picture"`
+	Provider string  `json:"provider"`
+	Sub      *string `json:"sub"`
+	Token   string  `json:"token"`
 }

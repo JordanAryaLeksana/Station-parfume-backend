@@ -1,13 +1,15 @@
 package models
 
 type RegisterRequest struct {
-	Name    string `json:"name" binding:"required,min=2,max=100"`
-	Email   string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6,max=100"`
+	Name     string `json:"name" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password,omitempty"` // optional for OAuth    
 }
 
 type RegisterResponse struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Name     string  `json:"name"`
+	Email    string  `json:"email"`
+	Role     string  `json:"role"`
+	Sub      *string `json:"sub"`
+	Provider string  `json:"provider"`
 }
