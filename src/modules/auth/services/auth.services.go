@@ -65,3 +65,7 @@ func Login(input *models.LoginRequest) (*models.LoginResponse, error){
 	}
 
 }
+
+func LoginWithGooge() {
+	
+}
