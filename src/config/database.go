@@ -3,7 +3,6 @@ package config
 import (
 	"backend/src/repository"
 	"log"
-
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

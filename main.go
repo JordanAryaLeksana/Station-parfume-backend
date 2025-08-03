@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+    config.InitRedis()
     config.ConnectDatabase()
     router := gin.Default()
     routes.InitRoutes(router)
@@ -18,6 +19,5 @@ func main() {
     if port == "" {
         port = "8080"
     }
-
     router.Run(":" + port)
 }

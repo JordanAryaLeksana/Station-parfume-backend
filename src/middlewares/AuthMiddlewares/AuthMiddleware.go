@@ -3,9 +3,11 @@ package authmiddlewares
 import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/utils/jwt"
+	utils "backend/src/utils/redisUtils"
 	"strings"
-	jwtv5 "github.com/golang-jwt/jwt/v5"
+
 	"github.com/gin-gonic/gin"
+	jwtv5 "github.com/golang-jwt/jwt/v5"
 )
 
 func AuthMiddleware(secretKey string) gin.HandlerFunc{
@@ -35,6 +37,16 @@ func AuthMiddleware(secretKey string) gin.HandlerFunc{
 		claims, ok := token.Claims.(*jwt.JwtCustomClaims)
 		if !ok {
 			httperror.UnauthorizedError(c, "Invalid token claims")
+			return
+		}
+
+		blacklisted,err := utils.IsTokenBlacklisted(tokenStr);
+		if err != nil {
+			httperror.InternalServerError(c, "Error checking token blacklist status")
+			return
+		}
+		if blacklisted {
+			httperror.UnauthorizedError(c, "Token is blacklisted")
 			return
 		}
 		c.Set("userID", claims.UserID)

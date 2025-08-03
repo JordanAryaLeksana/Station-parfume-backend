@@ -13,6 +13,7 @@ type AuthGoogleResponse struct {
 	Picture  string  `json:"picture"`
 	Provider string  `json:"provider"`
 	Sub      *string `json:"sub"`
+	Token    string  `json:"token"`
 }
 
 type LoginRequest struct {
@@ -28,5 +29,11 @@ type LoginResponse struct {
 	Picture  string  `json:"picture"`
 	Provider string  `json:"provider"`
 	Sub      *string `json:"sub"`
-	Token   string  `json:"token"`
+	AccessToken   string  `json:"access_token"`
+	RefreshToken  string  `json:"refresh_token"`
+}
+
+type PairToken struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
