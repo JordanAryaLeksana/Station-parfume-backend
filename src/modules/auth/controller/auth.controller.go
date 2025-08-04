@@ -16,7 +16,7 @@ func Register(c *gin.Context) {
 	}
 	user, err := services.Register(&input)
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+		httperror.BadRequestError(c, err.Error())
 		return
 	}
 	c.JSON(201, user)

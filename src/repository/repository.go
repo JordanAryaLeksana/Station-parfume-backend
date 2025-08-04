@@ -6,17 +6,6 @@ import (
 )
 
 
-const (
-	Exclusive = "exclusive"
-	Regular   = "regular"
-)
-
-var AllowedParfumeTypes = map[string]bool{
-	Exclusive: true,
-	Regular:   true,
-}
-
-
 //orderStatus
 const (
 	OrderStatusPending    = "pending"
@@ -31,17 +20,6 @@ var AllowedOrderStatus = map[string]bool{
 	OrderStatusCancelled: true,
 }
 
-const (
-	Mens   = "mens"
-	Womens = "womens"
-	Unisex = "unisex"
-)
-
-var AllowedCategory = map[string]bool{
-	Mens:   true,
-	Womens: true,
-	Unisex: true,
-}
 
 const (
 	RoleUser  = "user"
@@ -79,6 +57,17 @@ var AllowedFraudStatus = map[string]bool{
 	FraudStatusReject:   true,
 }
 
+
+
+type Categories struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"unique;not null" json:"name"`
+}
+type Type struct {
+	ID   uint   `gorm:"primaryKey" json:"id"`
+	Name string `gorm:"unique;not null" json:"name"`
+}
+
 type User struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	Name      string         `gorm:"not null;size:255" json:"name"`
@@ -108,8 +97,11 @@ type Parfume struct {
 	Description string    `gorm:"not null" json:"description"`
 	Price       float64   `gorm:"not null" json:"price"`
 	Image       string    `gorm:"not null" json:"image"`
-	Type       string    `gorm:"not null;type:varchar(10)" json:"type"` // exclusive, regular
-	Category    string    `gorm:"not null;type:varchar(10)" json:"category"`
+	Type       Type    `gorm:"not null" json:"type"`
+	TypeID      uint      `gorm:"not null" json:"type_id"`
+	Category    Categories   `gorm:"not null" json:"category"`
+	CategoryID  uint      `gorm:"not null" json:"category_id"`
+	Favorite     bool    `gorm:"not null;default:false" json:"favorite"`
 	BrandID     uint      `gorm:"not null" json:"brand_id"`
 	Brand       Brand     `gorm:"foreignKey:BrandID" json:"brand"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`

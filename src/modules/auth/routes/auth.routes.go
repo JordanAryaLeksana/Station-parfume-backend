@@ -5,20 +5,19 @@ import (
 	"backend/src/modules/auth/controller"
 	"fmt"
 	"os"
-
 	"github.com/gin-gonic/gin"
 )
 
 
-func AuthRoutes(router *gin.RouterGroup) {
-	registerAuthGroup := router.Group("/auth");
+func RegisterAuthRoutes(router *gin.RouterGroup) {
+	AuthGroup := router.Group("/auth");
 	{
-		registerAuthGroup.POST("/register", controller.Register)
-		registerAuthGroup.POST("/login", controller.LoginManual)
-		registerAuthGroup.GET("/google", controller.GoogleLogin)
-		registerAuthGroup.GET("/google/callback", controller.GoogleCallback)
-		registerAuthGroup.POST("/logout", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")), controller.Logout)
-		registerAuthGroup.POST("/refresh", authmiddlewares.RefreshTokenMiddleware(os.Getenv("JWT_REFRESH_SECRET")), controller.RefreshToken)
+		AuthGroup.POST("/register", controller.Register)
+		AuthGroup.POST("/login", controller.LoginManual)
+		AuthGroup.GET("/google", controller.GoogleLogin)
+		AuthGroup.GET("/google/callback", controller.GoogleCallback)
+		AuthGroup.POST("/logout", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")), controller.Logout)
+		AuthGroup.POST("/refresh", authmiddlewares.RefreshTokenMiddleware(os.Getenv("JWT_REFRESH_SECRET")), controller.RefreshToken)
 	}
 	fmt.Println("Auth routes registered")
 }

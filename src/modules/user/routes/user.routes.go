@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"backend/src/middlewares/authmiddlewares"
+	"backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/user/controller"
 	"fmt"
 	"os"
