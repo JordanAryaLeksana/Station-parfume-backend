@@ -189,6 +189,36 @@ func SortParfumeByType(parfumeType string) ([]models.ParfumeResponseDTO, error) 
 
 }
 
+func SortParfumesByBrand(brandName string) ([]models.ParfumeResponseDTO, error) {
+	var parfumes []repository.Parfume
+	if err := config.DB.Joins("JOIN brands ON brands.id = parfumes.brand_id").Where("LOWER(brands.name) = LOWER(?)", brandName).Preload("Type").Preload("Category").Order("parfumes.name ASC").Preload("Brand").Find(&parfumes).Error; err != nil {
+		return nil, fmt.Errorf("failed to retrieve parfumes by brand %s: %v", brandName, err)
+	}
+	if len(parfumes) == 0 {
+		return nil, fmt.Errorf("no parfumes found for brand %s", brandName)
+	}
+	var response []models.ParfumeResponseDTO
+	for _, parfume := range parfumes {
+		response = append(response, models.ParfumeResponseDTO{
+			ID:          parfume.ID,
+			Name:        parfume.Name,
+			Description: parfume.Description,
+			Price:       parfume.Price,
+			Image: 	 parfume.Image,	
+			Type:        models.TypeDTO(parfume.Type),
+			Category:    models.CategoriesDTO(parfume.Category),
+			Favorite:    parfume.Favorite,
+			Brand: models.BrandDTO{
+				ID:          parfume.Brand.ID,
+				Name:        parfume.Brand.Name,
+				Logo:        parfume.Brand.Logo,
+				Description: parfume.Brand.Description,
+			},
+		})
+	}
+	return response, nil
+}
+
 func SortParfumesByCategory(category string) ([]models.ParfumeResponseDTO, error) {
 	var parfumes []repository.Parfume
 	if err := config.DB.Joins("JOIN categories ON categories.id = parfumes.category_id").Where("categories.name = ?", category).Preload("Type").Preload("Category").Preload("Brand").Find(&parfumes).Error; err != nil {
