@@ -13,6 +13,7 @@ type JwtCustomClaims struct {
 	UserID uint   `json:"sub"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
+	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims 
 }
 
@@ -21,6 +22,7 @@ func GenerateAccessToken(user repository.User) (string, error) {
 		UserID: user.ID,
 		Email:  user.Email,
 		Role:   user.Role,
+		TokenType: "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -36,6 +38,7 @@ func GenerateRefreshToken(user repository.User) (string, error) {
 		UserID: user.ID,
 		Email:  user.Email,
 		Role:   user.Role,
+		TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

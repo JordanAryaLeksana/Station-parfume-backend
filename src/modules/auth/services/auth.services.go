@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
 	"github.com/go-playground/validator/v10"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
@@ -150,7 +149,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			Picture:  userInfo.Picture,
 			Sub:      userInfo.Sub,
 			Provider: "google",
-			Role:     "user", // default role jika kamu ingin konsisten
+			Role:     "user", // default role
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
 			http.Error(w, "DB Error: "+err.Error(), http.StatusInternalServerError)
@@ -199,7 +198,7 @@ func Logout(authHeader string) error {
 	if ttl <= 0 {
 		return fmt.Errorf("token has already expired")
 	}
-	err = utils.BlacklistToken(jti, ttl)
+	err = utils.BlacklistJti(jti, ttl)
 	log.Printf("Blacklisting token with jti: %s, ttl: %v", jti, ttl)
 	if err != nil {
 		return fmt.Errorf("error blacklisting token: %v", err)
@@ -219,7 +218,7 @@ func RefreshToken(authHeader string) (*models.PairToken, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error parsing refresh token: %v", err)
 	}
-	isBlacklisted, err := utils.IsTokenBlacklisted(claims.ID)
+	isBlacklisted, err := utils.IsJtiBlacklisted(claims.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check blacklist: %v", err)
 	}
@@ -251,7 +250,7 @@ func RefreshToken(authHeader string) (*models.PairToken, error) {
 	}
 	ttl := time.Until(exp)
 	if ttl > 0 {
-		if err := utils.BlacklistToken(jti, ttl); err != nil {
+		if err := utils.BlacklistJti(jti, ttl); err != nil {
 			return nil, fmt.Errorf("error blacklisting old token: %v", err)
 		}
 	}
