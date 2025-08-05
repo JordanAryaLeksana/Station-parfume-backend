@@ -17,4 +17,11 @@ func ParfumeRoutes(router *gin.Engine) {
 		parfumeGroup.GET("/type/:type", controller.GetParfumeByType)
 		parfumeGroup.GET("/brand/:brand", controller.GetParfumeByBrand)
 	}
+	brandGroup := router.Group("/brands")
+	{
+		brandGroup.GET("/", controller.GetAllBrands)
+		brandGroup.GET("/:id", controller.GetBrandById)
+		brandGroup.POST("/", controller.CreateBrand)
+		brandGroup.PUT("/:id", controller.UpdateBrand)
+	}
 }	
