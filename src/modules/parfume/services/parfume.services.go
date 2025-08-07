@@ -57,6 +57,60 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 	}
 	return &response, nil
 }
+func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, error) {
+    if err := validate.Struct(dto); err != nil {
+        return nil, fmt.Errorf("validation failed: %v", err)
+    }
+    var brand repository.Brand
+    if err := config.DB.First(&brand, brandID).Error; err != nil {
+        return nil, fmt.Errorf("brand with ID %d not found: %v", brandID, err)
+    }
+    var (
+        category repository.Categories
+        ptype    repository.Type
+    )
+    if err := config.DB.First(&category, dto.CategoryID).Error; err != nil {
+        return nil, fmt.Errorf("category with ID %d not found: %v", dto.CategoryID, err)
+    }
+    if err := config.DB.First(&ptype, dto.TypeID).Error; err != nil {
+        return nil, fmt.Errorf("type with ID %d not found: %v", dto.TypeID, err)
+    }
+
+    parfume := repository.Parfume{
+        Name:        dto.Name,
+        Description: dto.Description,
+        Price:       dto.Price,
+        Image:       dto.Image,
+        Favorite:    dto.Favorite,
+        BrandID:     brandID,
+        TypeID:      dto.TypeID,
+        CategoryID:  dto.CategoryID,
+    }
+
+    if err := config.DB.Create(&parfume).Error; err != nil {
+        return nil, fmt.Errorf("failed to create parfume: %v", err)
+    }
+
+    // 5. Response DTO
+    response := models.ParfumeResponseDTO{
+        ID:          parfume.ID,
+        Name:        parfume.Name,
+        Description: parfume.Description,
+        Price:       parfume.Price,
+        Image:       parfume.Image,
+        Favorite:    parfume.Favorite,
+        Type:        models.TypeDTO(ptype),
+        Category:    models.CategoriesDTO(category),
+        Brand: models.BrandDTO{
+            ID:          brand.ID,
+            Name:        brand.Name,
+            Logo:        brand.Logo,
+            Description: brand.Description,
+        },
+    }
+
+    return &response, nil
+}
 
 func GetAllParfumes() ([]models.ParfumeResponseDTO, error) {
 	var parfumes []repository.Parfume

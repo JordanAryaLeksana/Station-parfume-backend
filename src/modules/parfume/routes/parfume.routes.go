@@ -1,13 +1,15 @@
 package routes
 
-
-import (	
+import (
+	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/parfume/controller"
+	"os"
+
 	"github.com/gin-gonic/gin"
 )
 
-func ParfumeRoutes(router *gin.Engine) {
-	parfumeGroup := router.Group("/parfumes")
+func RegisterParfumeRoutes(router *gin.RouterGroup) {
+	parfumeGroup := router.Group("/parfumes", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	{
 		parfumeGroup.POST("/", controller.CreateParfume)
 		parfumeGroup.GET("/", controller.GetAllParfumes)
@@ -16,12 +18,11 @@ func ParfumeRoutes(router *gin.Engine) {
 		parfumeGroup.GET("/category/:category", controller.GetParfumesByCategory)
 		parfumeGroup.GET("/type/:type", controller.GetParfumeByType)
 		parfumeGroup.GET("/brand/:brand", controller.GetParfumeByBrand)
+		parfumeGroup.POST("/brand/:brand_id", controller.AddParfumeToBrand)
 	}
-	brandGroup := router.Group("/brands")
+	brandGroup := router.Group("/brands", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	{
-		brandGroup.GET("/", controller.GetAllBrands)
-		brandGroup.GET("/:id", controller.GetBrandById)
-		brandGroup.POST("/", controller.CreateBrand)
-		brandGroup.PUT("/:id", controller.UpdateBrand)
+		brandGroup.GET("/", controller.GetAllBrandsHandler)
+		brandGroup.POST("/", controller.CreateBrandHandler)
 	}
 }	

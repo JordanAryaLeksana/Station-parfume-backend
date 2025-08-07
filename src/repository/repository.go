@@ -106,6 +106,7 @@ type Parfume struct {
 	Favorite     bool    `gorm:"not null;default:false" json:"favorite"`
 	BrandID     uint      `gorm:"not null" json:"brand_id"`
 	Brand       Brand     `gorm:"foreignKey:BrandID" json:"brand"`
+	IsNew	  bool      `gorm:"default:false" json:"is_new"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

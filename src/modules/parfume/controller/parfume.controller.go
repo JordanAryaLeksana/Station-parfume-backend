@@ -5,6 +5,7 @@ import (
 	"backend/src/modules/parfume/services"
 	httperror"backend/src/middlewares/Error"
 	"github.com/gin-gonic/gin"
+	"strconv"
 )
 
 func CreateParfume(c *gin.Context) {
@@ -103,5 +104,30 @@ func GetParfumeByBrand(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "Parfumes Retrieved by Brand",
 		"parfumes": parfumes,
+	})
+}
+
+
+func AddParfumeToBrand(c *gin.Context) {
+	brandID := c.Param("brand_id")
+	var input models.ParfumeRequestDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httperror.BadRequestError(c, "Invalid input data")
+		return
+	}
+	brandIDUint32, err := strconv.ParseUint(brandID, 10, 32)
+	if err != nil {
+		httperror.BadRequestError(c, "Invalid brand ID")
+		return
+	}
+	brandIDUint := uint(brandIDUint32)
+	parfumeResponse, err := services.AddParfumeToBrand(brandIDUint, input)
+	if err != nil {
+		httperror.InternalServerError(c, err.Error())
+		return
+	}
+	c.JSON(201, gin.H{
+		"message": "Parfume Added to Brand",
+		"parfume": parfumeResponse,
 	})
 }
