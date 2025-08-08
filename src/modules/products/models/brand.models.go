@@ -16,7 +16,6 @@ type BrandResponseDTO struct{
 	Name        string    `gorm:"not null;size:255" json:"name"`
 	Description string    `gorm:"not null" json:"description"`
 	Logo        string    `gorm:"not null" json:"logo"`
-	ParfumeID   string    `gorm:"uniqueIndex;not null" json:"parfume_id"`
 	Parfume     []Parfume `gorm:"foreignKey:BrandID" json:"parfume"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`

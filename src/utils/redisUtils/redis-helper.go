@@ -20,3 +20,4 @@ func IsJtiBlacklisted(jti string) (bool, error) {
 	}
 	return result == "blacklisted", nil
 }
+

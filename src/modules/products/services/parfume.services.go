@@ -4,8 +4,14 @@ import (
 	"backend/src/config"
 	"backend/src/modules/products/models"
 	"backend/src/repository"
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
+
 	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
 )
 
 var validate = validator.New()
@@ -14,6 +20,12 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 	fmt.Println("Memulai service CreateParfume")
 	if err := validate.Struct(items); err != nil {
 		return nil, fmt.Errorf("validation error: %v", err)
+	}
+	var existingParfume repository.Parfume
+	if err := config.DB.Find(&existingParfume, "name = ?", items.Name).Error; err == nil {
+		return nil, fmt.Errorf("parfume with name %s already exists", items.Name)
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to check if parfume exists: %v", err)
 	}
 	var brand repository.Brand
 	if err := config.DB.First(&brand, items.BrandID).Error; err != nil {
@@ -39,6 +51,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 	if err := config.DB.Create(&parfume).Error; err != nil {
 		return nil, fmt.Errorf("failed to create parfume: %v", err)
 	}
+	config.RedisClient.Del(context.Background(), "parfumes:all") // Clear cache for all parfumes
 	response := models.ParfumeResponseDTO{
 		ID:          parfume.ID,
 		Name:        parfume.Name,
@@ -113,6 +126,16 @@ func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.Parf
 }
 
 func GetAllParfumes() ([]models.ParfumeResponseDTO, error) {
+	ctx := context.Background()
+	cachedKey := "parfumes:all"
+	cachedParfumes, err := config.RedisClient.Get(ctx, cachedKey).Result()
+	if err == nil && cachedParfumes != "" {
+		var parfumes []models.ParfumeResponseDTO
+		if err := json.Unmarshal([]byte(cachedParfumes), &parfumes); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal cached parfumes: %v", err)
+		}
+		return parfumes, nil
+	}
 	var parfumes []repository.Parfume
 	if err := config.DB.Preload("Type").Preload("Category").Preload("Brand").Find(&parfumes).Error; err != nil {
 		return nil, fmt.Errorf("failed to retrieve parfumes: %v", err)
@@ -136,14 +159,32 @@ func GetAllParfumes() ([]models.ParfumeResponseDTO, error) {
 			},
 		})
 	}
+	brandResponseJSON, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal parfumes: %v", err)
+	}
+	if err := config.RedisClient.Set(ctx, cachedKey, brandResponseJSON, 15*time.Minute).Err(); err != nil {
+		return nil, fmt.Errorf("failed to cache parfumes: %v", err)
+	}
 	return response, nil
 }
 
 func GetParfumeById(id string) (*models.ParfumeResponseDTO, error) {
+	ctx := context.Background()
+	cachedKey := fmt.Sprintf("parfume:%s", id)
+	cachedParfume, err := config.RedisClient.Get(ctx, cachedKey).Result()
+	if err == nil && cachedParfume != "" {
+		var parfume models.ParfumeResponseDTO
+		if err := json.Unmarshal([]byte(cachedParfume), &parfume); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal cached parfume: %v", err)
+		}
+		return &parfume, nil
+	}
 	parfume := repository.Parfume{}
 	if err := config.DB.Preload("Type").Preload("Category").Preload("Brand").First(&parfume, id).Error; err != nil {
 		return nil, fmt.Errorf("parfume not found with id: %s, error: %v", id, err)
 	}
+
 	response := models.ParfumeResponseDTO{
 		ID:          parfume.ID,
 		Name:        parfume.Name,
@@ -160,12 +201,20 @@ func GetParfumeById(id string) (*models.ParfumeResponseDTO, error) {
 			Description: parfume.Brand.Description,
 		},
 	}
+	parfumeJSON, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal parfume response: %v", err)
+	}
+	if err := config.RedisClient.Set(ctx, cachedKey, parfumeJSON, 15*time.Minute).Err(); err != nil {
+		return nil, fmt.Errorf("failed to cache parfume response: %v", err)
+	}
+	
 	return &response, nil
 }
 
 func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, error) {
-	var parfume repository.Parfume 
-	if err := config.DB.First(&parfume, id).Error; err != nil {
+	var parfume repository.Parfume
+	if err := config.DB.Preload("Type").Preload("Category").Preload("Brand").First(&parfume, id).Error; err != nil {
 		return nil, fmt.Errorf("parfume not found with id: %s", id)
 	}
 	if err := validate.Struct(model); err != nil {
@@ -209,6 +258,8 @@ func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeRe
 			Description: brand.Description,
 		},
 	}
+	config.RedisClient.Del(context.Background(), "parfumes:all") // Clear cache for all parfumes
+	config.RedisClient.Del(context.Background(), fmt.Sprintf("parfume:%s", id)) // Clear cache for specific parfume
 	return &response, nil
 }
 
