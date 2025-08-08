@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	userRoutes "backend/src/modules/user/routes"
 	authRoutes "backend/src/modules/auth/routes"
-	parfumeRoutes "backend/src/modules/parfume/routes"
+	parfumeRoutes "backend/src/modules/products/routes"
 )
 
 

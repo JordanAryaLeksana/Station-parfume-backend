@@ -1,10 +1,10 @@
 package services
 
 import (
-	"backend/src/modules/parfume/models"
+	"backend/src/modules/products/models"
 	"backend/src/repository"
 	"fmt"
-	"backend/src/config"
+		"backend/src/config"
 )
 
 func CreateBrand(input *models.BrandRequestDTO) (*models.BrandResponseDTO, error) {

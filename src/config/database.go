@@ -29,6 +29,10 @@ func ConnectDatabase() {
 		&repository.Admin{},
 		&repository.Cart{},
 		&repository.Order{},
+		&repository.Bottle{},
+		&repository.CartItem{},
+		&repository.OrderItem{},
+		&repository.TypeBottle{},
 	)
 	DB = db
 }

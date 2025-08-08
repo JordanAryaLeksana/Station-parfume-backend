@@ -2,7 +2,7 @@ package services
 
 import (
 	"backend/src/config"
-	"backend/src/modules/parfume/models"
+	"backend/src/modules/products/models"
 	"backend/src/repository"
 	"fmt"
 	"github.com/go-playground/validator/v10"
@@ -30,7 +30,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 	parfume := repository.Parfume{
 		Name:        items.Name,
 		Description: items.Description,
-		Price:       items.Price,
+		PriceML:       items.Price,
 		Image:       items.Image,
 		Type:        Type,
 		Category:    Category,
@@ -43,7 +43,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 		ID:          parfume.ID,
 		Name:        parfume.Name,
 		Description: parfume.Description,
-		Price:       parfume.Price,
+		Price:       parfume.PriceML,
 		Image:       parfume.Image,
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
@@ -79,7 +79,7 @@ func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.Parf
     parfume := repository.Parfume{
         Name:        dto.Name,
         Description: dto.Description,
-        Price:       dto.Price,
+        PriceML:       dto.Price,
         Image:       dto.Image,
         Favorite:    dto.Favorite,
         BrandID:     brandID,
@@ -96,7 +96,7 @@ func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.Parf
         ID:          parfume.ID,
         Name:        parfume.Name,
         Description: parfume.Description,
-        Price:       parfume.Price,
+        Price:       parfume.PriceML,
         Image:       parfume.Image,
         Favorite:    parfume.Favorite,
         Type:        models.TypeDTO(ptype),
@@ -123,7 +123,7 @@ func GetAllParfumes() ([]models.ParfumeResponseDTO, error) {
 			ID:          parfume.ID,
 			Name:        parfume.Name,
 			Description: parfume.Description,
-			Price:       parfume.Price,
+			Price:       parfume.PriceML,
 			Image:       parfume.Image,
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
@@ -148,7 +148,7 @@ func GetParfumeById(id string) (*models.ParfumeResponseDTO, error) {
 		ID:          parfume.ID,
 		Name:        parfume.Name,
 		Description: parfume.Description,
-		Price:       parfume.Price,
+		Price:       parfume.PriceML,
 		Image:       parfume.Image,
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
@@ -185,7 +185,7 @@ func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeRe
 	}
 	parfume.Name = model.Name
 	parfume.Description = model.Description
-	parfume.Price = model.Price
+	parfume.PriceML = model.Price
 	parfume.Image = model.Image
 	parfume.Type = Type
 	parfume.Category = Category
@@ -197,7 +197,7 @@ func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeRe
 		ID:          parfume.ID,
 		Name:        parfume.Name,
 		Description: parfume.Description,
-		Price:       parfume.Price,
+		Price:       parfume.PriceML,
 		Image:       parfume.Image,
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
@@ -226,7 +226,7 @@ func SortParfumeByType(parfumeType string) ([]models.ParfumeResponseDTO, error) 
 			ID:          parfume.ID,
 			Name:        parfume.Name,
 			Description: parfume.Description,
-			Price:       parfume.Price,
+			Price:       parfume.PriceML,
 			Image:       parfume.Image,
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
@@ -257,7 +257,7 @@ func SortParfumesByBrand(brandName string) ([]models.ParfumeResponseDTO, error) 
 			ID:          parfume.ID,
 			Name:        parfume.Name,
 			Description: parfume.Description,
-			Price:       parfume.Price,
+			Price:       parfume.PriceML,
 			Image: 	 parfume.Image,	
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
@@ -288,7 +288,7 @@ func SortParfumesByCategory(category string) ([]models.ParfumeResponseDTO, error
 				ID:          parfume.ID,
 				Name:        parfume.Name,
 				Description: parfume.Description,
-				Price:       parfume.Price,
+				Price:       parfume.PriceML,
 				Image:       parfume.Image,
 				Type:        models.TypeDTO(parfume.Type),
 				Category:    models.CategoriesDTO(parfume.Category),

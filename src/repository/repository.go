@@ -87,7 +87,6 @@ type Brand struct {
 	Name        string    `gorm:"not null;size:255" json:"name"`
 	Description string    `gorm:"not null" json:"description"`
 	Logo        string    `gorm:"not null" json:"logo"`
-	ParfumeID   string    `gorm:"uniqueIndex;not null" json:"parfume_id"`
 	Parfume     []Parfume `gorm:"foreignKey:BrandID" json:"parfume"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
@@ -97,7 +96,7 @@ type Parfume struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"not null;size:255" json:"name"`
 	Description string    `gorm:"not null" json:"description"`
-	Price       float64   `gorm:"not null" json:"price"`
+	PriceML       float64   `gorm:"not null" json:"price"`
 	Image       string    `gorm:"not null" json:"image"`
 	Type       Type    `gorm:"not null" json:"type"`
 	TypeID      uint      `gorm:"not null" json:"type_id"`
@@ -176,4 +175,21 @@ type OrderItem struct {
 	Price     float64   `gorm:"not null" json:"price"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+type TypeBottle struct {
+	ID   uint   `gorm:"primaryKey" json:"id"`
+	Name string `gorm:"unique;not null" json:"name"`
+}
+type Bottle struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name		string    `gorm:"not null;size:255" json:"name"`
+	Description string    `gorm:"not null" json:"description"`
+	Price       float64   `gorm:"not null" json:"price"`
+	Image       string    `gorm:"not null" json:"image"`
+	Size        float64   `gorm:"not null" json:"bottle_size"`
+	TypeBottle  TypeBottle `gorm:"foreignKey:TypeBottleID" json:"type_bottle"`
+	TypeBottleID uint      `gorm:"not null" json:"type_bottle_id"`
+	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

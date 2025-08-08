@@ -5,12 +5,12 @@ import "time"
 
 var ParfumeType = []string{"exclusive", "regular"}
 
-var Category = []string{"mens", "womens", "unisex"}
+var Category = []string{"mens", "womens", "unisex", "shalat"}
 type ParfumeRequestDTO struct {
 	Name        string  `json:"name" validate:"required"`
-	BrandID     uint    `json:"brand_id" validate:"required"`
+	BrandID     uint    `json:"brand_id" validate:"required, gt=0"`
 	Description string  `json:"description" validate:"required"`
-	Price       float64 `json:"price" validate:"required"`
+	Price       float64 `json:"price" validate:"required,gt=0"`
 	Image       string  `json:"image" validate:"required"`
 	TypeID      uint    `json:"type_id" validate:"required"`
 	CategoryID  uint    `json:"category_id" validate:"required"`

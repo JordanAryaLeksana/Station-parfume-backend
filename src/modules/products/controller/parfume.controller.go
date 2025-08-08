@@ -1,8 +1,8 @@
 package controller
 
 import (
-	"backend/src/modules/parfume/models"
-	"backend/src/modules/parfume/services"
+	"backend/src/modules/products/models"
+	"backend/src/modules/products/services"
 	httperror"backend/src/middlewares/Error"
 	"github.com/gin-gonic/gin"
 	"strconv"

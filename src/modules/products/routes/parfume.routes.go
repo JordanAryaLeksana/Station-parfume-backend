@@ -2,7 +2,7 @@ package routes
 
 import (
 	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
-	"backend/src/modules/parfume/controller"
+	"backend/src/modules/products/controller"
 	"os"
 
 	"github.com/gin-gonic/gin"
