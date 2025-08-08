@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterParfumeRoutes(router *gin.RouterGroup) {
+func RegisterProductsRoutes(router *gin.RouterGroup) {
 	parfumeGroup := router.Group("/parfumes", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	{
 		parfumeGroup.POST("/", controller.CreateParfume)
@@ -25,4 +25,11 @@ func RegisterParfumeRoutes(router *gin.RouterGroup) {
 		brandGroup.GET("/", controller.GetAllBrandsHandler)
 		brandGroup.POST("/", controller.CreateBrandHandler)
 	}
-}	
+	bottleGroup := router.Group("/bottles", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")))
+	{
+		bottleGroup.POST("/", controller.CreateBottleHandler)
+		bottleGroup.GET("/", controller.GetAllBottlesHandler)
+		bottleGroup.GET("/:id", controller.GetBottleByIDHandler)
+		bottleGroup.PUT("/:id", controller.UpdateBottleHandler)
+	}
+}
