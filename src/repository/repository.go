@@ -188,6 +188,8 @@ type Bottle struct {
 	Price       float64   `gorm:"not null" json:"price"`
 	Image       string    `gorm:"not null" json:"image"`
 	Size        float64   `gorm:"not null" json:"bottle_size"`
+	IsNew       bool      `gorm:"not null" json:"is_new"`
+	IsFavorite  bool      `gorm:"not null" json:"is_favorite"`
 	TypeBottle  TypeBottle `gorm:"foreignKey:TypeBottleID" json:"type_bottle"`
 	TypeBottleID uint      `gorm:"not null" json:"type_bottle_id"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`

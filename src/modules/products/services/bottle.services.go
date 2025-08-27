@@ -33,6 +33,8 @@ func CreateBottle(input *models.BottleRequestDTO) (*models.BottleResponseDTO, er
 		Image:       input.Image,
 		Size:        input.Size,
 		Price:       input.Price,
+		IsNew:       input.IsNew,
+		IsFavorite:  input.IsFavorite,
 		TypeBottleID: input.TypeBottleID,
 	}
 
@@ -53,6 +55,8 @@ func CreateBottle(input *models.BottleRequestDTO) (*models.BottleResponseDTO, er
 		Image:       bottle.Image,
 		Size:       bottle.Size,
 		Price:      bottle.Price,
+		IsNew:      bottle.IsNew,
+		IsFavorite: bottle.IsFavorite,
 		TypeBottle: models.TypeBottle{
 			ID:   bottle.TypeBottleID,
 			Name: bottle.TypeBottle.Name,
@@ -87,6 +91,8 @@ func GetAllBottles() ([]models.BottleResponseDTO, error) {
 			Image:       bottle.Image,
 			Size:        bottle.Size,
 			Price:       bottle.Price,
+			IsNew:      bottle.IsNew,
+			IsFavorite: bottle.IsFavorite,
 			TypeBottle: models.TypeBottle{
 				ID:   bottle.TypeBottleID,
 				Name: bottle.TypeBottle.Name,
@@ -124,6 +130,8 @@ func GetBottleByID(id uint) (*models.BottleResponseDTO, error) {
 		Description: bottle.Description,
 		Image:       bottle.Image,
 		Size:        bottle.Size,
+		IsNew:      bottle.IsNew,
+		IsFavorite: bottle.IsFavorite,
 		Price:       bottle.Price,
 		TypeBottle: models.TypeBottle{
 			ID:   bottle.TypeBottleID,
@@ -156,6 +164,8 @@ func UpdateBottle(id uint, input *models.BottleRequestDTO) (*models.BottleRespon
 	bottle.Size = input.Size
 	bottle.Price = input.Price
 	bottle.TypeBottleID = input.TypeBottleID
+	bottle.IsNew = input.IsNew
+	bottle.IsFavorite = input.IsFavorite
 	if err := config.DB.Save(&bottle).Error; err != nil {
 		return nil, fmt.Errorf("failed to update bottle: %v", err)
 	}
@@ -169,6 +179,8 @@ func UpdateBottle(id uint, input *models.BottleRequestDTO) (*models.BottleRespon
 		Name:        bottle.Name,
 		Description: bottle.Description,
 		Image:       bottle.Image,
+		IsNew:      bottle.IsNew,
+		IsFavorite: bottle.IsFavorite,
 		Size:        bottle.Size,
 		Price:       bottle.Price,
 		TypeBottle: models.TypeBottle{
