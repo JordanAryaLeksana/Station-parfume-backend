@@ -8,7 +8,6 @@ type BrandRequestDTO struct {
 	Name        string `gorm:"not null;size:255" json:"name" validate:"required"`
 	Description string `gorm:"not null" json:"description" validate:"required"`
 	Logo        string `gorm:"not null" json:"logo" validate:"required"`
-	ParfumeID   string `gorm:"uniqueIndex;not null" json:"parfume_id"`
 }
 
 type BrandResponseDTO struct{ 

@@ -47,6 +47,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 		Type:        Type,
 		Category:    Category,
 		Favorite:    items.Favorite,
+		IsNew:       items.IsNew,
 	}
 	if err := config.DB.Create(&parfume).Error; err != nil {
 		return nil, fmt.Errorf("failed to create parfume: %v", err)
@@ -61,6 +62,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
 		Favorite:    parfume.Favorite,
+		IsNew: 	 parfume.IsNew,
 		Brand: models.BrandDTO{
 			ID:          brand.ID,
 			Name:        brand.Name,
@@ -98,6 +100,7 @@ func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.Parf
         BrandID:     brandID,
         TypeID:      dto.TypeID,
         CategoryID:  dto.CategoryID,
+        IsNew:       dto.IsNew,
     }
 
     if err := config.DB.Create(&parfume).Error; err != nil {
@@ -114,6 +117,7 @@ func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.Parf
         Favorite:    parfume.Favorite,
         Type:        models.TypeDTO(ptype),
         Category:    models.CategoriesDTO(category),
+		IsNew:  dto.IsNew,
         Brand: models.BrandDTO{
             ID:          brand.ID,
             Name:        brand.Name,
@@ -151,6 +155,7 @@ func GetAllParfumes() ([]models.ParfumeResponseDTO, error) {
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
 			Favorite:    parfume.Favorite,
+			IsNew:       parfume.IsNew,
 			Brand: models.BrandDTO{
 				ID:          parfume.Brand.ID,
 				Name:        parfume.Brand.Name,
@@ -194,6 +199,7 @@ func GetParfumeById(id string) (*models.ParfumeResponseDTO, error) {
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
 		Favorite:    parfume.Favorite,
+		IsNew: 	 parfume.IsNew,
 		Brand: models.BrandDTO{
 			ID:          parfume.Brand.ID,
 			Name:        parfume.Brand.Name,
@@ -238,6 +244,7 @@ func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeRe
 	parfume.Image = model.Image
 	parfume.Type = Type
 	parfume.Category = Category
+	parfume.IsNew = model.IsNew
 	parfume.Favorite = model.Favorite
 	if err := config.DB.Save(&parfume).Error; err != nil {
 		return nil, fmt.Errorf("failed to update parfume: %v", err)
@@ -251,6 +258,7 @@ func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeRe
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
 		Favorite:    parfume.Favorite,
+		IsNew:       parfume.IsNew,
 		Brand: models.BrandDTO{
 			ID:          brand.ID,
 			Name:        brand.Name,
@@ -282,6 +290,7 @@ func SortParfumeByType(parfumeType string) ([]models.ParfumeResponseDTO, error) 
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
 			Favorite:    parfume.Favorite,
+			IsNew:  parfume.IsNew,
 			Brand: models.BrandDTO{
 				ID:          parfume.Brand.ID,
 				Name:        parfume.Brand.Name,
@@ -313,6 +322,7 @@ func SortParfumesByBrand(brandName string) ([]models.ParfumeResponseDTO, error) 
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
 			Favorite:    parfume.Favorite,
+			IsNew:       parfume.IsNew,
 			Brand: models.BrandDTO{
 				ID:          parfume.Brand.ID,
 				Name:        parfume.Brand.Name,
@@ -344,6 +354,7 @@ func SortParfumesByCategory(category string) ([]models.ParfumeResponseDTO, error
 				Type:        models.TypeDTO(parfume.Type),
 				Category:    models.CategoriesDTO(parfume.Category),
 				Favorite:    parfume.Favorite,
+				IsNew:       parfume.IsNew,
 				Brand: models.BrandDTO{
 					ID:          parfume.Brand.ID,
 					Name:        parfume.Brand.Name,

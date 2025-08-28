@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
@@ -26,7 +27,7 @@ func SeedParfume(db *gorm.DB) {
 	}
 
 	for i, row := range rows {
-		if i < 4 { // skip header
+		if i < 4 {
 			continue
 		}
 		if len(row) < 14 {
@@ -41,7 +42,7 @@ func SeedParfume(db *gorm.DB) {
 		favorite := row[5]
 		image := row[6]
 		isNew := row[7]
-		price := row[13]
+		price := row[14]
 
 		priceML, err := strconv.ParseFloat(price, 64)
 		if err != nil {
@@ -57,7 +58,7 @@ func SeedParfume(db *gorm.DB) {
 		var brand repository.Brand
 		db.FirstOrCreate(&brand, repository.Brand{
 			Name:        brandName,
-			Description: brandName,
+			Description: "No description yet",
 			Logo:        "default.png",
 		})
 
@@ -69,7 +70,6 @@ func SeedParfume(db *gorm.DB) {
 		isFav := favorite == "1" || favorite == "true" || favorite == "yes"
 		isNewBool := isNew == "1" || isNew == "true" || isNew == "yes"
 
-		
 		parfume := repository.Parfume{
 			Name:        name,
 			Description: description,
@@ -82,7 +82,7 @@ func SeedParfume(db *gorm.DB) {
 			IsNew:       isNewBool,
 		}
 
-		if err := db.FirstOrCreate(&parfume, repository.Parfume{Name: name}).Error; err != nil {
+		if err := db.Create(&parfume).Error; err != nil {
 			fmt.Printf("gagal insert %s: %v\n", name, err)
 		} else {
 			fmt.Printf("sukses insert: %s (%.0f/ml)\n", name, priceML)

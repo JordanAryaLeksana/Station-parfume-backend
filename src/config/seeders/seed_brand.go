@@ -9,6 +9,7 @@ import (
 )
 
 func SeedBrand(db *gorm.DB) {
+
 	readBrandData, err := excelize.OpenFile("C:\\Webdev\\station-parfume\\Produk_Station_Parfume.xlsx")
 	if err != nil {
 		fmt.Printf("error while parsing data: %v\n", err)
@@ -25,32 +26,41 @@ func SeedBrand(db *gorm.DB) {
 		fmt.Printf("error while reading rows: %v\n", err)
 		return
 	}
+	fmt.Printf("Found %d rows\n", len(rows))
 
 	for i, row := range rows {
 
 		if i < 1 {
-			continue
-		}
-		if len(row) < 3 {
+			fmt.Printf("Skipping header row %d\n", i+1)
 			continue
 		}
 
 		nameBrand := row[0]
-		descriptionBrand := row[1]
-		logo := row[2]
 
-		if nameBrand == "" || descriptionBrand == "" || logo == "" {
-			continue
-		}
+		// logo := row[2]
+		// if logo == "" {
+		// 	logo = "default-logo.png"
+		// }
+
+		// if nameBrand == "" {
+		// 	continue
+		// }
+
+		// descriptionBrand := row[1]
+		// if descriptionBrand == "" {
+		// 	descriptionBrand = "No description yet"
+		// }
 
 		brand := repository.Brand{
 			Name:        nameBrand,
-			Description: descriptionBrand,
-			Logo:        logo,
+			Description: "No description yet",
+			Logo:        "default-logo.png",
 		}
 
-		if err := db.Where("name = ?", brand.Name).FirstOrCreate(&brand).Error; err != nil {
-			fmt.Printf("failed to insert brand %s: %v\n", brand.Name, err)
+		if err := db.Create(&brand).Error; err != nil {
+			fmt.Printf("gagal insert %s: %v\n", nameBrand, err)
+		} else {
+			fmt.Printf("sukses insert: %s\n", nameBrand)
 		}
 	}
 	fmt.Println("Seeding brand selesai!")

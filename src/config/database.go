@@ -2,10 +2,10 @@ package config
 
 import (
 	"backend/src/repository"
-	"log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"log"
 )
 
 var DB *gorm.DB
@@ -34,5 +34,9 @@ func ConnectDatabase() {
 		&repository.OrderItem{},
 		&repository.TypeBottle{},
 	)
+	db.Migrator().DropColumn(&repository.Brand{}, "parfume_id")
+	db.Migrator().DropColumn(&repository.Parfume{}, "Type")
+	db.Migrator().DropColumn(&repository.Parfume{}, "Category")
+
 	DB = db
 }

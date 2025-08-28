@@ -10,6 +10,7 @@ import (
 )
 
 func SeedBottles(db *gorm.DB) {
+	fmt.Print("Seeding bottles...")
 	readBottlesData, err := excelize.OpenFile("C:\\Webdev\\station-parfume\\Produk_Station_Parfume.xlsx")
 	if err != nil {
 		fmt.Printf("error while parsing data: %v\n", err)
@@ -42,7 +43,7 @@ func SeedBottles(db *gorm.DB) {
 		sizeBottle:= row[10]
 		isNewBottle := strings.ToLower(strings.TrimSpace(row[4]))
 		favoriteBottle := strings.ToLower(strings.TrimSpace(row[6]))
-		price := row[13]
+		price := row[14]
 
 	
 		priceFloat, err := strconv.ParseFloat(price, 64)
@@ -62,7 +63,7 @@ func SeedBottles(db *gorm.DB) {
 				typeBottleModel = repository.TypeBottle{Name: typeBottle}
 				db.Create(&typeBottleModel)
 			} else {
-				fmt.Printf("❌ Error mencari type_bottle %s: %v\n", typeBottle, err)
+				fmt.Printf(" Error mencari type_bottle %s: %v\n", typeBottle, err)
 				continue
 			}
 		}

@@ -65,7 +65,7 @@ type Categories struct {
 }
 type Type struct {
 	ID   uint   `gorm:"primaryKey" json:"id"`
-	Name string `gorm:"unique;not null" json:"name"`
+	Name string `gorm:"unique" json:"name"`
 }
 
 type User struct {
@@ -93,21 +93,25 @@ type Brand struct {
 }
 
 type Parfume struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null;size:255" json:"name"`
-	Description string    `gorm:"not null" json:"description"`
-	PriceML       float64   `gorm:"not null" json:"price"`
-	Image       string    `gorm:"not null" json:"image"`
-	Type       Type    `gorm:"not null" json:"type"`
-	TypeID      uint      `gorm:"not null" json:"type_id"`
-	Category    Categories   `gorm:"not null" json:"category"`
-	CategoryID  uint      `gorm:"not null" json:"category_id"`
-	Favorite     bool    `gorm:"not null;default:false" json:"favorite"`
-	BrandID     uint      `gorm:"not null" json:"brand_id"`
-	Brand       Brand     `gorm:"foreignKey:BrandID" json:"brand"`
-	IsNew	  bool      `gorm:"default:false" json:"is_new"`
-	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+    ID          uint       `gorm:"primaryKey" json:"id"`
+    Name        string     `gorm:"not null;size:255" json:"name"`
+    Description string     `gorm:"not null" json:"description"`
+    PriceML     float64    `gorm:"not null" json:"price"`
+    Image       string     `gorm:"not null" json:"image"`
+
+    TypeID      uint       `gorm:"not null" json:"type_id"`
+    Type        Type       `json:"type"`
+
+    CategoryID  uint       `gorm:"not null" json:"category_id"`
+    Category    Categories `json:"category"`
+
+    BrandID     uint       `gorm:"not null" json:"brand_id"`
+    Brand       Brand      `json:"brand"`
+
+    Favorite    bool       `gorm:"not null;default:false" json:"favorite"`
+    IsNew       bool       `gorm:"default:false" json:"is_new"`
+    CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
+    UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Payment struct {
