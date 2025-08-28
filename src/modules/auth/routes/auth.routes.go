@@ -14,6 +14,7 @@ func RegisterAuthRoutes(router *gin.RouterGroup) {
 	{
 		AuthGroup.POST("/register", controller.Register)
 		AuthGroup.POST("/login", controller.LoginManual)
+		AuthGroup.POST("/login/admin", controller.LoginAdmin)
 		AuthGroup.GET("/google", controller.GoogleLogin)
 		AuthGroup.GET("/google/callback", controller.GoogleCallback)
 		AuthGroup.POST("/logout", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")), controller.Logout)

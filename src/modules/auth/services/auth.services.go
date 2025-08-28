@@ -10,13 +10,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-playground/validator/v10"
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-	"github.com/go-playground/validator/v10"
-	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/oauth2"
 	// "google.golang.org/api/idtoken"
 )
 
@@ -83,6 +83,48 @@ func LoginManual(input *models.LoginRequest) (*models.LoginResponse, error) {
 	if err != nil || refresh_token == "" {
 		return nil, fmt.Errorf("error generating refresh token: %v", err)
 	}
+	return &models.LoginResponse{
+		ID:           user.ID,
+		Name:         user.Name,
+		Email:        user.Email,
+		Role:         user.Role,
+		Picture:      user.Picture,
+		Provider:     user.Provider,
+		Sub:          user.Sub,
+		AccessToken:  access_token,
+		RefreshToken: refresh_token,
+	}, nil
+}
+func LoginAdmin(input *models.LoginRequest) (*models.LoginResponse, error) {
+	var user repository.User
+	err := config.DB.Where("email = ?", input.Email).First(&user).Error
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %v", err)
+	}
+
+	// Validasi role khusus admin
+	if user.Role != "admin" {
+		return nil, fmt.Errorf("only admin can login here")
+	}
+
+	if user.Provider != "local" {
+		return nil, fmt.Errorf("please login using %s", user.Provider)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+		return nil, fmt.Errorf("invalid password: %v", err)
+	}
+
+	access_token, err := jwt.GenerateAccessToken(user)
+	if err != nil || access_token == "" {
+		return nil, fmt.Errorf("error generating access token: %v", err)
+	}
+
+	refresh_token, err := jwt.GenerateRefreshToken(user)
+	if err != nil || refresh_token == "" {
+		return nil, fmt.Errorf("error generating refresh token: %v", err)
+	}
+
 	return &models.LoginResponse{
 		ID:           user.ID,
 		Name:         user.Name,
@@ -259,4 +301,3 @@ func RefreshToken(authHeader string) (*models.PairToken, error) {
 		RefreshToken: refreshToken,
 	}, nil
 }
-

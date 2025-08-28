@@ -2,7 +2,7 @@ package main
 
 import (
 	"backend/src/config"
-	"backend/src/config/seeders"
+	// "backend/src/config/seeders"
 
 	"os"
 

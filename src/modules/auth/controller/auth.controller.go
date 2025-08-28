@@ -19,7 +19,10 @@ func Register(c *gin.Context) {
 		httperror.BadRequestError(c, err.Error())
 		return
 	}
-	c.JSON(201, user)
+	c.JSON(201, gin.H{
+		"message": "User Registered",
+		"user":   user,
+	})
 }
 
 func LoginManual(c *gin.Context) {
@@ -33,7 +36,27 @@ func LoginManual(c *gin.Context) {
 		httperror.InternalServerError(c, err.Error())
 		return
 	}
-	c.JSON(200, user)
+	c.JSON(200, gin.H{
+		"message": "User Logged In",
+		"user":   user,
+	})
+}
+
+func LoginAdmin(c *gin.Context) {
+	var input models.LoginRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httperror.BadRequestError(c, "Invalid input data")
+		return
+	}
+	user, err := services.LoginAdmin(&input)
+	if err != nil {
+		httperror.InternalServerError(c, err.Error())
+		return
+	}
+	c.JSON(200, gin.H{
+		"message": "Admin Logged In",
+		"user":   user,
+	})
 }
 
 func GoogleLogin(c *gin.Context) {
@@ -55,7 +78,9 @@ func Logout(c *gin.Context) {
 		httperror.InternalServerError(c, err.Error())
 		return
 	}
-	c.JSON(204, nil)
+	c.JSON(204, gin.H{
+		"message": "User Logged Out",
+	})
 }
 
 func RefreshToken(c *gin.Context) {
@@ -69,5 +94,8 @@ func RefreshToken(c *gin.Context) {
 		httperror.UnauthorizedError(c, err.Error())
 		return
 	}
-	c.JSON(200, newTokens)
-}	
+	c.JSON(200, gin.H{
+		"message": "Token Refreshed",
+		"tokens":  newTokens,
+	})
+}

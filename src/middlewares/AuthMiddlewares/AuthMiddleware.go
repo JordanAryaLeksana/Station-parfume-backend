@@ -116,3 +116,24 @@ func RefreshTokenMiddleware(secretKey string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+
+func RoleBasedAccess(allowedRoles ...string) gin.HandlerFunc{
+	return func(c *gin.Context){
+		role,exist := c.Get("role")
+		if !exist{
+			httperror.UnauthorizedError(c, "Role not found in token")
+			return
+		}
+
+		userRole := role.(string)
+		for _, allowedRole := range allowedRoles{
+			if userRole == allowedRole{
+				c.Next()
+				return
+			}
+		}
+		httperror.ForbiddenError(c, "You don't have permission to access this resource")
+		c.Abort()
+	}
+}

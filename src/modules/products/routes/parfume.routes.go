@@ -14,7 +14,7 @@ func RegisterProductsRoutes(router *gin.RouterGroup) {
 		parfumeGroup.POST("/", controller.CreateParfume)
 		parfumeGroup.GET("/", controller.GetAllParfumes)
 		parfumeGroup.GET("/:id", controller.GetParfumeById)
-		parfumeGroup.PUT("/:id", controller.UpdateParfume)
+		parfumeGroup.PUT("/:id", controller.UpdateParfume, authmiddlewares.RoleBasedAccess("admin"))
 		parfumeGroup.GET("/category/:category", controller.GetParfumesByCategory)
 		parfumeGroup.GET("/type/:type", controller.GetParfumeByType)
 		parfumeGroup.GET("/brand/:brand", controller.GetParfumeByBrand)
@@ -30,6 +30,6 @@ func RegisterProductsRoutes(router *gin.RouterGroup) {
 		bottleGroup.POST("/", controller.CreateBottleHandler)
 		bottleGroup.GET("/", controller.GetAllBottlesHandler)
 		bottleGroup.GET("/:id", controller.GetBottleByIDHandler)
-		bottleGroup.PUT("/:id", controller.UpdateBottleHandler)
+		bottleGroup.PUT("/:id", controller.UpdateBottleHandler, authmiddlewares.RoleBasedAccess("admin"))
 	}
 }
