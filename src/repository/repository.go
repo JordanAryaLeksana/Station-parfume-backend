@@ -152,6 +152,8 @@ type CartItem struct {
 	ID        uint    `gorm:"primaryKey" json:"id"`
 	CartID    uint    `gorm:"not null" json:"cart_id"`
 	ParfumeID uint    `gorm:"not null" json:"parfume_id"`
+	BottleID  uint    `gorm:"not null" json:"bottle_id"`
+	Bottle	Bottle  `gorm:"foreignKey:BottleID" json:"bottle"`
 	Parfume   Parfume `gorm:"foreignKey:ParfumeID" json:"parfume"`
 	Quantity  int     `gorm:"not null" json:"quantity"`
 }
