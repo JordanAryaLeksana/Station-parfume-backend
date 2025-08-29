@@ -6,48 +6,31 @@ import (
 )
 
 
-//orderStatus
-const (
-	OrderStatusPending    = "pending"
-	OrderStatusSuccess   = "success"
-	OrderStatusFailed     = "failed"
-	OrderStatusCancelled = "cancelled"
-)
-var AllowedOrderStatus = map[string]bool{
-	OrderStatusPending:    true,
-	OrderStatusSuccess:   true,
-	OrderStatusFailed:     true,
-	OrderStatusCancelled: true,
+type OrderStatus struct {
+	ID     uint   `gorm:"primaryKey" json:"id"`
+	Status string `gorm:"not null" json:"status"`
 }
+// OrderStatusPending    = "pending"
+// OrderStatusSuccess   = "success"
+// OrderStatusFailed     = "failed"
+// OrderStatusCancelled = "cancelled"
 
-
-
-const (
-	StatusPending    = "pending"
-	StatusSettlement = "settlement"
-	StatusCancel     = "cancel"
-	StatusExpire     = "expire"
-)
-var AllowedPaymentStatus = map[string]bool{
-	StatusPending:    true,
-	StatusSettlement: true,
-	StatusCancel:     true,
-	StatusExpire:     true,
+type PaymentStatus struct {
+	ID     uint   `gorm:"primaryKey" json:"id"`
+	Status string `gorm:"not null" json:"status"`
 }
+// StatusPending    = "pending"
+// 	StatusSettlement = "settlement"
+// 	StatusCancel     = "cancel"
+// 	StatusExpire     = "expire"
 
-//fraud status
-const (
-	FraudStatusAccept    = "accept"
-	FraudStatusChallenge = "challenge"
-	FraudStatusReject   = "reject"
-)
-var AllowedFraudStatus = map[string]bool{
-	FraudStatusAccept:    true,
-	FraudStatusChallenge: true,
-	FraudStatusReject:   true,
+type FraudStatus struct {
+	ID     uint   `gorm:"primaryKey" json:"id"`
+	Status string `gorm:"not null" json:"status"`
 }
-
-
+// FraudStatusAccept    = "accept"
+// FraudStatusChallenge  = "challenge"
+// FraudStatusReject     = "reject"
 
 type Categories struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
@@ -112,10 +95,13 @@ type Payment struct {
 	TransactionID string  `gorm:"uniqueIndex" json:"transaction_id"`                // Ex: "abcd1234"
 	PaymentMethod string  `gorm:"not null" json:"payment_method"`                   // Ex: "gopay", "bank_transfer"
 	Amount        float64 `gorm:"not null" json:"amount"`                           // Gross amount
-	Status        string  `gorm:"type:varchar(20);default:'pending'" json:"status"` // pending, settlement, cancel, expire
-	FraudStatus   string  `gorm:"type:varchar(20)" json:"fraud_status"`             // accept, challenge, etc.
-	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	FraudStatus   FraudStatus `gorm:"foreignKey:PaymentID" json:"fraud_status"`
+	FraudStatusID uint        `gorm:"not null" json:"fraud_status_id"`
+	PaymentStatusID uint       `gorm:"not null" json:"payment_status_id"`
+	PaymentStatus   PaymentStatus `gorm:"foreignKey:PaymentStatusID" json:"payment_status"`
+
+	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Admin struct {
@@ -155,7 +141,8 @@ type Order struct {
 	Items         []OrderItem `gorm:"foreignKey:OrderID" json:"items"`
 	TotalPrice    float64     `gorm:"not null" json:"total_price"`
 	TotalQuantity int         `gorm:"not null" json:"total_quantity"`
-	Status        string      `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	OrderStatus   OrderStatus `gorm:"foreignKey:OrderStatusID" json:"order_status"`
+	OrderStatusID uint        `gorm:"not null" json:"order_status_id"`
 	PaymentID     uint        `gorm:"not null" json:"payment_id"`
 	Payment       Payment     `gorm:"foreignKey:PaymentID" json:"payment"`
 	CreatedAt     time.Time   `gorm:"autoCreateTime" json:"created_at"`
