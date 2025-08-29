@@ -21,16 +21,6 @@ var AllowedOrderStatus = map[string]bool{
 }
 
 
-const (
-	RoleUser  = "user"
-	RoleAdmin = "admin"
-)
-
-var AllowedRoles = map[string]bool{
-	RoleUser:  true,
-	RoleAdmin: true,
-}
-
 
 const (
 	StatusPending    = "pending"

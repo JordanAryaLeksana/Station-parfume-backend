@@ -12,6 +12,10 @@ import (
 func CreateCartHandler(c *gin.Context)  {
 	userID := c.GetUint("userID")
 	var input models.CartRequestDTO
+	if userID != input.UserID{
+		httperror.ForbiddenError(c, "You are not allowed to create a cart for this user")
+		return
+	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid input: "+err.Error())
 		return 
@@ -21,28 +25,29 @@ func CreateCartHandler(c *gin.Context)  {
 		httperror.InternalServerError(c, "Failed to create cart: "+err.Error())
 		return 
 	}
+	
 	c.JSON(201, gin.H{
 		"message": "Cart created successfully",
 		"data":    cart,
 	}) 
 }
 
-func GetCartByIDHandler(c *gin.Context) {
-	cartID := c.Param("id")
+func GetCartByUserIDHandler(c *gin.Context) {
+	userID := c.Param("userID")
 	var cart models.CartRequestDTO
-	if err := config.DB.Where("id = ?", cartID).First(&cart).Error; err != nil {
+	if err := config.DB.Where("id = ?", userID).First(&cart).Error; err != nil {
 		httperror.NotFoundError(c, "Cart not found")
 		return
 	}
 
-	// Convert cartID from string to uint
-	var cartIDUint uint
-	if _, err := fmt.Sscanf(cartID, "%d", &cartIDUint); err != nil {
-		httperror.BadRequestError(c, "Invalid cart ID format")
+	// Convert userID from string to uint
+	var userIDUint uint
+	if _, err := fmt.Sscanf(userID, "%d", &userIDUint); err != nil {
+		httperror.BadRequestError(c, "Invalid user ID format")
 		return
 	}
 
-	cartResponse, err := services.GetCartByUserID(cartIDUint)
+	cartResponse, err := services.GetCartByUserID(userIDUint)
 	if err != nil {
 		httperror.InternalServerError(c, "Failed to retrieve cart: "+err.Error())
 		return
@@ -72,16 +77,12 @@ func AddItemToCartHandler(c *gin.Context){
 	}
 
 	cartID := c.Param("id")
-	parfumeID := c.GetUint("parfumeID")
-	bottleID := c.GetUint("bottleID")
-	quantity := 0
-
 	var cartIDUint uint
 	if _, err := fmt.Sscanf(cartID, "%d", &cartIDUint); err != nil {
 		httperror.BadRequestError(c, "Invalid cart ID format")
 		return
 	}
-	addtoCartResponse, err := services.AddItemToCart(cartIDUint, parfumeID, bottleID, quantity)
+	addtoCartResponse, err := services.AddItemToCart(cartIDUint, inputItem.ParfumeID, inputItem.BottleID, inputItem.Quantity)
 	if err != nil {
 		httperror.InternalServerError(c, "Failed to add item to cart: "+err.Error())
 		return
