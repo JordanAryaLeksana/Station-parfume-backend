@@ -20,6 +20,7 @@ func CreateAdmin(input *models.AdminRequest) (*models.AdminResponse, error ) {
 	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err == nil {
 		return nil, fmt.Errorf("email already exists")
 	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("error hashing password: %v", err)

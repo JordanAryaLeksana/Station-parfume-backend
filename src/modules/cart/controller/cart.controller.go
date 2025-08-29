@@ -71,11 +71,6 @@ func AddItemToCartHandler(c *gin.Context){
 		return
 	}
 
-	if err := c.ShouldBindJSON(&inputItem); err != nil {
-		httperror.BadRequestError(c, "Invalid item data: "+err.Error())
-		return
-	}
-
 	cartID := c.Param("id")
 	var cartIDUint uint
 	if _, err := fmt.Sscanf(cartID, "%d", &cartIDUint); err != nil {

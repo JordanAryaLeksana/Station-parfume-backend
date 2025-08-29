@@ -95,22 +95,12 @@ type Payment struct {
 	TransactionID string  `gorm:"uniqueIndex" json:"transaction_id"`                // Ex: "abcd1234"
 	PaymentMethod string  `gorm:"not null" json:"payment_method"`                   // Ex: "gopay", "bank_transfer"
 	Amount        float64 `gorm:"not null" json:"amount"`                           // Gross amount
-	FraudStatus   FraudStatus `gorm:"foreignKey:PaymentID" json:"fraud_status"`
+	FraudStatus   FraudStatus `gorm:"foreignKey:FraudStatusID" json:"fraud_status"`
 	FraudStatusID uint        `gorm:"not null" json:"fraud_status_id"`
 	PaymentStatusID uint       `gorm:"not null" json:"payment_status_id"`
 	PaymentStatus   PaymentStatus `gorm:"foreignKey:PaymentStatusID" json:"payment_status"`
-
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
-}
-
-type Admin struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"not null" json:"user_id"`
-	User      User      `gorm:"foreignKey:UserID" json:"user"`
-	Role      string    `gorm:"type:varchar(10);default:'admin'" json:"role"`
-	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Cart struct {

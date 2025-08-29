@@ -19,6 +19,7 @@ func main() {
     // seeders.SeedBottles(config.DB)
     // seeders.SeedBrand(config.DB)
     // seeders.SeedParfume(config.DB)
+    // seeders.SeedAdmin(config.DB)
     router := gin.Default()
     routes.InitRoutes(router)
     authhandler.InitGoogleOauthConfig()

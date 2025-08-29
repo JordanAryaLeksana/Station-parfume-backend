@@ -26,7 +26,6 @@ func ConnectDatabase() {
 		&repository.Parfume{},
 		&repository.Brand{},
 		&repository.Payment{},
-		&repository.Admin{},
 		&repository.Cart{},
 		&repository.Order{},
 		&repository.Bottle{},
