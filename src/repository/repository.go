@@ -91,8 +91,8 @@ type Payment struct {
 	ID     uint `gorm:"primaryKey" json:"id"`
 	UserID uint `gorm:"not null" json:"user_id"`
 	User   User `gorm:"foreignKey:UserID" json:"user"`
-	OrderID       string  `gorm:"uniqueIndex;not null" json:"order_id"`             // Ex: "ORDER-101"
-	TransactionID string  `gorm:"uniqueIndex" json:"transaction_id"`                // Ex: "abcd1234"
+	Order  Order `gorm:"foreignKey:OrderID" json:"order"`
+	OrderID uint `gorm:"not null" json:"order_id"`
 	PaymentMethod string  `gorm:"not null" json:"payment_method"`                   // Ex: "gopay", "bank_transfer"
 	Amount        float64 `gorm:"not null" json:"amount"`                           // Gross amount
 	FraudStatus   FraudStatus `gorm:"foreignKey:FraudStatusID" json:"fraud_status"`
@@ -133,8 +133,7 @@ type Order struct {
 	TotalQuantity int         `gorm:"not null" json:"total_quantity"`
 	OrderStatus   OrderStatus `gorm:"foreignKey:OrderStatusID" json:"order_status"`
 	OrderStatusID uint        `gorm:"not null" json:"order_status_id"`
-	PaymentID     uint        `gorm:"not null" json:"payment_id"`
-	Payment       Payment     `gorm:"foreignKey:PaymentID" json:"payment"`
+
 	CreatedAt     time.Time   `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time   `gorm:"autoUpdateTime" json:"updated_at"`
 }
@@ -144,6 +143,8 @@ type OrderItem struct {
 	OrderID   uint      `gorm:"not null" json:"order_id"`
 	ParfumeID uint      `gorm:"not null" json:"parfume_id"`
 	Parfume   Parfume   `gorm:"foreignKey:ParfumeID" json:"parfume"`
+	BottleID  uint      `gorm:"not null" json:"bottle_id"`
+	Bottle    Bottle    `gorm:"foreignKey:BottleID" json:"bottle"`	
 	Quantity  int       `gorm:"not null" json:"quantity"`
 	Price     float64   `gorm:"not null" json:"price"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
