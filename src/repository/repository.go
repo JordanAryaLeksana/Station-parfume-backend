@@ -16,24 +16,7 @@ type OrderStatus struct {
 // OrderStatusFailed     = "failed"
 // OrderStatusCancelled = "cancelled"
 
-type PaymentStatus struct {
-	ID     uint   `gorm:"primaryKey" json:"id"`
-	Status string `gorm:"not null" json:"status"`
-}
 
-// StatusPending    = "pending"
-// 	StatusSettlement = "settlement"
-// 	StatusCancel     = "cancel"
-// 	StatusExpire     = "expire"
-
-type FraudStatus struct {
-	ID     uint   `gorm:"primaryKey" json:"id"`
-	Status string `gorm:"not null" json:"status"`
-}
-
-// FraudStatusAccept    = "accept"
-// FraudStatusChallenge  = "challenge"
-// FraudStatusReject     = "reject"
 
 type Categories struct {
 	ID   uint   `gorm:"primaryKey" json:"id"`

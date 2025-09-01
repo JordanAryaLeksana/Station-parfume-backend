@@ -6,6 +6,7 @@ import (
 	userRoutes "backend/src/modules/user/routes"
 	adminRoutes "backend/src/modules/admin/routes"
 	cartRoutes "backend/src/modules/cart/routes"
+	paymentRoutes "backend/src/modules/payment/routes"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +18,7 @@ func InitRoutes(router *gin.Engine) {
 	productsRoutes.RegisterProductsRoutes(api)
 	adminRoutes.RegisterAdminRoutes(api)
 	cartRoutes.RegisterCartRoutes(api)
-
+	paymentRoutes.RegisterPaymentRoutes(api)
 	api.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Welcome to Station Parfume API!"})
 	})
