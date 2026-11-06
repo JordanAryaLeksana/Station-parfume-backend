@@ -16,8 +16,6 @@ type OrderStatus struct {
 // OrderStatusFailed     = "failed"
 // OrderStatusCancelled = "cancelled"
 
-
-
 type Categories struct {
 	ID   uint   `gorm:"primaryKey" json:"id"`
 	Name string `gorm:"unique;not null" json:"name"`
@@ -79,8 +77,8 @@ type Payment struct {
 	OrderID uint `gorm:"not null" json:"order_id"`
 
 	TransactionID string  `gorm:"uniqueIndex" json:"transaction_id"`
-	OrderRef      string  `gorm:"not null;uniqueIndex" json:"order_ref"` 
-	PaymentType   string  `gorm:"not null" json:"payment_type"`          
+	OrderRef      string  `gorm:"not null;uniqueIndex" json:"order_ref"`
+	PaymentType   string  `gorm:"not null" json:"payment_type"`
 	Amount        float64 `gorm:"not null" json:"amount"`
 
 	TransactionStatus string `gorm:"not null" json:"transaction_status"` // pending, settlement, cancel, expire

@@ -4,8 +4,8 @@ import (
 	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/cart/controller"
 	"fmt"
-	"os"
 	"github.com/gin-gonic/gin"
+	"os"
 )
 
 func RegisterCartRoutes(rg *gin.RouterGroup) {

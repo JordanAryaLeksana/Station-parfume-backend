@@ -9,6 +9,7 @@ import (
 )
 
 var RedisClient *redis.Client
+
 func InitRedis() error {
 	RedisClient = redis.NewClient(&redis.Options{
 		Addr:     os.Getenv("REDIS_ADDR"),

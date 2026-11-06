@@ -9,27 +9,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CreateCartHandler(c *gin.Context)  {
+func CreateCartHandler(c *gin.Context) {
 	userID := c.GetUint("userID")
 	var input models.CartRequestDTO
-	if userID != input.UserID{
+	if userID != input.UserID {
 		httperror.ForbiddenError(c, "You are not allowed to create a cart for this user")
 		return
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid input: "+err.Error())
-		return 
+		return
 	}
 	cart, err := services.CreateCart(userID, &input)
 	if err != nil {
 		httperror.InternalServerError(c, "Failed to create cart: "+err.Error())
-		return 
+		return
 	}
-	
+
 	c.JSON(201, gin.H{
 		"message": "Cart created successfully",
 		"data":    cart,
-	}) 
+	})
 }
 
 func GetCartByUserIDHandler(c *gin.Context) {
@@ -58,8 +58,7 @@ func GetCartByUserIDHandler(c *gin.Context) {
 	})
 }
 
-
-func AddItemToCartHandler(c *gin.Context){
+func AddItemToCartHandler(c *gin.Context) {
 	var input models.CartRequestDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid input: "+err.Error())
@@ -89,7 +88,7 @@ func AddItemToCartHandler(c *gin.Context){
 }
 
 func ClearCartHandler(c *gin.Context) {
-	cartID := c.Param("id")	
+	cartID := c.Param("id")
 	var cartIDUint uint
 	if _, err := fmt.Sscanf(cartID, "%d", &cartIDUint); err != nil {
 		httperror.BadRequestError(c, "Invalid cart ID format")

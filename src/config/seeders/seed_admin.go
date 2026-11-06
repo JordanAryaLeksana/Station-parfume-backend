@@ -3,11 +3,11 @@ package seeders
 import (
 	"backend/src/repository"
 	"fmt"
-	"os"
 	"gorm.io/gorm"
+	"os"
 )
 
-func SeedAdmin(db *gorm.DB){
+func SeedAdmin(db *gorm.DB) {
 	user := repository.User{
 		Name:     os.Getenv("ADMIN_NAME"),
 		Email:    os.Getenv("ADMIN_EMAIL"),

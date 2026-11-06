@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterUserRoutes(router *gin.RouterGroup){
+func RegisterUserRoutes(router *gin.RouterGroup) {
 	userGroup := router.Group("/users", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	fmt.Println("Registering user routes...")
 	{

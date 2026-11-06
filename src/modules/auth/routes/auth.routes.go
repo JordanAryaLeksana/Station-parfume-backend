@@ -4,13 +4,12 @@ import (
 	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/auth/controller"
 	"fmt"
-	"os"
 	"github.com/gin-gonic/gin"
+	"os"
 )
 
-
 func RegisterAuthRoutes(router *gin.RouterGroup) {
-	AuthGroup := router.Group("/auth");
+	AuthGroup := router.Group("/auth")
 	{
 		AuthGroup.POST("/register", controller.Register)
 		AuthGroup.POST("/login", controller.LoginManual)

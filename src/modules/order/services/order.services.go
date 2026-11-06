@@ -70,16 +70,16 @@ func CreateOrder(input models.OrderRequestDTO) (*models.OrderResponseDTO, error)
 	}
 
 	Order := repository.Order{
-		UserID:      input.UserID,
-		TotalPrice:  total,
+		UserID:     input.UserID,
+		TotalPrice: total,
 		OrderStatus: repository.OrderStatus{
-			ID:   1,
+			ID:     1,
 			Status: "pending",
 		},
-		Items:      OrderItems,
+		Items:         OrderItems,
 		TotalQuantity: input.TotalQuantity,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	if err := config.DB.Create(&Order).Error; err != nil {
@@ -194,11 +194,11 @@ func CancelOrder(orderID uint, userID uint) error {
 	if order.UserID != userID {
 		return fmt.Errorf("unauthorized: user cannot cancel this order")
 	}
-	if order.OrderStatusID != 1 { 
+	if order.OrderStatusID != 1 {
 		return fmt.Errorf("cannot cancel order with status: %d", order.OrderStatusID)
 	}
 
-	order.OrderStatusID = 4 
+	order.OrderStatusID = 4
 	order.UpdatedAt = time.Now()
 
 	if err := config.DB.Save(&order).Error; err != nil {

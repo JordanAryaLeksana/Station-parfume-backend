@@ -10,30 +10,30 @@ import (
 )
 
 func CreateOrderHandler(c *gin.Context) {
-    var input models.OrderRequestDTO
-    if err := c.ShouldBindJSON(&input); err != nil {
-        httperror.BadRequestError(c, "Invalid request body: " + err.Error())
-        return
-    }
+	var input models.OrderRequestDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httperror.BadRequestError(c, "Invalid request body: "+err.Error())
+		return
+	}
 
-    if input.UserID == 0 {
-        httperror.BadRequestError(c, "UserID is required")
-        return
-    }
-    if len(input.Items) == 0 {
-        httperror.BadRequestError(c, "Order items cannot be empty")
-        return
-    }
+	if input.UserID == 0 {
+		httperror.BadRequestError(c, "UserID is required")
+		return
+	}
+	if len(input.Items) == 0 {
+		httperror.BadRequestError(c, "Order items cannot be empty")
+		return
+	}
 
-    result, err  := services.CreateOrder(input)
+	result, err := services.CreateOrder(input)
 	if err != nil {
 		httperror.InternalServerError(c, err.Error())
 		return
 	}
-    c.JSON(201, gin.H{
-        "message": "Order created successfully",
-        "data":    result,
-    })
+	c.JSON(201, gin.H{
+		"message": "Order created successfully",
+		"data":    result,
+	})
 }
 func GetOrderByIDHandler(c *gin.Context) {
 	idParam := c.Param("id")
@@ -64,9 +64,8 @@ func GetOrdersByUserHandler(c *gin.Context) {
 		httperror.InternalServerError(c, err.Error())
 		return
 	}
-	c.JSON(200, gin.H{"message": "success","data": result})
+	c.JSON(200, gin.H{"message": "success", "data": result})
 }
-
 
 func CancelOrderHandler(c *gin.Context) {
 	idParam := c.Param("id")

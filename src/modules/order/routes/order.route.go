@@ -1,10 +1,10 @@
 package routes
 
 import (
-	"backend/src/modules/order/controller"
-	"os"
 	authMiddleware "backend/src/middlewares/AuthMiddlewares"
+	"backend/src/modules/order/controller"
 	"github.com/gin-gonic/gin"
+	"os"
 )
 
 func RegisterOrderRoutes(rg *gin.RouterGroup) {

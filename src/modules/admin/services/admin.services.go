@@ -12,8 +12,9 @@ import (
 )
 
 var validate = validator.New()
-func CreateAdmin(input *models.AdminRequest) (*models.AdminResponse, error ) {
-	if err := validate.Struct(input); err !=  nil {
+
+func CreateAdmin(input *models.AdminRequest) (*models.AdminResponse, error) {
+	if err := validate.Struct(input); err != nil {
 		return nil, fmt.Errorf("validation error: %v", err)
 	}
 	var user repository.User
@@ -36,14 +37,14 @@ func CreateAdmin(input *models.AdminRequest) (*models.AdminResponse, error ) {
 			return nil, fmt.Errorf("failed to create admin: %v", err)
 		}
 		return &models.AdminResponse{
-			Email:    createAdmin.Email,
-			Role:     createAdmin.Role,
+			Email: createAdmin.Email,
+			Role:  createAdmin.Role,
 		}, nil
 	}
 	return nil, fmt.Errorf("invalid email")
 }
 
-func GetAdminByID(id string ) (*models.AdminResponse, error){
+func GetAdminByID(id string) (*models.AdminResponse, error) {
 	var admin = repository.User{}
 	if err := config.DB.First(&admin, id).Error; err != nil {
 		return nil, fmt.Errorf("admin not found with id:%s", id)
@@ -60,34 +61,33 @@ func UpdateAdmin(id string, input *models.AdminRequest) (*models.AdminResponse, 
 		return nil, fmt.Errorf("admin not found with id:%s", id)
 	}
 
-    updateData := repository.User{}
+	updateData := repository.User{}
 
-    if input.Email != "" {
-        updateData.Email = input.Email
-    }
-    if input.Name != "" {
-        updateData.Name = input.Name
-    }
-    if input.Password != "" {
-        hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-        if err != nil {
-            return nil, fmt.Errorf("error hashing password: %v", err)
-        }
-        updateData.Password = string(hashedPassword)
-    }
+	if input.Email != "" {
+		updateData.Email = input.Email
+	}
+	if input.Name != "" {
+		updateData.Name = input.Name
+	}
+	if input.Password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("error hashing password: %v", err)
+		}
+		updateData.Password = string(hashedPassword)
+	}
 
-    if updateData != (repository.User{}) {
-        if err := config.DB.Model(&admin).Updates(updateData).Error; err != nil {
-            return nil, fmt.Errorf("failed to update admin: %v", err)
-        }
-    }
+	if updateData != (repository.User{}) {
+		if err := config.DB.Model(&admin).Updates(updateData).Error; err != nil {
+			return nil, fmt.Errorf("failed to update admin: %v", err)
+		}
+	}
 
-    return &models.AdminResponse{
-        Email: admin.Email,
-        Role:  admin.Role,
-    }, nil
+	return &models.AdminResponse{
+		Email: admin.Email,
+		Role:  admin.Role,
+	}, nil
 }
-
 
 func DeleteAdmin(id string) error {
 	var admin repository.User

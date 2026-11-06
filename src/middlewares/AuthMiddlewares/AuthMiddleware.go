@@ -4,21 +4,21 @@ import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/utils/jwt"
 	utils "backend/src/utils/redisUtils"
-	"strings"
 	"github.com/gin-gonic/gin"
 	jwtv5 "github.com/golang-jwt/jwt/v5"
+	"strings"
 )
 
-func AuthMiddleware(secretKey string) gin.HandlerFunc{
+func AuthMiddleware(secretKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authorizationHeader := c.GetHeader("Authorization");
-		if(authorizationHeader == ""){
-		  httperror.UnauthorizedError(c, "Authorization header is missing") 
-		  return 
+		authorizationHeader := c.GetHeader("Authorization")
+		if authorizationHeader == "" {
+			httperror.UnauthorizedError(c, "Authorization header is missing")
+			return
 		}
 
-		parts := strings.Split(authorizationHeader, " ");
-		if(len(parts) != 2 || parts[0] != "Bearer"){
+		parts := strings.Split(authorizationHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
 			httperror.UnauthorizedError(c, "Invalid authorization header format")
 			return
 		}
@@ -30,9 +30,9 @@ func AuthMiddleware(secretKey string) gin.HandlerFunc{
 			}
 			return []byte(secretKey), nil
 		})
-		if (err != nil || !token.Valid) {
+		if err != nil || !token.Valid {
 			httperror.UnauthorizedError(c, "Invalid token")
-			return 
+			return
 		}
 		claims, ok := token.Claims.(*jwt.JwtCustomClaims)
 		if !ok {
@@ -40,7 +40,7 @@ func AuthMiddleware(secretKey string) gin.HandlerFunc{
 			return
 		}
 
-		if claims.ID == ""{
+		if claims.ID == "" {
 			httperror.UnauthorizedError(c, "Token ID (jti) is empty")
 			return
 		}
@@ -49,7 +49,7 @@ func AuthMiddleware(secretKey string) gin.HandlerFunc{
 			httperror.UnauthorizedError(c, "Invalid token type")
 			return
 		}
-		blacklisted,err := utils.IsJtiBlacklisted(claims.ID);
+		blacklisted, err := utils.IsJtiBlacklisted(claims.ID)
 		if err != nil {
 			httperror.InternalServerError(c, "Error checking token blacklist status")
 			return
@@ -61,10 +61,9 @@ func AuthMiddleware(secretKey string) gin.HandlerFunc{
 		c.Set("userID", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("role", claims.Role)
-		c.Next()	
+		c.Next()
 	}
 }
-
 
 func RefreshTokenMiddleware(secretKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -107,8 +106,8 @@ func RefreshTokenMiddleware(secretKey string) gin.HandlerFunc {
 		}
 		blacklisted, _ := utils.IsJtiBlacklisted(claims.ID)
 		if blacklisted {
-		    httperror.UnauthorizedError(c, "Token is blacklisted")
-		    return
+			httperror.UnauthorizedError(c, "Token is blacklisted")
+			return
 		}
 		c.Set("userID", claims.UserID)
 		c.Set("email", claims.Email)
@@ -117,18 +116,17 @@ func RefreshTokenMiddleware(secretKey string) gin.HandlerFunc {
 	}
 }
 
-
-func RoleBasedAccess(allowedRoles ...string) gin.HandlerFunc{
-	return func(c *gin.Context){
-		role,exist := c.Get("role")
-		if !exist{
+func RoleBasedAccess(allowedRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exist := c.Get("role")
+		if !exist {
 			httperror.UnauthorizedError(c, "Role not found in token")
 			return
 		}
 
 		userRole := role.(string)
-		for _, allowedRole := range allowedRoles{
-			if userRole == allowedRole{
+		for _, allowedRole := range allowedRoles {
+			if userRole == allowedRole {
 				c.Next()
 				return
 			}

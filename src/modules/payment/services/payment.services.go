@@ -2,15 +2,15 @@ package services
 
 import (
 	"backend/src/config"
+	"backend/src/modules/order/services"
 	"backend/src/modules/payment/models"
 	"backend/src/repository"
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
-	"backend/src/modules/order/services"
 	"github.com/midtrans/midtrans-go"
 	"github.com/midtrans/midtrans-go/coreapi"
+	"time"
 )
 
 func CreatePayment(input *models.PaymentRequestDTO) (*models.PaymentResponseDTO, error) {
@@ -175,7 +175,5 @@ func HandleNotification(notificationPayload map[string]interface{}) (*models.Pay
 		}
 	}
 
-
 	return paymentResp, nil
 }
-

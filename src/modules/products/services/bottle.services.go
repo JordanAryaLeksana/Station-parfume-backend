@@ -10,11 +10,8 @@ import (
 	"fmt"
 	"time"
 
-
 	"gorm.io/gorm"
 )
-
-
 
 func CreateBottle(input *models.BottleRequestDTO) (*models.BottleResponseDTO, error) {
 	if err := validate.Struct(input); err != nil {
@@ -28,13 +25,13 @@ func CreateBottle(input *models.BottleRequestDTO) (*models.BottleResponseDTO, er
 	}
 
 	bottle := repository.Bottle{
-		Name:        input.Name,
-		Description: input.Description,
-		Image:       input.Image,
-		Size:        input.Size,
-		Price:       input.Price,
-		IsNew:       input.IsNew,
-		IsFavorite:  input.IsFavorite,
+		Name:         input.Name,
+		Description:  input.Description,
+		Image:        input.Image,
+		Size:         input.Size,
+		Price:        input.Price,
+		IsNew:        input.IsNew,
+		IsFavorite:   input.IsFavorite,
 		TypeBottleID: input.TypeBottleID,
 	}
 
@@ -42,27 +39,26 @@ func CreateBottle(input *models.BottleRequestDTO) (*models.BottleResponseDTO, er
 		return nil, fmt.Errorf("failed to create bottle: %v", err)
 	}
 
-	config.RedisClient.Del(context.Background(), "bottles:all") 
+	config.RedisClient.Del(context.Background(), "bottles:all")
 	if err := config.DB.Preload("TypeBottle").First(&bottle, bottle.ID).Error; err != nil {
 		return nil, fmt.Errorf("failed to retrieve created bottle: %v", err)
 	}
 
-	
 	return &models.BottleResponseDTO{
 		ID:          bottle.ID,
 		Name:        bottle.Name,
 		Description: bottle.Description,
 		Image:       bottle.Image,
-		Size:       bottle.Size,
-		Price:      bottle.Price,
-		IsNew:      bottle.IsNew,
-		IsFavorite: bottle.IsFavorite,
+		Size:        bottle.Size,
+		Price:       bottle.Price,
+		IsNew:       bottle.IsNew,
+		IsFavorite:  bottle.IsFavorite,
 		TypeBottle: models.TypeBottle{
 			ID:   bottle.TypeBottleID,
 			Name: bottle.TypeBottle.Name,
 		},
-		CreatedAt:   bottle.CreatedAt,
-		UpdatedAt:   bottle.UpdatedAt,
+		CreatedAt: bottle.CreatedAt,
+		UpdatedAt: bottle.UpdatedAt,
 	}, nil
 }
 
@@ -70,7 +66,7 @@ func GetAllBottles() ([]models.BottleResponseDTO, error) {
 	ctx := context.Background()
 	cachedKey := "bottles:all"
 	cachedBottles, err := config.RedisClient.Get(ctx, cachedKey).Result()
-	if (err == nil && cachedBottles != "") {
+	if err == nil && cachedBottles != "" {
 		var bottles []models.BottleResponseDTO
 		if err := json.Unmarshal([]byte(cachedBottles), &bottles); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal cached bottles: %v", err)
@@ -91,8 +87,8 @@ func GetAllBottles() ([]models.BottleResponseDTO, error) {
 			Image:       bottle.Image,
 			Size:        bottle.Size,
 			Price:       bottle.Price,
-			IsNew:      bottle.IsNew,
-			IsFavorite: bottle.IsFavorite,
+			IsNew:       bottle.IsNew,
+			IsFavorite:  bottle.IsFavorite,
 			TypeBottle: models.TypeBottle{
 				ID:   bottle.TypeBottleID,
 				Name: bottle.TypeBottle.Name,
@@ -130,15 +126,15 @@ func GetBottleByID(id uint) (*models.BottleResponseDTO, error) {
 		Description: bottle.Description,
 		Image:       bottle.Image,
 		Size:        bottle.Size,
-		IsNew:      bottle.IsNew,
-		IsFavorite: bottle.IsFavorite,
+		IsNew:       bottle.IsNew,
+		IsFavorite:  bottle.IsFavorite,
 		Price:       bottle.Price,
 		TypeBottle: models.TypeBottle{
 			ID:   bottle.TypeBottleID,
 			Name: bottle.TypeBottle.Name,
 		},
-		CreatedAt:   bottle.CreatedAt,
-		UpdatedAt:   bottle.UpdatedAt,
+		CreatedAt: bottle.CreatedAt,
+		UpdatedAt: bottle.UpdatedAt,
 	}
 	bottleResponseJSON, err := json.Marshal(bottleResponse)
 	if err != nil {
@@ -179,16 +175,16 @@ func UpdateBottle(id uint, input *models.BottleRequestDTO) (*models.BottleRespon
 		Name:        bottle.Name,
 		Description: bottle.Description,
 		Image:       bottle.Image,
-		IsNew:      bottle.IsNew,
-		IsFavorite: bottle.IsFavorite,
+		IsNew:       bottle.IsNew,
+		IsFavorite:  bottle.IsFavorite,
 		Size:        bottle.Size,
 		Price:       bottle.Price,
 		TypeBottle: models.TypeBottle{
 			ID:   bottle.TypeBottleID,
 			Name: bottle.TypeBottle.Name,
 		},
-		CreatedAt:   bottle.CreatedAt,
-		UpdatedAt:   bottle.UpdatedAt,
+		CreatedAt: bottle.CreatedAt,
+		UpdatedAt: bottle.UpdatedAt,
 	}, nil
 }
 

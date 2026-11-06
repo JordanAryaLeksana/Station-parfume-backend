@@ -8,8 +8,7 @@ import (
 	httperror "backend/src/middlewares/Error"
 )
 
-
-func CreateBrandHandler(c *gin.Context){
+func CreateBrandHandler(c *gin.Context) {
 	var input models.BrandRequestDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid input data")
@@ -21,20 +20,18 @@ func CreateBrandHandler(c *gin.Context){
 	}
 	c.JSON(201, gin.H{
 		"message": "Brand Created",
-		"brand": brandResponse,
+		"brand":   brandResponse,
 	})
 }
 
-
-func GetAllBrandsHandler( c *gin.Context) {
+func GetAllBrandsHandler(c *gin.Context) {
 	brands, err := services.GetAllBrands()
 	if err != nil {
 		httperror.BadRequestError(c, err.Error())
 		return
-	}	
+	}
 	c.JSON(200, gin.H{
 		"message": "Brands Retrieved",
-		"brands": brands,
+		"brands":  brands,
 	})
 }
-

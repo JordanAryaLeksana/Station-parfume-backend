@@ -20,7 +20,7 @@ func CreateBrand(input *models.BrandRequestDTO) (*models.BrandResponseDTO, error
 	var existingBrand repository.Brand
 	if err := config.DB.Find(&existingBrand, "name = ?", input.Name).Error; err != nil {
 		return nil, fmt.Errorf("failed to check if brand exists: %v", err)
-	} else if (!errors.Is(err, gorm.ErrRecordNotFound)) {
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("failed to check if brand exists: %v", err)
 	}
 	brand := repository.Brand{
@@ -36,7 +36,7 @@ func CreateBrand(input *models.BrandRequestDTO) (*models.BrandResponseDTO, error
 		ID:          brand.ID,
 		Name:        brand.Name,
 		Description: brand.Description,
-		Logo:       brand.Logo,
+		Logo:        brand.Logo,
 	}, nil
 }
 
@@ -104,8 +104,8 @@ func GetBrandByID(id uint) (*models.BrandResponseDTO, error) {
 	var parfumes []models.Parfume
 	for _, parfume := range brand.Parfume {
 		parfumes = append(parfumes, models.Parfume{
-			ID:          parfume.ID,
-			Name:        parfume.Name,
+			ID:   parfume.ID,
+			Name: parfume.Name,
 		})
 	}
 	brandResponse := models.BrandResponseDTO{
@@ -117,7 +117,7 @@ func GetBrandByID(id uint) (*models.BrandResponseDTO, error) {
 		CreatedAt:   brand.CreatedAt,
 		UpdatedAt:   brand.UpdatedAt,
 	}
-	
+
 	brandResponseJSON, err := json.Marshal(brandResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal brand response: %v", err)

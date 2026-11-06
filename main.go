@@ -14,18 +14,18 @@ import (
 )
 
 func main() {
-    config.InitRedis()
-    config.ConnectDatabase()
-    // seeders.SeedBottles(config.DB)
-    // seeders.SeedBrand(config.DB)
-    // seeders.SeedParfume(config.DB)
-    // seeders.SeedAdmin(config.DB)
-    router := gin.Default()
-    routes.InitRoutes(router)
-    authhandler.InitGoogleOauthConfig()
-    port := os.Getenv("PORT")
-    if port == "" {
-        port = "8080"
-    }
-    router.Run(":" + port)
+	config.InitRedis()
+	config.ConnectDatabase()
+	// seeders.SeedBottles(config.DB)
+	// seeders.SeedBrand(config.DB)
+	// seeders.SeedParfume(config.DB)
+	// seeders.SeedAdmin(config.DB)
+	router := gin.Default()
+	routes.InitRoutes(router)
+	authhandler.InitGoogleOauthConfig()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	router.Run(":" + port)
 }

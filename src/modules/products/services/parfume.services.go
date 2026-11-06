@@ -42,7 +42,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 	parfume := repository.Parfume{
 		Name:        items.Name,
 		Description: items.Description,
-		PriceML:       items.Price,
+		PriceML:     items.Price,
 		Image:       items.Image,
 		Type:        Type,
 		Category:    Category,
@@ -62,7 +62,7 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
 		Favorite:    parfume.Favorite,
-		IsNew: 	 parfume.IsNew,
+		IsNew:       parfume.IsNew,
 		Brand: models.BrandDTO{
 			ID:          brand.ID,
 			Name:        brand.Name,
@@ -73,60 +73,60 @@ func CreateParfume(items models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, 
 	return &response, nil
 }
 func AddParfumeToBrand(brandID uint, dto models.ParfumeRequestDTO) (*models.ParfumeResponseDTO, error) {
-    if err := validate.Struct(dto); err != nil {
-        return nil, fmt.Errorf("validation failed: %v", err)
-    }
-    var brand repository.Brand
-    if err := config.DB.First(&brand, brandID).Error; err != nil {
-        return nil, fmt.Errorf("brand with ID %d not found: %v", brandID, err)
-    }
-    var (
-        category repository.Categories
-        ptype    repository.Type
-    )
-    if err := config.DB.First(&category, dto.CategoryID).Error; err != nil {
-        return nil, fmt.Errorf("category with ID %d not found: %v", dto.CategoryID, err)
-    }
-    if err := config.DB.First(&ptype, dto.TypeID).Error; err != nil {
-        return nil, fmt.Errorf("type with ID %d not found: %v", dto.TypeID, err)
-    }
+	if err := validate.Struct(dto); err != nil {
+		return nil, fmt.Errorf("validation failed: %v", err)
+	}
+	var brand repository.Brand
+	if err := config.DB.First(&brand, brandID).Error; err != nil {
+		return nil, fmt.Errorf("brand with ID %d not found: %v", brandID, err)
+	}
+	var (
+		category repository.Categories
+		ptype    repository.Type
+	)
+	if err := config.DB.First(&category, dto.CategoryID).Error; err != nil {
+		return nil, fmt.Errorf("category with ID %d not found: %v", dto.CategoryID, err)
+	}
+	if err := config.DB.First(&ptype, dto.TypeID).Error; err != nil {
+		return nil, fmt.Errorf("type with ID %d not found: %v", dto.TypeID, err)
+	}
 
-    parfume := repository.Parfume{
-        Name:        dto.Name,
-        Description: dto.Description,
-        PriceML:       dto.Price,
-        Image:       dto.Image,
-        Favorite:    dto.Favorite,
-        BrandID:     brandID,
-        TypeID:      dto.TypeID,
-        CategoryID:  dto.CategoryID,
-        IsNew:       dto.IsNew,
-    }
+	parfume := repository.Parfume{
+		Name:        dto.Name,
+		Description: dto.Description,
+		PriceML:     dto.Price,
+		Image:       dto.Image,
+		Favorite:    dto.Favorite,
+		BrandID:     brandID,
+		TypeID:      dto.TypeID,
+		CategoryID:  dto.CategoryID,
+		IsNew:       dto.IsNew,
+	}
 
-    if err := config.DB.Create(&parfume).Error; err != nil {
-        return nil, fmt.Errorf("failed to create parfume: %v", err)
-    }
+	if err := config.DB.Create(&parfume).Error; err != nil {
+		return nil, fmt.Errorf("failed to create parfume: %v", err)
+	}
 
-    // 5. Response DTO
-    response := models.ParfumeResponseDTO{
-        ID:          parfume.ID,
-        Name:        parfume.Name,
-        Description: parfume.Description,
-        Price:       parfume.PriceML,
-        Image:       parfume.Image,
-        Favorite:    parfume.Favorite,
-        Type:        models.TypeDTO(ptype),
-        Category:    models.CategoriesDTO(category),
-		IsNew:  dto.IsNew,
-        Brand: models.BrandDTO{
-            ID:          brand.ID,
-            Name:        brand.Name,
-            Logo:        brand.Logo,
-            Description: brand.Description,
-        },
-    }
+	// 5. Response DTO
+	response := models.ParfumeResponseDTO{
+		ID:          parfume.ID,
+		Name:        parfume.Name,
+		Description: parfume.Description,
+		Price:       parfume.PriceML,
+		Image:       parfume.Image,
+		Favorite:    parfume.Favorite,
+		Type:        models.TypeDTO(ptype),
+		Category:    models.CategoriesDTO(category),
+		IsNew:       dto.IsNew,
+		Brand: models.BrandDTO{
+			ID:          brand.ID,
+			Name:        brand.Name,
+			Logo:        brand.Logo,
+			Description: brand.Description,
+		},
+	}
 
-    return &response, nil
+	return &response, nil
 }
 
 func GetAllParfumes() ([]models.ParfumeResponseDTO, error) {
@@ -199,7 +199,7 @@ func GetParfumeById(id string) (*models.ParfumeResponseDTO, error) {
 		Type:        models.TypeDTO(parfume.Type),
 		Category:    models.CategoriesDTO(parfume.Category),
 		Favorite:    parfume.Favorite,
-		IsNew: 	 parfume.IsNew,
+		IsNew:       parfume.IsNew,
 		Brand: models.BrandDTO{
 			ID:          parfume.Brand.ID,
 			Name:        parfume.Brand.Name,
@@ -214,7 +214,7 @@ func GetParfumeById(id string) (*models.ParfumeResponseDTO, error) {
 	if err := config.RedisClient.Set(ctx, cachedKey, parfumeJSON, 15*time.Minute).Err(); err != nil {
 		return nil, fmt.Errorf("failed to cache parfume response: %v", err)
 	}
-	
+
 	return &response, nil
 }
 
@@ -266,7 +266,7 @@ func UpdateParfume(id string, model models.ParfumeRequestDTO) (*models.ParfumeRe
 			Description: brand.Description,
 		},
 	}
-	config.RedisClient.Del(context.Background(), "parfumes:all") // Clear cache for all parfumes
+	config.RedisClient.Del(context.Background(), "parfumes:all")                // Clear cache for all parfumes
 	config.RedisClient.Del(context.Background(), fmt.Sprintf("parfume:%s", id)) // Clear cache for specific parfume
 	return &response, nil
 }
@@ -290,7 +290,7 @@ func SortParfumeByType(parfumeType string) ([]models.ParfumeResponseDTO, error) 
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
 			Favorite:    parfume.Favorite,
-			IsNew:  parfume.IsNew,
+			IsNew:       parfume.IsNew,
 			Brand: models.BrandDTO{
 				ID:          parfume.Brand.ID,
 				Name:        parfume.Brand.Name,
@@ -318,7 +318,7 @@ func SortParfumesByBrand(brandName string) ([]models.ParfumeResponseDTO, error) 
 			Name:        parfume.Name,
 			Description: parfume.Description,
 			Price:       parfume.PriceML,
-			Image: 	 parfume.Image,	
+			Image:       parfume.Image,
 			Type:        models.TypeDTO(parfume.Type),
 			Category:    models.CategoriesDTO(parfume.Category),
 			Favorite:    parfume.Favorite,
@@ -366,4 +366,3 @@ func SortParfumesByCategory(category string) ([]models.ParfumeResponseDTO, error
 		return response, nil
 	}
 }
-

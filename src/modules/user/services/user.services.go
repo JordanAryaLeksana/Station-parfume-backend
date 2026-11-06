@@ -8,7 +8,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"golang.org/x/crypto/bcrypt"
 	"time"
-	
 )
 
 var validate = validator.New()
@@ -20,7 +19,7 @@ func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
 	if err := validate.Struct(input); err != nil {
 		return nil, fmt.Errorf("validation error: %v", err)
 	}
-	fmt.Println("🔍 Validasi input berhasil");
+	fmt.Println("🔍 Validasi input berhasil")
 	fmt.Println(input.Password)
 	start := time.Now()
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -36,9 +35,9 @@ func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
 		Email:    input.Email,
 		Password: string(hashedPassword),
 		// Password: input.Password,
-		Role:     input.Role,
-		Picture:  input.Picture,
-		Sub: nil,
+		Role:    input.Role,
+		Picture: input.Picture,
+		Sub:     nil,
 	}
 
 	if err := config.DB.Create(&newUser).Error; err != nil {
@@ -66,7 +65,7 @@ func GetAllUsers() ([]models.UserDTOResponse, error) {
 	var userResponses []models.UserDTOResponse
 	for _, user := range users {
 		userResponses = append(userResponses, models.UserDTOResponse{
-			ID: 	 user.ID,
+			ID:       user.ID,
 			Name:     user.Name,
 			Email:    user.Email,
 			Role:     user.Role,
@@ -91,7 +90,7 @@ func GetUserById(id string) (*models.UserDTOResponse, error) {
 	var userResponse = models.UserDTOResponse{
 		ID:       user.ID,
 		Name:     user.Name,
-		Email:    user.Email,	
+		Email:    user.Email,
 		Role:     user.Role,
 		Picture:  user.Picture,
 		Provider: user.Provider,

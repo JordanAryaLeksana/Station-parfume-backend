@@ -3,10 +3,10 @@ package seeders
 import (
 	"backend/src/repository"
 	"fmt"
-	"strconv"
-	"strings"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
+	"strconv"
+	"strings"
 )
 
 func SeedBottles(db *gorm.DB) {
@@ -29,7 +29,7 @@ func SeedBottles(db *gorm.DB) {
 	}
 
 	for i, row := range rows {
-		if i < 1 { 
+		if i < 1 {
 			continue
 		}
 		if len(row) < 14 {
@@ -40,12 +40,11 @@ func SeedBottles(db *gorm.DB) {
 		typeBottle := row[1]
 		descriptionBottle := row[2]
 		imageBottle := row[3]
-		sizeBottle:= row[10]
+		sizeBottle := row[10]
 		isNewBottle := strings.ToLower(strings.TrimSpace(row[4]))
 		favoriteBottle := strings.ToLower(strings.TrimSpace(row[6]))
 		price := row[14]
 
-	
 		priceFloat, err := strconv.ParseFloat(price, 64)
 		if err != nil {
 			fmt.Printf(" Gagal parsing harga di baris %d (%s): %v\n", i+1, nameBottle, err)
@@ -73,13 +72,13 @@ func SeedBottles(db *gorm.DB) {
 		isFav := favoriteBottle == "yes" || favoriteBottle == "1" || favoriteBottle == "true"
 
 		bottle := repository.Bottle{
-			Name:        nameBottle,
-			Description: descriptionBottle,
-			Price:       priceFloat,
-			Image:       imageBottle,
-			Size:        sizeFloat,
-			IsNew:       isNew,
-			IsFavorite:  isFav,
+			Name:         nameBottle,
+			Description:  descriptionBottle,
+			Price:        priceFloat,
+			Image:        imageBottle,
+			Size:         sizeFloat,
+			IsNew:        isNew,
+			IsFavorite:   isFav,
 			TypeBottleID: typeBottleModel.ID,
 		}
 

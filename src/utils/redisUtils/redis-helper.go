@@ -16,8 +16,7 @@ func IsJtiBlacklisted(jti string) (bool, error) {
 		if err.Error() == "redis: nil" {
 			return false, nil // Jti is not blacklisted
 		}
-		return false, err 
+		return false, err
 	}
 	return result == "blacklisted", nil
 }
-

@@ -4,8 +4,8 @@ import (
 	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/payment/controller"
 	"fmt"
-	"os"
 	"github.com/gin-gonic/gin"
+	"os"
 )
 
 func RegisterPaymentRoutes(r *gin.RouterGroup) {

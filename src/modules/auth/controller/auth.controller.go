@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 func Register(c *gin.Context) {
 	var input models.RegisterRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -21,7 +20,7 @@ func Register(c *gin.Context) {
 	}
 	c.JSON(201, gin.H{
 		"message": "User Registered",
-		"user":   user,
+		"user":    user,
 	})
 }
 
@@ -38,7 +37,7 @@ func LoginManual(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{
 		"message": "User Logged In",
-		"user":   user,
+		"user":    user,
 	})
 }
 
@@ -55,7 +54,7 @@ func LoginAdmin(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{
 		"message": "Admin Logged In",
-		"user":   user,
+		"user":    user,
 	})
 }
 
@@ -66,7 +65,6 @@ func GoogleLogin(c *gin.Context) {
 func GoogleCallback(c *gin.Context) {
 	services.HandleGoogleCallback(c.Writer, c.Request)
 }
-
 
 func Logout(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
@@ -89,8 +87,8 @@ func RefreshToken(c *gin.Context) {
 		httperror.UnauthorizedError(c, "Authorization header is missing")
 		return
 	}
-	newTokens, err := services.RefreshToken(authHeader);
-		if err != nil {
+	newTokens, err := services.RefreshToken(authHeader)
+	if err != nil {
 		httperror.UnauthorizedError(c, err.Error())
 		return
 	}

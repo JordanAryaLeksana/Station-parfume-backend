@@ -3,7 +3,7 @@ package models
 type RegisterRequest struct {
 	Name     string `json:"name" validate:"required"`
 	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password,omitempty"` // optional for OAuth    
+	Password string `json:"password,omitempty"` // optional for OAuth
 }
 
 type RegisterResponse struct {

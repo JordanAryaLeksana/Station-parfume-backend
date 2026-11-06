@@ -1,12 +1,12 @@
 package controller
+
 import (
+	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/products/models"
 	"backend/src/modules/products/services"
-	httperror "backend/src/middlewares/Error"
 	"github.com/gin-gonic/gin"
 	"strconv"
 )
-
 
 func CreateBottleHandler(c *gin.Context) {
 	var input models.BottleRequestDTO
@@ -26,7 +26,7 @@ func CreateBottleHandler(c *gin.Context) {
 }
 
 func GetAllBottlesHandler(c *gin.Context) {
-	bottles, err := services.GetAllBottles();
+	bottles, err := services.GetAllBottles()
 	if err != nil {
 		httperror.BadRequestError(c, err.Error())
 		return
@@ -35,7 +35,7 @@ func GetAllBottlesHandler(c *gin.Context) {
 		"message": "Bottles Retrieved",
 		"bottles": bottles,
 	})
-}	
+}
 
 func GetBottleByIDHandler(c *gin.Context) {
 	idStr := c.Param("id")

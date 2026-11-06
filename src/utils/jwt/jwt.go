@@ -2,26 +2,26 @@ package jwt
 
 import (
 	"backend/src/repository"
-	"os"
-	"time"
 	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"os"
+	"time"
 )
 
 type JwtCustomClaims struct {
-	UserID uint   `json:"sub"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	UserID    uint   `json:"sub"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
 	TokenType string `json:"token_type"`
-	jwt.RegisteredClaims 
+	jwt.RegisteredClaims
 }
 
 func GenerateAccessToken(user repository.User) (string, error) {
 	claims := JwtCustomClaims{
-		UserID: user.ID,
-		Email:  user.Email,
-		Role:   user.Role,
+		UserID:    user.ID,
+		Email:     user.Email,
+		Role:      user.Role,
 		TokenType: "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
@@ -35,14 +35,14 @@ func GenerateAccessToken(user repository.User) (string, error) {
 
 func GenerateRefreshToken(user repository.User) (string, error) {
 	claims := JwtCustomClaims{
-		UserID: user.ID,
-		Email:  user.Email,
-		Role:   user.Role,
+		UserID:    user.ID,
+		Email:     user.Email,
+		Role:      user.Role,
 		TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ID:       uuid.NewString(),
+			ID:        uuid.NewString(),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

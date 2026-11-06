@@ -1,13 +1,12 @@
 package authhandler
 
 import (
-	"os"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"os"
 )
 
 var GoogleOauthConfig *oauth2.Config
-
 
 func InitGoogleOauthConfig() {
 	GoogleOauthConfig = &oauth2.Config{
@@ -18,6 +17,6 @@ func InitGoogleOauthConfig() {
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
 		},
-		Endpoint: google.Endpoint, 
+		Endpoint: google.Endpoint,
 	}
 }

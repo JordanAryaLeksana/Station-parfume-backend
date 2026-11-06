@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterAdminRoutes(router *gin.RouterGroup){
+func RegisterAdminRoutes(router *gin.RouterGroup) {
 	AdminGroup := router.Group("/admins")
 	{
 		AdminGroup.POST("/", controller.CreateAdminHandler)

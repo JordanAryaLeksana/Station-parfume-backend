@@ -1,4 +1,3 @@
-
 package httperror
 
 import (
@@ -6,7 +5,7 @@ import (
 	"net/http"
 )
 
-func BadRequestError(c *gin.Context, message string){
+func BadRequestError(c *gin.Context, message string) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error":   "Bad Request",
 		"message": message,
@@ -14,7 +13,7 @@ func BadRequestError(c *gin.Context, message string){
 	})
 }
 
-func InternalServerError(c *gin.Context, message string){
+func InternalServerError(c *gin.Context, message string) {
 	c.JSON(http.StatusInternalServerError, gin.H{
 		"error":   "Internal Server Error",
 		"message": message,
@@ -22,7 +21,7 @@ func InternalServerError(c *gin.Context, message string){
 	})
 }
 
-func NotFoundError(c *gin.Context, message string){
+func NotFoundError(c *gin.Context, message string) {
 	c.JSON(http.StatusNotFound, gin.H{
 		"error":   "Not Found",
 		"message": message,
@@ -30,7 +29,7 @@ func NotFoundError(c *gin.Context, message string){
 	})
 }
 
-func UnauthorizedError(c *gin.Context, message string){
+func UnauthorizedError(c *gin.Context, message string) {
 	c.JSON(http.StatusUnauthorized, gin.H{
 		"error":   "Unauthorized",
 		"message": message,
@@ -38,14 +37,14 @@ func UnauthorizedError(c *gin.Context, message string){
 	})
 }
 
-func ForbiddenError(c *gin.Context, message string){
+func ForbiddenError(c *gin.Context, message string) {
 	c.JSON(http.StatusForbidden, gin.H{
 		"error":   "Forbidden",
 		"message": message,
 		"status":  http.StatusForbidden,
 	})
 }
-func ConflictError(c *gin.Context, message string){
+func ConflictError(c *gin.Context, message string) {
 	c.JSON(http.StatusConflict, gin.H{
 		"error":   "Conflict",
 		"message": message,
@@ -53,7 +52,7 @@ func ConflictError(c *gin.Context, message string){
 	})
 }
 
-func UnprocessableEntityError(c *gin.Context, message string){
+func UnprocessableEntityError(c *gin.Context, message string) {
 	c.JSON(http.StatusUnprocessableEntity, gin.H{
 		"error":   "Unprocessable Entity",
 		"message": message,
@@ -61,7 +60,7 @@ func UnprocessableEntityError(c *gin.Context, message string){
 	})
 }
 
-func ServiceUnavailableError(c *gin.Context, message string){
+func ServiceUnavailableError(c *gin.Context, message string) {
 	c.JSON(http.StatusServiceUnavailable, gin.H{
 		"error":   "Service Unavailable",
 		"message": message,
@@ -69,7 +68,7 @@ func ServiceUnavailableError(c *gin.Context, message string){
 	})
 }
 
-func TooManyRequestsError(c *gin.Context, message string){
+func TooManyRequestsError(c *gin.Context, message string) {
 	c.JSON(http.StatusTooManyRequests, gin.H{
 		"error":   "Too Many Requests",
 		"message": message,
@@ -77,7 +76,7 @@ func TooManyRequestsError(c *gin.Context, message string){
 	})
 }
 
-func NotImplementedError(c *gin.Context, message string){
+func NotImplementedError(c *gin.Context, message string) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"error":   "Not Implemented",
 		"message": message,
@@ -85,7 +84,7 @@ func NotImplementedError(c *gin.Context, message string){
 	})
 }
 
-func GatewayTimeoutError(c *gin.Context, message string){
+func GatewayTimeoutError(c *gin.Context, message string) {
 	c.JSON(http.StatusGatewayTimeout, gin.H{
 		"error":   "Gateway Timeout",
 		"message": message,
@@ -93,7 +92,7 @@ func GatewayTimeoutError(c *gin.Context, message string){
 	})
 }
 
-func MethodNotAllowedError(c *gin.Context, message string){
+func MethodNotAllowedError(c *gin.Context, message string) {
 	c.JSON(http.StatusMethodNotAllowed, gin.H{
 		"error":   "Method Not Allowed",
 		"message": message,
@@ -101,12 +100,10 @@ func MethodNotAllowedError(c *gin.Context, message string){
 	})
 }
 
-func NotAcceptableError(c *gin.Context, message string){
+func NotAcceptableError(c *gin.Context, message string) {
 	c.JSON(http.StatusNotAcceptable, gin.H{
 		"error":   "Not Acceptable",
 		"message": message,
 		"status":  http.StatusNotAcceptable,
 	})
 }
-
-

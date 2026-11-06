@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CreateAdminHandler(c *gin.Context){
+func CreateAdminHandler(c *gin.Context) {
 	var input = models.AdminRequest{}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid request payload")
@@ -25,7 +25,7 @@ func CreateAdminHandler(c *gin.Context){
 	})
 }
 
-func UpdateAdminHandler(c *gin.Context){
+func UpdateAdminHandler(c *gin.Context) {
 	id := c.Param("id")
 	var input models.AdminRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -45,7 +45,7 @@ func UpdateAdminHandler(c *gin.Context){
 	})
 }
 
-func GetAdminByIDHandler(c *gin.Context){
+func GetAdminByIDHandler(c *gin.Context) {
 	paramID := c.Param("id")
 	admin, err := services.GetAdminByID(paramID)
 	if err != nil {
@@ -58,7 +58,7 @@ func GetAdminByIDHandler(c *gin.Context){
 	})
 }
 
-func DeleteAdminHandler(c *gin.Context){
+func DeleteAdminHandler(c *gin.Context) {
 	paramID := c.Param("id")
 	if err := services.DeleteAdmin(paramID); err != nil {
 		httperror.InternalServerError(c, err.Error())

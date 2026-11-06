@@ -1,9 +1,9 @@
 package controller
 
 import (
+	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/products/models"
 	"backend/src/modules/products/services"
-	httperror"backend/src/middlewares/Error"
 	"github.com/gin-gonic/gin"
 	"strconv"
 )
@@ -32,7 +32,7 @@ func GetAllParfumes(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"message": "Parfumes Retrieved",
+		"message":  "Parfumes Retrieved",
 		"parfumes": parfumes,
 	})
 }
@@ -76,7 +76,7 @@ func GetParfumesByCategory(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"message": "Parfumes Retrieved by Category",
+		"message":  "Parfumes Retrieved by Category",
 		"parfumes": parfumes,
 	})
 }
@@ -89,7 +89,7 @@ func GetParfumeByType(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"message": "Parfumes Retrieved by Type",
+		"message":  "Parfumes Retrieved by Type",
 		"parfumes": parfumes,
 	})
 }
@@ -102,11 +102,10 @@ func GetParfumeByBrand(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"message": "Parfumes Retrieved by Brand",
+		"message":  "Parfumes Retrieved by Brand",
 		"parfumes": parfumes,
 	})
 }
-
 
 func AddParfumeToBrand(c *gin.Context) {
 	brandID := c.Param("brand_id")
