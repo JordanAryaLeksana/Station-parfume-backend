@@ -4,199 +4,182 @@ import (
 	"backend/src/config"
 	"backend/src/modules/cart/models"
 	"backend/src/repository"
+	"errors"
 	"fmt"
+
 	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
 )
 
 var validate = validator.New()
 
-func CreateCart(userID uint, input *models.CartRequestDTO) (*models.CartResponseDTO, error) {
-	if err := validate.Struct(input); err != nil {
-		return nil, fmt.Errorf("validation error: %v", err)
-	}
+var (
+	ErrNotFound   = errors.New("not found")
+	ErrValidation = errors.New("validation error")
+)
 
-	if userID != input.UserID {
-		return nil, fmt.Errorf("user ID mismatch: %v != %v", userID, input.UserID)
-	}
-
-	var totalPrice float64 = 0
-	var totalQuantity int = 0
-	var cartItems []repository.CartItem
-
-	// Hitung total dan siapkan cart items
-	for _, item := range input.Items {
-		var parfume repository.Parfume
-		var bottle repository.Bottle
-
-		if err := config.DB.First(&parfume, "id = ?", item.ParfumeID).Error; err != nil {
-			return nil, fmt.Errorf("failed to find parfume: %v", err)
-		}
-
-		if err := config.DB.First(&bottle, "id = ?", item.BottleID).Error; err != nil {
-			return nil, fmt.Errorf("failed to find bottle: %v", err)
-		}
-
-		quantity := item.Quantity
-		price := parfume.PriceML + bottle.Price
-
-		totalPrice += price * float64(quantity)
-		totalQuantity += quantity
-
-		cartItems = append(cartItems, repository.CartItem{
-			ParfumeID: item.ParfumeID,
-			BottleID:  item.BottleID,
-			Quantity:  quantity,
-		})
-	}
-
-	// Simpan Cart ke DB
-	cart := repository.Cart{
-		UserID:        userID,
-		TotalPrice:    totalPrice,
-		TotalQuantity: totalQuantity,
-	}
-	if err := config.DB.Create(&cart).Error; err != nil {
-		return nil, fmt.Errorf("failed to create cart: %v", err)
-	}
-
-	// Simpan CartItems ke DB (dengan CartID dari cart yang baru dibuat)
-	for i := range cartItems {
-		cartItems[i].CartID = cart.ID
-	}
-	if err := config.DB.Create(&cartItems).Error; err != nil {
-		return nil, fmt.Errorf("failed to create cart items: %v", err)
-	}
-
-	// Build response DTO
-	var cartItemDTOs []models.CartItemDTO
-	for _, item := range cartItems {
-		cartItemDTOs = append(cartItemDTOs, models.CartItemDTO{
-			ParfumeID: item.ParfumeID,
-			BottleID:  item.BottleID,
-			Quantity:  item.Quantity,
-		})
-	}
-
-	return &models.CartResponseDTO{
-		ID:            cart.ID,
-		Items:         cartItemDTOs,
-		TotalPrice:    cart.TotalPrice,
-		TotalQuantity: cart.TotalQuantity,
-	}, nil
+// PreloadCartItem memuat semua yang dibutuhkan untuk menampilkan / checkout item keranjang.
+func PreloadCartItem(db *gorm.DB) *gorm.DB {
+	return db.Preload("ProductModel").
+		Preload("ProductModel.Product").
+		Preload("ProductModel.Product.Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ProductModel.Option1").
+		Preload("ProductModel.Option2")
 }
 
-func AddItemToCart(cartID uint, parfumeID uint, bottleID uint, quantity int) (*models.CartResponseDTO, error) {
+// IsPurchasable: model aktif, belum dihapus, dan produknya sedang dijual.
+func IsPurchasable(m *repository.ProductModel) bool {
+	return m != nil && m.IsActive && m.Product != nil && m.Product.Status == repository.ProductStatusActive
+}
+
+func GetCart(userID uint) (*models.CartResponseDTO, error) {
 	var cart repository.Cart
-	if err := config.DB.Preload("Items").First(&cart, "id = ?", cartID).Error; err != nil {
-		return nil, fmt.Errorf("cart not found: %v", err)
+	err := config.DB.Where("user_id = ?", userID).First(&cart).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return &models.CartResponseDTO{Items: []models.CartItemResponseDTO{}}, nil
 	}
-
-	var parfume repository.Parfume
-	var bottle repository.Bottle
-	if err := config.DB.First(&parfume, "id = ?", parfumeID).Error; err != nil {
-		return nil, fmt.Errorf("parfume not found: %v", parfumeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cart: %w", err)
 	}
-	if err := config.DB.First(&bottle, "id = ?", bottleID).Error; err != nil {
-		return nil, fmt.Errorf("bottle not found: %v", bottleID)
-	}
-
-	var item repository.CartItem
-	err := config.DB.First(&item, "cart_id = ? AND parfume_id = ? AND bottle_id = ?", cartID, parfumeID, bottleID).Error
-	if err == nil {
-		item.Quantity += quantity
-		if err := config.DB.Save(&item).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		item = repository.CartItem{
-			CartID:    cart.ID,
-			ParfumeID: parfume.ID,
-			BottleID:  bottle.ID,
-			Quantity:  quantity,
-		}
-		if err := config.DB.Create(&item).Error; err != nil {
-			return nil, err
-		}
-	}
-
 	var items []repository.CartItem
-	if err := config.DB.Preload("Parfume").Preload("Bottle").Find(&items, "cart_id = ?", cartID).Error; err != nil {
-		return nil, err
+	if err := PreloadCartItem(config.DB).Where("cart_id = ?", cart.ID).Order("id").Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("failed to get cart items: %w", err)
 	}
-
-	var totalPrice float64
-	var totalQty int
+	resp := &models.CartResponseDTO{ID: cart.ID, Items: make([]models.CartItemResponseDTO, 0, len(items))}
 	for _, it := range items {
-		totalQty += it.Quantity
-		totalPrice += float64(it.Quantity) * (it.Parfume.PriceML + it.Bottle.Price)
+		dto := models.CartItemResponseDTO{ID: it.ID, ProductModelID: it.ProductModelID, Quantity: it.Quantity}
+		if m := it.ProductModel; m != nil {
+			dto.ProductID = m.ProductID
+			dto.VariationName = m.VariationName()
+			dto.SKU = m.SKU
+			dto.UnitPrice = m.Price
+			dto.OriginalPrice = m.OriginalPrice
+			dto.Stock = m.Stock
+			dto.Subtotal = m.Price * int64(it.Quantity)
+			if m.Product != nil {
+				dto.ProductName = m.Product.Name
+			}
+			dto.Available = IsPurchasable(m) && m.Stock >= it.Quantity
+		}
+		if dto.Available {
+			resp.TotalQuantity += it.Quantity
+			resp.TotalPrice += dto.Subtotal
+		}
+		resp.Items = append(resp.Items, dto)
 	}
-
-	cart.TotalQuantity = totalQty
-	cart.TotalPrice = totalPrice
-	if err := config.DB.Save(&cart).Error; err != nil {
-		return nil, err
-	}
-
-	respItems := make([]models.CartItemDTO, 0)
-	for _, it := range items {
-		respItems = append(respItems, models.CartItemDTO{
-			ID:        it.ID,
-			CartID:    it.CartID,
-			ParfumeID: it.ParfumeID,
-			BottleID:  it.BottleID,
-			Quantity:  it.Quantity,
-		})
-	}
-
-	return &models.CartResponseDTO{
-		ID:            cart.ID,
-		Items:         respItems,
-		TotalPrice:    cart.TotalPrice,
-		TotalQuantity: cart.TotalQuantity,
-	}, nil
+	return resp, nil
 }
 
-func GetCartByUserID(userID uint) (*models.CartResponseDTO, error) {
-	var cart repository.Cart
-	if err := config.DB.Preload("Items").First(&cart, "user_id = ?", userID).Error; err != nil {
-		return nil, fmt.Errorf("cart not found: %v", err)
+// AddItem menambah model ke keranjang user (keranjang dibuat otomatis).
+// Kalau model sudah ada di keranjang, jumlahnya ditambahkan.
+func AddItem(userID uint, input *models.AddCartItemDTO) (*models.CartResponseDTO, error) {
+	if err := validate.Struct(input); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 	}
-
-	var respItems []models.CartItemDTO
-	for _, it := range cart.Items {
-		respItems = append(respItems, models.CartItemDTO{
-			ID:        it.ID,
-			CartID:    it.CartID,
-			ParfumeID: it.ParfumeID,
-			BottleID:  it.BottleID,
-			Quantity:  it.Quantity,
-		})
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		var m repository.ProductModel
+		if err := tx.Preload("Product").First(&m, input.ProductModelID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("product model %d: %w", input.ProductModelID, ErrNotFound)
+			}
+			return err
+		}
+		if !IsPurchasable(&m) {
+			return fmt.Errorf("%w: produk tidak tersedia", ErrValidation)
+		}
+		cart, err := getOrCreateCart(tx, userID)
+		if err != nil {
+			return err
+		}
+		var item repository.CartItem
+		err = tx.Where("cart_id = ? AND product_model_id = ?", cart.ID, m.ID).First(&item).Error
+		switch {
+		case err == nil:
+			qty := item.Quantity + input.Quantity
+			if qty > m.Stock {
+				return fmt.Errorf("%w: stok tersisa %d", ErrValidation, m.Stock)
+			}
+			return tx.Model(&item).Update("quantity", qty).Error
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if input.Quantity > m.Stock {
+				return fmt.Errorf("%w: stok tersisa %d", ErrValidation, m.Stock)
+			}
+			return tx.Create(&repository.CartItem{CartID: cart.ID, ProductModelID: m.ID, Quantity: input.Quantity}).Error
+		default:
+			return err
+		}
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	return &models.CartResponseDTO{
-		ID:            cart.ID,
-		Items:         respItems,
-		TotalPrice:    cart.TotalPrice,
-		TotalQuantity: cart.TotalQuantity,
-	}, nil
+	return GetCart(userID)
 }
 
-func ClearCart(cartID uint) error {
-	var cart repository.Cart
-	if err := config.DB.Preload("Items").First(&cart, "id = ?", cartID).Error; err != nil {
-		return fmt.Errorf("cart not found: %v", err)
+func UpdateItem(userID, itemID uint, input *models.UpdateCartItemDTO) (*models.CartResponseDTO, error) {
+	if err := validate.Struct(input); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 	}
-
-	var cartItem repository.CartItem
-	if err := config.DB.Where("cart_id = ?", cart.ID).Delete(&cartItem).Error; err != nil {
-		return fmt.Errorf("failed to clear cart items: %v", err)
+	item, err := findOwnItem(userID, itemID)
+	if err != nil {
+		return nil, err
 	}
-
-	cart.TotalPrice = 0
-	cart.TotalQuantity = 0
-	if err := config.DB.Save(&cart).Error; err != nil {
-		return fmt.Errorf("failed to reset cart: %v", err)
+	var m repository.ProductModel
+	if err := config.DB.First(&m, item.ProductModelID).Error; err == nil && input.Quantity > m.Stock {
+		return nil, fmt.Errorf("%w: stok tersisa %d", ErrValidation, m.Stock)
 	}
+	if err := config.DB.Model(item).Update("quantity", input.Quantity).Error; err != nil {
+		return nil, fmt.Errorf("failed to update cart item: %w", err)
+	}
+	return GetCart(userID)
+}
 
+func RemoveItem(userID, itemID uint) (*models.CartResponseDTO, error) {
+	item, err := findOwnItem(userID, itemID)
+	if err != nil {
+		return nil, err
+	}
+	if err := config.DB.Delete(item).Error; err != nil {
+		return nil, fmt.Errorf("failed to remove cart item: %w", err)
+	}
+	return GetCart(userID)
+}
+
+func ClearCart(userID uint) error {
+	sub := config.DB.Model(&repository.Cart{}).Select("id").Where("user_id = ?", userID)
+	if err := config.DB.Where("cart_id IN (?)", sub).Delete(&repository.CartItem{}).Error; err != nil {
+		return fmt.Errorf("failed to clear cart: %w", err)
+	}
 	return nil
+}
+
+// findOwnItem hanya menemukan item yang ada di keranjang milik userID.
+func findOwnItem(userID, itemID uint) (*repository.CartItem, error) {
+	var item repository.CartItem
+	err := config.DB.
+		Joins("JOIN carts ON carts.id = cart_items.cart_id AND carts.deleted_at IS NULL").
+		Where("cart_items.id = ? AND carts.user_id = ?", itemID, userID).
+		First(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("cart item %d: %w", itemID, ErrNotFound)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func getOrCreateCart(tx *gorm.DB, userID uint) (*repository.Cart, error) {
+	var cart repository.Cart
+	err := tx.Where("user_id = ?", userID).First(&cart).Error
+	if err == nil {
+		return &cart, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	cart = repository.Cart{UserID: userID}
+	if err := tx.Create(&cart).Error; err != nil {
+		return nil, fmt.Errorf("failed to create cart: %w", err)
+	}
+	return &cart, nil
 }

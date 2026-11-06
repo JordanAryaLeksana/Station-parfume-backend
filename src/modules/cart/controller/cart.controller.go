@@ -1,104 +1,126 @@
 package controller
 
 import (
-	"backend/src/config"
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/cart/models"
 	"backend/src/modules/cart/services"
-	"fmt"
+	"errors"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 )
 
-func CreateCartHandler(c *gin.Context) {
-	userID := c.GetUint("userID")
-	var input models.CartRequestDTO
-	if userID != input.UserID {
-		httperror.ForbiddenError(c, "You are not allowed to create a cart for this user")
+// Semua handler memakai userID dari token (di-set AuthMiddleware), bukan dari body/URL.
+
+func GetCartHandler(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, "Invalid input: "+err.Error())
-		return
-	}
-	cart, err := services.CreateCart(userID, &input)
+	cart, err := services.GetCart(userID)
 	if err != nil {
-		httperror.InternalServerError(c, "Failed to create cart: "+err.Error())
+		writeError(c, err)
 		return
 	}
-
-	c.JSON(201, gin.H{
-		"message": "Cart created successfully",
-		"data":    cart,
-	})
-}
-
-func GetCartByUserIDHandler(c *gin.Context) {
-	userID := c.Param("userID")
-	var cart models.CartRequestDTO
-	if err := config.DB.Where("id = ?", userID).First(&cart).Error; err != nil {
-		httperror.NotFoundError(c, "Cart not found")
-		return
-	}
-
-	// Convert userID from string to uint
-	var userIDUint uint
-	if _, err := fmt.Sscanf(userID, "%d", &userIDUint); err != nil {
-		httperror.BadRequestError(c, "Invalid user ID format")
-		return
-	}
-
-	cartResponse, err := services.GetCartByUserID(userIDUint)
-	if err != nil {
-		httperror.InternalServerError(c, "Failed to retrieve cart: "+err.Error())
-		return
-	}
-	c.JSON(200, gin.H{
-		"message": "Cart retrieved successfully",
-		"data":    cartResponse,
-	})
+	c.JSON(200, gin.H{"message": "Cart retrieved successfully", "data": cart})
 }
 
 func AddItemToCartHandler(c *gin.Context) {
-	var input models.CartRequestDTO
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	var input models.AddCartItemDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, "Invalid input: "+err.Error())
+		httperror.BadRequestError(c, "Invalid input")
 		return
 	}
-	var inputItem models.CartItemDTO
-	if len(input.Items) == 0 {
-		httperror.BadRequestError(c, "No items provided to add")
-		return
-	}
-
-	cartID := c.Param("id")
-	var cartIDUint uint
-	if _, err := fmt.Sscanf(cartID, "%d", &cartIDUint); err != nil {
-		httperror.BadRequestError(c, "Invalid cart ID format")
-		return
-	}
-	addtoCartResponse, err := services.AddItemToCart(cartIDUint, inputItem.ParfumeID, inputItem.BottleID, inputItem.Quantity)
+	cart, err := services.AddItem(userID, &input)
 	if err != nil {
-		httperror.InternalServerError(c, "Failed to add item to cart: "+err.Error())
+		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "Item added to cart successfully",
-		"data":    addtoCartResponse,
-	})
+	c.JSON(200, gin.H{"message": "Item added to cart successfully", "data": cart})
+}
+
+func UpdateCartItemHandler(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	itemID, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var input models.UpdateCartItemDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httperror.BadRequestError(c, "Invalid input")
+		return
+	}
+	cart, err := services.UpdateItem(userID, itemID, &input)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"message": "Cart item updated successfully", "data": cart})
+}
+
+func RemoveCartItemHandler(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	itemID, ok := parseID(c)
+	if !ok {
+		return
+	}
+	cart, err := services.RemoveItem(userID, itemID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"message": "Cart item removed successfully", "data": cart})
 }
 
 func ClearCartHandler(c *gin.Context) {
-	cartID := c.Param("id")
-	var cartIDUint uint
-	if _, err := fmt.Sscanf(cartID, "%d", &cartIDUint); err != nil {
-		httperror.BadRequestError(c, "Invalid cart ID format")
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
-	if err := services.ClearCart(cartIDUint); err != nil {
-		httperror.InternalServerError(c, "Failed to clear cart: "+err.Error())
+	if err := services.ClearCart(userID); err != nil {
+		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "Cart cleared successfully",
-	})
+	c.JSON(200, gin.H{"message": "Cart cleared successfully"})
+}
+
+func currentUser(c *gin.Context) (uint, bool) {
+	userID := c.GetUint("userID")
+	if userID == 0 {
+		if !c.Writer.Written() {
+			httperror.UnauthorizedError(c, "Unauthorized")
+		}
+		return 0, false
+	}
+	return userID, true
+}
+
+func parseID(c *gin.Context) (uint, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		httperror.BadRequestError(c, "Invalid ID")
+		return 0, false
+	}
+	return uint(id), true
+}
+
+func writeError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrNotFound):
+		httperror.NotFoundError(c, err.Error())
+	case errors.Is(err, services.ErrValidation):
+		httperror.BadRequestError(c, err.Error())
+	default:
+		httperror.InternalServerError(c, "Internal server error")
+	}
 }

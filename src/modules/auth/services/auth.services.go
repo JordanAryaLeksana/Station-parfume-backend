@@ -37,14 +37,13 @@ func Register(input *models.RegisterRequest) (*models.RegisterResponse, error) {
 	if hashErr != nil {
 		return nil, fmt.Errorf("error hashing password: %v", hashErr)
 	}
+	hash := string(hashedPassword)
 	newUser := repository.User{
-		Name:     input.Name,
-		Email:    input.Email,
-		Password: string(hashedPassword),
-		Role:     "user",
-		Picture:  "",
-		Sub:      nil,
-		Provider: "local",
+		Name:         input.Name,
+		Email:        input.Email,
+		PasswordHash: &hash,
+		Role:         repository.RoleUser,
+		Provider:     repository.ProviderLocal,
 	}
 
 	if err := config.DB.Create(&newUser).Error; err != nil {
@@ -55,7 +54,7 @@ func Register(input *models.RegisterRequest) (*models.RegisterResponse, error) {
 		Name:     newUser.Name,
 		Email:    newUser.Email,
 		Role:     newUser.Role,
-		Sub:      newUser.Sub,
+		Sub:      newUser.ProviderSub,
 		Provider: newUser.Provider,
 	}
 	return &userResponse, nil
@@ -71,8 +70,8 @@ func LoginManual(input *models.LoginRequest) (*models.LoginResponse, error) {
 		return nil, fmt.Errorf("please login using %s", user.Provider)
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
-		return nil, fmt.Errorf("invalid password: %v", err)
+	if user.PasswordHash == nil || bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(input.Password)) != nil {
+		return nil, fmt.Errorf("invalid password")
 	}
 
 	access_token, err := jwt.GenerateAccessToken(user)
@@ -88,9 +87,9 @@ func LoginManual(input *models.LoginRequest) (*models.LoginResponse, error) {
 		Name:         user.Name,
 		Email:        user.Email,
 		Role:         user.Role,
-		Picture:      user.Picture,
+		Picture:      derefString(user.PictureURL),
 		Provider:     user.Provider,
-		Sub:          user.Sub,
+		Sub:          user.ProviderSub,
 		AccessToken:  access_token,
 		RefreshToken: refresh_token,
 	}, nil
@@ -111,8 +110,8 @@ func LoginAdmin(input *models.LoginRequest) (*models.LoginResponse, error) {
 		return nil, fmt.Errorf("please login using %s", user.Provider)
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
-		return nil, fmt.Errorf("invalid password: %v", err)
+	if user.PasswordHash == nil || bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(input.Password)) != nil {
+		return nil, fmt.Errorf("invalid password")
 	}
 
 	access_token, err := jwt.GenerateAccessToken(user)
@@ -130,9 +129,9 @@ func LoginAdmin(input *models.LoginRequest) (*models.LoginResponse, error) {
 		Name:         user.Name,
 		Email:        user.Email,
 		Role:         user.Role,
-		Picture:      user.Picture,
+		Picture:      derefString(user.PictureURL),
 		Provider:     user.Provider,
-		Sub:          user.Sub,
+		Sub:          user.ProviderSub,
 		AccessToken:  access_token,
 		RefreshToken: refresh_token,
 	}, nil
@@ -186,12 +185,12 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		user = repository.User{
-			Name:     userInfo.Name,
-			Email:    userInfo.Email,
-			Picture:  userInfo.Picture,
-			Sub:      userInfo.Sub,
-			Provider: "google",
-			Role:     "user", // default role
+			Name:        userInfo.Name,
+			Email:       userInfo.Email,
+			PictureURL:  optionalString(userInfo.Picture),
+			ProviderSub: userInfo.Sub,
+			Provider:    repository.ProviderGoogle,
+			Role:        repository.RoleUser, // default role
 		}
 		if err := config.DB.Create(&user).Error; err != nil {
 			http.Error(w, "DB Error: "+err.Error(), http.StatusInternalServerError)
@@ -300,4 +299,18 @@ func RefreshToken(authHeader string) (*models.PairToken, error) {
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func optionalString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
