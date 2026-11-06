@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"backend/src/modules/Order/controller"
+	"backend/src/modules/order/controller"
 	"os"
 	authMiddleware "backend/src/middlewares/AuthMiddlewares"
 	"github.com/gin-gonic/gin"

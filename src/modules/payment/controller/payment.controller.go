@@ -2,8 +2,8 @@ package controller
 
 import (
 	httperror "backend/src/middlewares/Error"
-	"backend/src/modules/Payment/models"
-	"backend/src/modules/Payment/services"
+	"backend/src/modules/payment/models"
+	"backend/src/modules/payment/services"
 	"net/http"
 	"strconv"
 

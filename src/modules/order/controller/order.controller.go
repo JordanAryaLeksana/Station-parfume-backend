@@ -2,8 +2,8 @@ package controller
 
 import (
 	httperror "backend/src/middlewares/Error"
-	"backend/src/modules/Order/models"
-	"backend/src/modules/Order/services"
+	"backend/src/modules/order/models"
+	"backend/src/modules/order/services"
 	"strconv"
 
 	"github.com/gin-gonic/gin"

@@ -2,13 +2,13 @@ package services
 
 import (
 	"backend/src/config"
-	"backend/src/modules/Payment/models"
+	"backend/src/modules/payment/models"
 	"backend/src/repository"
 	"context"
 	"encoding/json"
 	"fmt"
 	"time"
-	"backend/src/modules/Order/services"
+	"backend/src/modules/order/services"
 	"github.com/midtrans/midtrans-go"
 	"github.com/midtrans/midtrans-go/coreapi"
 )

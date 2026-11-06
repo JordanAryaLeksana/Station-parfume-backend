@@ -2,7 +2,7 @@ package routes
 
 import (
 	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
-	"backend/src/modules/Payment/controller"
+	"backend/src/modules/payment/controller"
 	"fmt"
 	"os"
 	"github.com/gin-gonic/gin"

@@ -2,7 +2,7 @@ package services
 
 import (
 	"backend/src/config"
-	"backend/src/modules/Order/models"
+	"backend/src/modules/order/models"
 	"backend/src/repository"
 	"fmt"
 	"time"
