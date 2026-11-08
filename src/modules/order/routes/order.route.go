@@ -7,13 +7,15 @@ import (
 	"os"
 )
 
+// RegisterOrderRoutes: order milik user di token; /orders/:id/status khusus admin.
+// Aman didaftarkan karena middleware auth/role sekarang memanggil Abort.
 func RegisterOrderRoutes(rg *gin.RouterGroup) {
 	orderGroup := rg.Group("/orders", authMiddleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	{
-		orderGroup.POST("/", controller.CreateOrderHandler)
+		orderGroup.POST("/", controller.CheckoutHandler) // checkout dari keranjang
+		orderGroup.GET("/", controller.GetMyOrdersHandler)
 		orderGroup.GET("/:id", controller.GetOrderByIDHandler)
-		orderGroup.GET("/user/:user_id", controller.GetOrdersByUserHandler)
 		orderGroup.PUT("/:id/cancel", controller.CancelOrderHandler)
-		orderGroup.PUT("/:id/status", controller.UpdateOrderStatusHandler, authMiddleware.RoleBasedAccess("admin"))
+		orderGroup.PUT("/:id/status", authMiddleware.RoleBasedAccess("admin"), controller.UpdateOrderStatusHandler)
 	}
 }

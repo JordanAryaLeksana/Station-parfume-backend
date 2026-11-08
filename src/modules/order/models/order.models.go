@@ -1,44 +1,26 @@
 package models
 
-import "time"
-
-type OrderRequestDTO struct {
-	UserID        uint           `json:"user_id" validate:"required"`
-	PaymentID     uint           `json:"payment_id" validate:"required"`
-	Items         []OrderItemDTO `json:"items" validate:"required,dive"`
-	OrderStatusID uint           `json:"order_status_id" validate:"required"`
-	TotalPrice    float64        `json:"total_price" validate:"required"`
-	TotalQuantity int            `json:"total_quantity" validate:"required"`
+// CheckoutRequestDTO: order dibuat dari isi keranjang user (harga dari DB, bukan dari klien).
+// Alamat disalin ke order sebagai snapshot.
+type CheckoutRequestDTO struct {
+	RecipientName  string  `json:"recipient_name" validate:"required,max=255"`
+	RecipientPhone string  `json:"recipient_phone" validate:"required,max=20"`
+	Province       string  `json:"province" validate:"required,max=100"`
+	City           string  `json:"city" validate:"required,max=100"`
+	District       string  `json:"district" validate:"required,max=100"`
+	PostalCode     string  `json:"postal_code" validate:"required,max=10"`
+	Address        string  `json:"address" validate:"required"`
+	BuyerNote      *string `json:"buyer_note"`
 }
 
-type OrderItemDTO struct {
-	ID        uint    `json:"id"`
-	OrderID   uint    `json:"order_id" validate:"required"`
-	ParfumeID uint    `json:"parfume_id" validate:"required"`
-	BottleID  uint    `json:"bottle_id" validate:"required"`
-	Quantity  int     `json:"quantity" validate:"required,gte=1"`
-	Price     float64 `json:"price" validate:"required,gte=0"`
+type CancelOrderDTO struct {
+	Reason *string `json:"reason"`
 }
 
-type OrderResponseDTO struct {
-	ID            uint           `json:"id"`
-	UserID        uint           `json:"user_id"`
-	PaymentID     uint           `json:"payment_id"`
-	OrderStatusID uint           `json:"order_status_id"`
-	OrderStatus   OrderStatusDTO `json:"order_status"`
-	Items         []OrderItemDTO `json:"items"`
-	TotalPrice    float64        `json:"total_price"`
-	TotalQuantity int            `json:"total_quantity"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-}
-
-type PaymentStatusDTO struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
-}
-
-type OrderStatusDTO struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+// UpdateOrderStatusDTO (admin). Status: PAID, PROCESSING, SHIPPED, COMPLETED, CANCELLED, EXPIRED, REFUNDED.
+type UpdateOrderStatusDTO struct {
+	Status         string  `json:"status" validate:"required"`
+	Courier        *string `json:"courier"`
+	TrackingNumber *string `json:"tracking_number"`
+	Reason         *string `json:"reason"`
 }

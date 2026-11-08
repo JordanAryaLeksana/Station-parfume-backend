@@ -6,7 +6,7 @@ import (
 )
 
 func BadRequestError(c *gin.Context, message string) {
-	c.JSON(http.StatusBadRequest, gin.H{
+	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 		"error":   "Bad Request",
 		"message": message,
 		"status":  http.StatusBadRequest,
@@ -14,7 +14,7 @@ func BadRequestError(c *gin.Context, message string) {
 }
 
 func InternalServerError(c *gin.Context, message string) {
-	c.JSON(http.StatusInternalServerError, gin.H{
+	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 		"error":   "Internal Server Error",
 		"message": message,
 		"status":  http.StatusInternalServerError,
@@ -22,7 +22,7 @@ func InternalServerError(c *gin.Context, message string) {
 }
 
 func NotFoundError(c *gin.Context, message string) {
-	c.JSON(http.StatusNotFound, gin.H{
+	c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 		"error":   "Not Found",
 		"message": message,
 		"status":  http.StatusNotFound,
@@ -30,7 +30,7 @@ func NotFoundError(c *gin.Context, message string) {
 }
 
 func UnauthorizedError(c *gin.Context, message string) {
-	c.JSON(http.StatusUnauthorized, gin.H{
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 		"error":   "Unauthorized",
 		"message": message,
 		"status":  http.StatusUnauthorized,
@@ -38,14 +38,14 @@ func UnauthorizedError(c *gin.Context, message string) {
 }
 
 func ForbiddenError(c *gin.Context, message string) {
-	c.JSON(http.StatusForbidden, gin.H{
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 		"error":   "Forbidden",
 		"message": message,
 		"status":  http.StatusForbidden,
 	})
 }
 func ConflictError(c *gin.Context, message string) {
-	c.JSON(http.StatusConflict, gin.H{
+	c.AbortWithStatusJSON(http.StatusConflict, gin.H{
 		"error":   "Conflict",
 		"message": message,
 		"status":  http.StatusConflict,
@@ -53,7 +53,7 @@ func ConflictError(c *gin.Context, message string) {
 }
 
 func UnprocessableEntityError(c *gin.Context, message string) {
-	c.JSON(http.StatusUnprocessableEntity, gin.H{
+	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{
 		"error":   "Unprocessable Entity",
 		"message": message,
 		"status":  http.StatusUnprocessableEntity,
@@ -61,7 +61,7 @@ func UnprocessableEntityError(c *gin.Context, message string) {
 }
 
 func ServiceUnavailableError(c *gin.Context, message string) {
-	c.JSON(http.StatusServiceUnavailable, gin.H{
+	c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 		"error":   "Service Unavailable",
 		"message": message,
 		"status":  http.StatusServiceUnavailable,
@@ -69,7 +69,7 @@ func ServiceUnavailableError(c *gin.Context, message string) {
 }
 
 func TooManyRequestsError(c *gin.Context, message string) {
-	c.JSON(http.StatusTooManyRequests, gin.H{
+	c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 		"error":   "Too Many Requests",
 		"message": message,
 		"status":  http.StatusTooManyRequests,
@@ -77,7 +77,7 @@ func TooManyRequestsError(c *gin.Context, message string) {
 }
 
 func NotImplementedError(c *gin.Context, message string) {
-	c.JSON(http.StatusNotImplemented, gin.H{
+	c.AbortWithStatusJSON(http.StatusNotImplemented, gin.H{
 		"error":   "Not Implemented",
 		"message": message,
 		"status":  http.StatusNotImplemented,
@@ -85,7 +85,7 @@ func NotImplementedError(c *gin.Context, message string) {
 }
 
 func GatewayTimeoutError(c *gin.Context, message string) {
-	c.JSON(http.StatusGatewayTimeout, gin.H{
+	c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
 		"error":   "Gateway Timeout",
 		"message": message,
 		"status":  http.StatusGatewayTimeout,
@@ -93,7 +93,7 @@ func GatewayTimeoutError(c *gin.Context, message string) {
 }
 
 func MethodNotAllowedError(c *gin.Context, message string) {
-	c.JSON(http.StatusMethodNotAllowed, gin.H{
+	c.AbortWithStatusJSON(http.StatusMethodNotAllowed, gin.H{
 		"error":   "Method Not Allowed",
 		"message": message,
 		"status":  http.StatusMethodNotAllowed,
@@ -101,7 +101,7 @@ func MethodNotAllowedError(c *gin.Context, message string) {
 }
 
 func NotAcceptableError(c *gin.Context, message string) {
-	c.JSON(http.StatusNotAcceptable, gin.H{
+	c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{
 		"error":   "Not Acceptable",
 		"message": message,
 		"status":  http.StatusNotAcceptable,

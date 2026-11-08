@@ -1,0 +1,31 @@
+services:
+    postgres:
+        image: postgres:17-alpine
+        container_name: station-parfume-db
+        environment:
+            POSTGRES_USER: stationparfume
+            POSTGRES_PASSWORD: stationparfumedev2026
+            POSTGRES_DB: station-parfume-db
+        ports:
+            - "5433:5432"
+        volumes: 
+            - sp_postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U sp_user -d station-parfume-db"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        
+    redis:
+        image: redis:7-alpine
+        container_name: station-parfume-redis
+        ports:
+            - "6380:6379"
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+volumes:
+    sp_postgres_data:

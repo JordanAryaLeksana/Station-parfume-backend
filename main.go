@@ -2,13 +2,11 @@ package main
 
 import (
 	"backend/src/config"
-	// "backend/src/config/seeders"
 
 	"os"
 
 	"github.com/gin-gonic/gin"
 
-	// "backend/src/routes"
 	"backend/src/routes"
 	"backend/src/utils/AuthHandler"
 )
@@ -16,10 +14,8 @@ import (
 func main() {
 	config.InitRedis()
 	config.ConnectDatabase()
-	// seeders.SeedBottles(config.DB)
-	// seeders.SeedBrand(config.DB)
-	// seeders.SeedParfume(config.DB)
-	// seeders.SeedAdmin(config.DB)
+	config.InitMidtrans()
+	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
 	router := gin.Default()
 	routes.InitRoutes(router)
 	authhandler.InitGoogleOauthConfig()

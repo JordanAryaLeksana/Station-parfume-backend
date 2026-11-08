@@ -1,7 +1,6 @@
 package config
 
 import (
-	"backend/src/repository"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -21,21 +20,8 @@ func ConnectDatabase() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	log.Println("Database connection established successfully")
-	db.AutoMigrate(
-		&repository.User{},
-		&repository.Parfume{},
-		&repository.Brand{},
-		&repository.Payment{},
-		&repository.Cart{},
-		&repository.Order{},
-		&repository.Bottle{},
-		&repository.CartItem{},
-		&repository.OrderItem{},
-		&repository.TypeBottle{},
-	)
-	db.Migrator().DropColumn(&repository.Brand{}, "parfume_id")
-	db.Migrator().DropColumn(&repository.Parfume{}, "Type")
-	db.Migrator().DropColumn(&repository.Parfume{}, "Category")
-
+	// Schema TIDAK dibuat/diubah saat startup. Terapkan docs/schema/schema.sql
+	// (migrasi SQL) ke database sebelum menjalankan aplikasi. AutoMigrate tidak
+	// dipakai karena tidak bisa membuat partial unique index, CHECK, dan FK komposit.
 	DB = db
 }

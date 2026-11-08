@@ -4,110 +4,124 @@ import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/order/models"
 	"backend/src/modules/order/services"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-func CreateOrderHandler(c *gin.Context) {
-	var input models.OrderRequestDTO
+// Semua handler user memakai userID dari token, bukan dari body/URL.
+
+func CheckoutHandler(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	var input models.CheckoutRequestDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, "Invalid request body: "+err.Error())
+		httperror.BadRequestError(c, "Invalid request body")
 		return
 	}
-
-	if input.UserID == 0 {
-		httperror.BadRequestError(c, "UserID is required")
-		return
-	}
-	if len(input.Items) == 0 {
-		httperror.BadRequestError(c, "Order items cannot be empty")
-		return
-	}
-
-	result, err := services.CreateOrder(input)
+	order, err := services.Checkout(userID, &input)
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{
-		"message": "Order created successfully",
-		"data":    result,
-	})
+	c.JSON(201, gin.H{"message": "Order created successfully", "data": order})
 }
+
+func GetMyOrdersHandler(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	orders, err := services.GetOrdersByUser(userID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"message": "success", "data": orders})
+}
+
 func GetOrderByIDHandler(c *gin.Context) {
-	idParam := c.Param("id")
-	orderID, err := strconv.Atoi(idParam)
-	if err != nil {
-		httperror.BadRequestError(c, "invalid order id")
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
-
-	result, err := services.GetOrderByID(uint(orderID))
-	if err != nil {
-		httperror.NotFoundError(c, err.Error())
+	orderID, ok := parseID(c)
+	if !ok {
 		return
 	}
-	c.JSON(200, gin.H{"data": result})
-}
-
-func GetOrdersByUserHandler(c *gin.Context) {
-	userIDParam := c.Param("user_id")
-	userID, err := strconv.Atoi(userIDParam)
+	order, err := services.GetOrderForUser(orderID, userID)
 	if err != nil {
-		httperror.BadRequestError(c, "invalid user id")
+		writeError(c, err)
 		return
 	}
-
-	result, err := services.GetOrdersByUserID(uint(userID))
-	if err != nil {
-		httperror.InternalServerError(c, err.Error())
-		return
-	}
-	c.JSON(200, gin.H{"message": "success", "data": result})
+	c.JSON(200, gin.H{"data": order})
 }
 
 func CancelOrderHandler(c *gin.Context) {
-	idParam := c.Param("id")
-	orderID, err := strconv.Atoi(idParam)
-	if err != nil {
-		httperror.BadRequestError(c, "invalid order id")
+	userID, ok := currentUser(c)
+	if !ok {
 		return
 	}
-
-	userIDParam := c.Param("user_id")
-	userID, err := strconv.Atoi(userIDParam)
-	if err != nil {
-		httperror.BadRequestError(c, "invalid user id")
+	orderID, ok := parseID(c)
+	if !ok {
 		return
 	}
-
-	err = services.CancelOrder(uint(orderID), uint(userID))
-	if err != nil {
-		httperror.BadRequestError(c, err.Error())
+	var input models.CancelOrderDTO
+	_ = c.ShouldBindJSON(&input) // body opsional
+	if err := services.CancelOrder(orderID, userID, input.Reason); err != nil {
+		writeError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{"message": "order canceled successfully"})
 }
 
 func UpdateOrderStatusHandler(c *gin.Context) {
-	idParam := c.Param("id")
-	orderID, err := strconv.Atoi(idParam)
-	if err != nil {
-		httperror.BadRequestError(c, "invalid order id")
+	orderID, ok := parseID(c)
+	if !ok {
 		return
 	}
-
-	var input models.OrderStatusDTO
+	var input models.UpdateOrderStatusDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, err.Error())
+		httperror.BadRequestError(c, "Invalid request body")
 		return
 	}
-
-	err = services.UpdateOrderStatus(uint(orderID), input.Name)
-	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+	if err := services.UpdateOrderStatus(orderID, &input); err != nil {
+		writeError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{"message": "order status updated successfully"})
+}
+
+func currentUser(c *gin.Context) (uint, bool) {
+	userID := c.GetUint("userID")
+	if userID == 0 {
+		if !c.Writer.Written() {
+			httperror.UnauthorizedError(c, "Unauthorized")
+		}
+		return 0, false
+	}
+	return userID, true
+}
+
+func parseID(c *gin.Context) (uint, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		httperror.BadRequestError(c, "invalid order id")
+		return 0, false
+	}
+	return uint(id), true
+}
+
+func writeError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrNotFound):
+		httperror.NotFoundError(c, err.Error())
+	case errors.Is(err, services.ErrValidation):
+		httperror.BadRequestError(c, err.Error())
+	default:
+		httperror.InternalServerError(c, "Internal server error")
+	}
 }
