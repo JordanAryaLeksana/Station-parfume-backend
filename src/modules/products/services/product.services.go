@@ -21,6 +21,8 @@ func productQuery() *gorm.DB {
 		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("Variations", func(db *gorm.DB) *gorm.DB { return db.Order("tier_index") }).
 		Preload("Variations.Options", func(db *gorm.DB) *gorm.DB { return db.Order("option_index") }).
+		Preload("Variations.Options.Scent.Group").
+		Preload("Scent.Group").
 		Preload("Models", func(db *gorm.DB) *gorm.DB { return db.Where("is_active = ?", true).Order("id") }).
 		Preload("Category").
 		Where("products.status = ?", repository.ProductStatusActive)

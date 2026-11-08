@@ -1,5 +1,5 @@
-// Command seed menjalankan seeder di src/config/seeders (kategori + katalog dari
-// CSV di folder seed/, atau admin dari env kalau pakai -admin).
+// Command seed menjalankan seeder di src/config/seeders (kategori, wangian, dan
+// katalog dari CSV di folder seed/, atau admin dari env kalau pakai -admin).
 //
 //	DATABASE_URL="host=localhost user=postgres password=... dbname=station_parfume sslmode=disable" \
 //	  go run ./seed -dry-run      # cek dulu, semua di-rollback
@@ -28,7 +28,7 @@ import (
 )
 
 func main() {
-	dir := flag.String("dir", "seed", "folder berisi categories.csv dan catalog.csv")
+	dir := flag.String("dir", "seed", "folder berisi categories.csv, wangian.csv, catalog.csv")
 	dsn := flag.String("dsn", os.Getenv("DATABASE_URL"), "DSN PostgreSQL (default: env DATABASE_URL)")
 	dryRun := flag.Bool("dry-run", false, "jalankan semua lalu rollback (tidak ada yang tersimpan)")
 	withAdmin := flag.Bool("admin", false, "hanya buat akun admin dari env ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD (katalog dilewati)")
@@ -71,15 +71,18 @@ func main() {
 	if data.Categories, err = load(*dir, "categories.csv", seeders.LoadCategories); err != nil {
 		log.Fatal(err)
 	}
+	if data.Scents, err = load(*dir, "wangian.csv", seeders.LoadScents); err != nil {
+		log.Fatal(err)
+	}
 	if data.Catalog, err = load(*dir, "catalog.csv", seeders.LoadCatalog); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("CSV OK: %d kategori, %d model\n", len(data.Categories), len(data.Catalog))
+	fmt.Printf("CSV OK: %d kategori, %d wangian, %d model\n", len(data.Categories), len(data.Scents), len(data.Catalog))
 
 	rep, err := seeders.SeedCatalog(db, data, *dryRun)
 	if rep != nil {
-		fmt.Printf("kategori : %v\nproduk   : %v\nvariasi  : %v\npilihan  : %v\nmodel/SKU: %v, %d dinonaktifkan\n",
-			rep.Categories, rep.Products, rep.Variations, rep.Options, rep.Models, rep.ModelsDeactivated)
+		fmt.Printf("kategori : %v\ngrup wangian: %v\nwangian  : %v, %d dinonaktifkan\nproduk   : %v\nvariasi  : %v\npilihan  : %v\nmodel/SKU: %v, %d dinonaktifkan\n",
+			rep.Categories, rep.ScentGroups, rep.Scents, rep.ScentsDeactivated, rep.Products, rep.Variations, rep.Options, rep.Models, rep.ModelsDeactivated)
 		for _, w := range rep.Warnings {
 			fmt.Println("PERINGATAN:", w)
 		}

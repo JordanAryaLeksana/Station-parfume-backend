@@ -1,15 +1,16 @@
 # Seed katalog (schema v2)
 
-Seeder mengisi tabel katalog dari 2 file CSV di folder ini, supaya isi website **sama persis** dengan toko Shopee `shopee.co.id/stationparfume`.
+Seeder mengisi tabel katalog dari 3 file CSV di folder ini, supaya isi website **sama persis** dengan toko Shopee `shopee.co.id/stationparfume`.
 
 Kode seeder ada di [`src/config/seeders/`](../src/config/seeders/), model GORM di [`src/repository/`](../src/repository/). [`main.go`](main.go) di folder ini hanya titik masuk untuk menjalankannya tanpa menyalakan server (`go run ./seed`).
 
 | File | Isi | Status |
 |---|---|---|
 | `categories.csv` | kategori toko, persis seperti di halaman toko Shopee | ✅ terisi: 7 kategori, urutan dan ID dari Shopee (dicek 2026-11-08) |
-| `catalog.csv` | listing + kombinasi variasi (kategori, harga, stok, SKU) | ⏳ 50 baris siap, **judul listing dan harga masih `TODO`** |
+| `wangian.csv` | wangian dari 62 foto produk: grade → grup → varian + 2 label aroma | ✅ terisi: 53 grup Regular + 9 grup Exclusive, 123 varian (dari `gambar-parfum.zip`) |
+| `catalog.csv` | listing + kombinasi variasi (kategori, harga, stok, SKU, wangian) | ⏳ 50 baris siap, **judul listing dan harga masih `TODO`** |
 
-Tidak ada lagi `aromas.csv` dan `bottles.csv`. Di Shopee parfum dijual sebagai **satu produk** (botol + isi), jadi nama parfum ditulis di judul listing atau sebagai pilihan variasi, dan botol kosong adalah listing biasa. Ke-50 aroma tetap ada sebagai pilihan variasi "Aroma" di `catalog.csv`.
+Tidak ada lagi `aromas.csv` dan `bottles.csv`. Parfum dijual sebagai **satu produk** (botol + isi), dan botol kosong adalah listing biasa. Wangiannya ada di `wangian.csv` dan ditautkan ke listing lewat kolom `scent` di `catalog.csv`.
 
 ### Mengisi `catalog.csv`
 
@@ -46,6 +47,7 @@ ADMIN_NAME="Admin" ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="minimal-8-kar
 - Semua berjalan dalam **satu transaksi**. Kalau ada satu error, tidak ada yang tersimpan.
 - Aman dijalankan berulang kali. Data yang sudah ada diperbarui dan tidak diduplikasi (kategori dicocokkan lewat `shopee_category_id` atau nama; produk lewat slug nama; pilihan lewat label; model lewat kombinasi variasi).
 - Tidak ada yang dihapus. Kombinasi yang tidak ada lagi di `catalog.csv` hanya **dinonaktifkan** (`is_active = false`). Pilihan variasinya dipindah ke urutan paling belakang.
+- Wangian yang dihapus dari `wangian.csv` hanya **dinonaktifkan** (tidak tampil di `GET /scents`).
 - Seeder menampilkan **PERINGATAN** untuk kategori yang belum punya produk di `catalog.csv`.
 
 ## `categories.csv`
@@ -56,6 +58,23 @@ Urutan baris = urutan tampil (sama seperti di Shopee).
 |---|---|---|
 | `name` | ✅ | nama kategori persis seperti di Shopee, mis. `Parfum & Wewangian` |
 | `shopee_category_id` | | ID kategori toko di Shopee (dari URL `?originalCategoryId=…`), mis. `11043198` |
+
+## `wangian.csv`
+
+**Satu baris = satu varian** (satu bullet di foto produk). Grup tanpa varian (mis. "1000 Bunga") ditulis 1 baris dengan `varian` = nama grup. Baris yang diawali `#` adalah komentar.
+
+| Kolom | Wajib | Isi |
+|---|---|---|
+| `grade` | ✅ | `regular` atau `exclusive`. Nama sama di grade berbeda = **2 parfum berbeda** |
+| `group_code` | ✅ | kunci grup (1 foto), mis. `annasui`, `exclusive-3`. Huruf kecil, angka, `-` |
+| `group` | ✅ | judul di foto, mis. `Annasui`, `Exclusive` |
+| `inspired_by` | | teks "Inspired by …" di foto |
+| `note1`, `note2` | ✅ | 2 label aroma di foto, dari: amber, aromatic, balsamic, citrus, creamy, floral, fresh, fruity, musk, oud, powdery, sweet, woody |
+| `code` | ✅ | kunci varian, unik, mis. `annasui-dolly-girl`. **Jangan diubah** setelah dipakai di `catalog.csv` |
+| `varian` | ✅ | nama varian persis seperti di foto |
+| `image` | | nama file foto |
+
+Semua baris dengan `group_code` sama harus punya `grade`, `group`, `inspired_by`, `note1`, `note2`, dan `image` yang sama.
 
 ## `catalog.csv`
 
@@ -74,14 +93,16 @@ Urutan baris = urutan tampil (sama seperti di Shopee).
 | `stock` | ✅ | stok kombinasi ini (sama seperti di Shopee) |
 | `weight_gram` | | berat produk untuk ongkir |
 | `shopee_item_id`, `shopee_model_id` | | ID dari Seller Center |
+| `scent` | | `code` dari `wangian.csv`. Kalau listing punya variasi bernama `Aroma`, wangian ini milik pilihan Aroma di baris itu; kalau tidak, wangian milik seluruh listing (harus sama di semua baris) |
 
 Contoh dengan bentuk listing yang ada di toko (harga dan stok hanya contoh):
 
 ```csv
-product_name,category,parent_sku,variation1,option1,variation2,option2,sku,price,original_price,stock,weight_gram,shopee_item_id,shopee_model_id
-MASTER Inspired parfume by MAHERZEIN,Parfum & Wewangian,,Warna,Campur,Ukuran,15 ML,MZ-C-15,155000,,5,,7413921292,
-MASTER Inspired parfume by MAHERZEIN,Parfum & Wewangian,,Warna,Murni,Ukuran,15 ML,MZ-M-15,185000,,0,,7413921292,
-Botol spray,Kecantikan Lainnya,,,,,,BTL-SPRAY,5000,,40,30,,
+product_name,category,parent_sku,variation1,option1,variation2,option2,sku,price,original_price,stock,weight_gram,shopee_item_id,shopee_model_id,scent
+MASTER Inspired parfume by MAHERZEIN,Parfum & Wewangian,,Warna,Campur,Ukuran,15 ML,MZ-C-15,155000,,5,,7413921292,,maher-zein
+MASTER Inspired parfume by MAHERZEIN,Parfum & Wewangian,,Warna,Murni,Ukuran,15 ML,MZ-M-15,185000,,0,,7413921292,,maher-zein
+Annasui,Parfum & Wewangian,,Ukuran,30 ML,Aroma,Dolly Girl,AS-DG-30,45000,,5,,,,annasui-dolly-girl
+Botol spray,Kecantikan Lainnya,,,,,,BTL-SPRAY,5000,,40,30,,,
 ```
 
 Produk tanpa variasi (seperti "Botol spray"): kosongkan semua kolom variasi, dan produk itu hanya boleh punya 1 baris. Kategori `Kecantikan Lainnya` di contoh hanya ilustrasi, jadi cek kategori asli listing itu di Shopee.

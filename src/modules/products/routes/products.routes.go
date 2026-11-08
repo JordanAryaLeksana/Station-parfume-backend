@@ -6,12 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterProductsRoutes: katalog yang meniru toko Shopee (kategori + listing).
+// RegisterProductsRoutes: katalog (kategori + listing seperti Shopee) dan wangian dari foto produk.
 // Semua publik (pengunjung bisa lihat produk tanpa login, seperti di Shopee) dan
-// read-only: isinya disamakan dengan Shopee lewat seeder (seed/categories.csv,
+// read-only: isinya diisi lewat seeder (seed/categories.csv, seed/wangian.csv,
 // seed/catalog.csv), jadi tidak ada endpoint tulis di sini.
 func RegisterProductsRoutes(router *gin.RouterGroup) {
 	router.GET("/categories", controller.GetAllCategories)
+	router.GET("/scents", controller.GetScentGroups) // ?grade=regular|exclusive&note=woody
 
 	productGroup := router.Group("/products")
 	{

@@ -83,7 +83,7 @@ func plan(t *testing.T, body string) ([]*productPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	return planProducts(rows, testCats)
+	return planProducts(rows, testCats, nil)
 }
 
 var testCats = []CategoryRow{{Name: "Parfum & Wewangian"}, {Name: "Kecantikan Lainnya"}}
@@ -158,7 +158,7 @@ func TestCatalogCSVTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plans, err := planProducts(rows, loadCategoriesFile(t))
+	plans, err := planProducts(rows, loadCategoriesFile(t), loadScentsFile(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,5 +167,112 @@ func TestCatalogCSVTemplate(t *testing.T) {
 	}
 	if strings.Contains(string(b), "TODO") && len(plans[0].Opts1) != 50 {
 		t.Fatalf("template harus berisi 50 aroma, got %d", len(plans[0].Opts1))
+	}
+}
+
+func loadScentsFile(t *testing.T) []ScentRow {
+	t.Helper()
+	f, err := os.Open("../../../seed/wangian.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	rows, err := LoadScents(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}
+
+// wangian.csv harus sama dengan 62 foto produk.
+func TestWangianCSVMatchesPhotos(t *testing.T) {
+	rows := loadScentsFile(t)
+	if len(rows) != 123 {
+		t.Fatalf("want 123 varian, got %d", len(rows))
+	}
+	groups := map[string]map[string]bool{"regular": {}, "exclusive": {}}
+	byCode := map[string]ScentRow{}
+	for _, r := range rows {
+		groups[r.Grade][r.GroupCode] = true
+		byCode[r.Code] = r
+	}
+	if len(groups["regular"]) != 53 || len(groups["exclusive"]) != 9 {
+		t.Fatalf("want 53 grup regular + 9 exclusive, got %d + %d", len(groups["regular"]), len(groups["exclusive"]))
+	}
+	// Regular dan Exclusive dengan nama sama = 2 parfum berbeda.
+	a, b := byCode["escada-moonlight"], byCode["exclusive-4-moonlight"]
+	if a.Name != "Moonlight" || b.Name != "Moonlight" || a.Grade != "regular" || b.Grade != "exclusive" {
+		t.Fatalf("Moonlight regular/exclusive harus 2 wangian berbeda: %+v / %+v", a, b)
+	}
+	an := byCode["annasui-dolly-girl"]
+	if an.Group != "Annasui" || an.InspiredBy != "Anna sui" || an.Note1 != "sweet" || an.Note2 != "fruity" {
+		t.Fatalf("Annasui Dolly Girl salah: %+v", an)
+	}
+	if s := byCode["1000-bunga"]; s.Name != "1000 Bunga" || s.GroupCode != "1000-bunga" {
+		t.Fatalf("grup tanpa varian harus 1 baris bernama sama: %+v", s)
+	}
+}
+
+func TestLoadScentsRejectsBadData(t *testing.T) {
+	const h = "grade,group_code,group,inspired_by,note1,note2,code,varian,image\n"
+	ok := "regular,annasui,Annasui,Anna sui,sweet,fruity,annasui-dolly-girl,Dolly Girl,a.jpeg\n"
+	cases := map[string]string{
+		"grade salah":        "premium,a,A,,sweet,fruity,a,A,x\n",
+		"note tidak dikenal": "regular,a,A,,sweet,spicy,a,A,x\n",
+		"note sama":          "regular,a,A,,sweet,sweet,a,A,x\n",
+		"code tidak valid":   "regular,a,A,,sweet,fruity,A B,A,x\n",
+		"code dobel":         ok + "regular,annasui,Annasui,Anna sui,sweet,fruity,annasui-dolly-girl,Sweet Dream,a.jpeg\n",
+		"varian dobel":       ok + "regular,annasui,Annasui,Anna sui,sweet,fruity,annasui-x,dolly girl,a.jpeg\n",
+		"data grup beda":     ok + "regular,annasui,Annasui,Anna sui,sweet,woody,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
+	}
+	for name, body := range cases {
+		if _, err := LoadScents(strings.NewReader(h + body)); err == nil {
+			t.Errorf("%s: harus error", name)
+		}
+	}
+	if _, err := LoadScents(strings.NewReader(h + ok)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPlanProductsLinksScents(t *testing.T) {
+	const h = "product_name,category,variation1,option1,variation2,option2,sku,price,stock,scent\n"
+	scents := []ScentRow{{Code: "angelina-jolie"}, {Code: "annasui-dolly-girl"}, {Code: "annasui-sweet-dream"}}
+	load := func(body string) ([]*productPlan, error) {
+		rows, err := LoadCatalog(strings.NewReader(h + body))
+		if err != nil {
+			return nil, err
+		}
+		return planProducts(rows, testCats, scents)
+	}
+	// Listing 1 wangian (seperti "Anggelina Jolie" di Shopee): wangian di level produk.
+	plans, err := load(`Anggelina Jolie,Parfum & Wewangian,Warna,Campur,Ukuran,15 ML,,110000,1,angelina-jolie
+Anggelina Jolie,Parfum & Wewangian,Warna,Murni,Ukuran,15 ML,,130000,1,
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := plans[0]; p.ScentTier != -1 || p.Scent != "angelina-jolie" {
+		t.Fatalf("wangian produk salah: tier=%d scent=%q", p.ScentTier, p.Scent)
+	}
+	// Listing banyak wangian: wangian per pilihan di variasi "Aroma" (tier mana pun).
+	plans, err = load(`Annasui,Parfum & Wewangian,Ukuran,30 ML,Aroma,Dolly Girl,,45000,1,annasui-dolly-girl
+Annasui,Parfum & Wewangian,Ukuran,30 ML,Aroma,Sweet Dream,,45000,1,annasui-sweet-dream
+Annasui,Parfum & Wewangian,Ukuran,50 ML,Aroma,dolly girl,,65000,1,annasui-dolly-girl
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := plans[0]; p.ScentTier != 1 || p.OptionScents["dolly girl"] != "annasui-dolly-girl" || p.OptionScents["sweet dream"] != "annasui-sweet-dream" {
+		t.Fatalf("wangian pilihan salah: tier=%d %v", p.ScentTier, p.OptionScents)
+	}
+	for name, body := range map[string]string{
+		"scent tidak ada":              "P,Parfum & Wewangian,,,,,,1000,1,tidak-ada\n",
+		"produk 2 wangian tanpa Aroma": "P,Parfum & Wewangian,Ukuran,15 ML,,,,1000,1,angelina-jolie\nP,Parfum & Wewangian,Ukuran,25 ML,,,,1000,1,annasui-dolly-girl\n",
+		"1 pilihan 2 wangian":          "P,Parfum & Wewangian,Aroma,A,Ukuran,15,,1000,1,annasui-dolly-girl\nP,Parfum & Wewangian,Aroma,A,Ukuran,25,,1000,1,annasui-sweet-dream\n",
+	} {
+		if _, err := load(body); err == nil {
+			t.Errorf("%s: harus error", name)
+		}
 	}
 }

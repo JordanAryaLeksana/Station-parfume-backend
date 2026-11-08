@@ -4,15 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"backend/src/repository"
 
 	"gorm.io/gorm"
 )
 
-// CatalogData adalah isi categories.csv dan catalog.csv yang sudah diparse.
+// CatalogData adalah isi categories.csv, wangian.csv, dan catalog.csv yang sudah diparse.
 type CatalogData struct {
 	Categories []CategoryRow
+	Scents     []ScentRow
 	Catalog    []CatalogRow
 }
 
@@ -21,9 +23,10 @@ type Counter struct{ Created, Updated int }
 func (c Counter) String() string { return fmt.Sprintf("%d baru, %d diperbarui", c.Created, c.Updated) }
 
 type CatalogReport struct {
-	Categories, Products, Variations, Options, Models Counter
-	ModelsDeactivated                                 int // model di DB yang tidak ada lagi di CSV
-	Warnings                                          []string
+	Categories, ScentGroups, Scents, Products, Variations, Options, Models Counter
+	ScentsDeactivated                                                      int // wangian di DB yang tidak ada lagi di wangian.csv
+	ModelsDeactivated                                                      int // model di DB yang tidak ada lagi di CSV
+	Warnings                                                               []string
 }
 
 // ErrDryRun dikembalikan SeedCatalog saat DryRun=true; semua perubahan di-rollback.
@@ -34,7 +37,7 @@ var ErrDryRun = errors.New("dry run: semua perubahan di-rollback")
 // ada lagi di CSV hanya dinonaktifkan (is_active=false), supaya website tetap
 // sama dengan Shopee.
 func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error) {
-	plans, err := planProducts(d.Catalog, d.Categories)
+	plans, err := planProducts(d.Catalog, d.Categories, d.Scents)
 	if err != nil {
 		return nil, err
 	}
@@ -44,9 +47,13 @@ func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error
 		if err != nil {
 			return err
 		}
+		scentIDs, err := upsertScents(tx, d.Scents, rep)
+		if err != nil {
+			return err
+		}
 		used := map[string]bool{}
 		for _, p := range plans {
-			if err := upsertProduct(tx, p, catIDs[Slugify(p.Category)], rep); err != nil {
+			if err := upsertProduct(tx, p, catIDs[Slugify(p.Category)], scentIDs, rep); err != nil {
 				return fmt.Errorf("produk %q: %w", p.Name, err)
 			}
 			used[Slugify(p.Category)] = true
@@ -75,11 +82,18 @@ type productPlan struct {
 	WeightGram                      int
 	ShopeeItemID                    *int64
 	Var1, Var2                      string
-	Opts1, Opts2                    []string // urutan = urutan muncul pertama di CSV (= urutan di Shopee)
+	ScentTier                       int               // tier bernama "Aroma" (0/1), -1 = wangian di level produk
+	Scent                           string            // kode wangian produk (kalau ScentTier = -1)
+	OptionScents                    map[string]string // label pilihan (normLabel) → kode wangian
+	Opts1, Opts2                    []string          // urutan = urutan muncul pertama di CSV (= urutan di Shopee)
 	Rows                            []CatalogRow
 }
 
-func planProducts(rows []CatalogRow, cats []CategoryRow) ([]*productPlan, error) {
+func planProducts(rows []CatalogRow, cats []CategoryRow, scents []ScentRow) ([]*productPlan, error) {
+	scentCodes := map[string]bool{}
+	for _, sc := range scents {
+		scentCodes[sc.Code] = true
+	}
 	catNames := map[string]string{} // slug → nama persis di categories.csv
 	for _, c := range cats {
 		catNames[Slugify(c.Name)] = c.Name
@@ -92,7 +106,8 @@ func planProducts(rows []CatalogRow, cats []CategoryRow) ([]*productPlan, error)
 		slug := Slugify(r.ProductName)
 		p, ok := bySlug[slug]
 		if !ok {
-			p = &productPlan{Name: r.ProductName, Slug: slug, Category: r.Category, Var1: r.Variation1, Var2: r.Variation2}
+			p = &productPlan{Name: r.ProductName, Slug: slug, Category: r.Category, Var1: r.Variation1, Var2: r.Variation2,
+				ScentTier: aromaTier(r.Variation1, r.Variation2), OptionScents: map[string]string{}}
 			bySlug[slug] = p
 			plans = append(plans, p)
 		}
@@ -137,6 +152,23 @@ func planProducts(rows []CatalogRow, cats []CategoryRow) ([]*productPlan, error)
 				return nil, fail("kombinasi (%q, %q) sudah ada di baris %d", r.Option1, r.Option2, prev.Line)
 			}
 		}
+		if r.Scent != "" {
+			if !scentCodes[r.Scent] {
+				return nil, fail("scent %q tidak ada di wangian.csv", r.Scent)
+			}
+			if p.ScentTier < 0 {
+				if p.Scent != "" && p.Scent != r.Scent {
+					return nil, fail("scent %q beda dengan baris sebelumnya (%q); produk tanpa variasi \"Aroma\" hanya boleh 1 wangian", r.Scent, p.Scent)
+				}
+				p.Scent = r.Scent
+			} else {
+				label := normLabel([]string{r.Option1, r.Option2}[p.ScentTier])
+				if prev, ok := p.OptionScents[label]; ok && prev != r.Scent {
+					return nil, fail("pilihan %q sudah ditautkan ke scent %q", label, prev)
+				}
+				p.OptionScents[label] = r.Scent
+			}
+		}
 		if p.Var1 == "" && len(p.Rows) > 0 {
 			return nil, fail("produk tanpa variasi hanya boleh 1 baris")
 		}
@@ -145,6 +177,16 @@ func planProducts(rows []CatalogRow, cats []CategoryRow) ([]*productPlan, error)
 		p.Rows = append(p.Rows, r)
 	}
 	return plans, nil
+}
+
+// aromaTier mengembalikan tier variasi yang bernama "Aroma" (0/1), atau -1.
+func aromaTier(var1, var2 string) int {
+	for i, v := range []string{var1, var2} {
+		if strings.EqualFold(strings.TrimSpace(v), "aroma") {
+			return i
+		}
+	}
+	return -1
 }
 
 func mergeField(dst *string, v string) error {
@@ -229,14 +271,97 @@ func upsertCategories(tx *gorm.DB, rows []CategoryRow, rep *CatalogReport) (map[
 	return ids, nil
 }
 
-func upsertProduct(tx *gorm.DB, p *productPlan, categoryID uint, rep *CatalogReport) error {
+// upsertScents menyimpan grup + varian wangian (dicocokkan lewat code). Urutan = urutan di CSV.
+// Wangian yang tidak ada lagi di CSV dinonaktifkan, tidak dihapus.
+func upsertScents(tx *gorm.DB, rows []ScentRow, rep *CatalogReport) (map[string]uint, error) {
+	ids := map[string]uint{}
+	if len(rows) == 0 {
+		return ids, nil
+	}
+	groupIDs := map[string]uint{}
+	inGroup := map[string]int{}
+	for _, r := range rows {
+		gid, ok := groupIDs[r.GroupCode]
+		if !ok {
+			var g repository.ScentGroup
+			found, err := findActive(tx, &g, "code = ?", r.GroupCode)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				err = tx.Model(&g).Updates(map[string]any{"grade": r.Grade, "name": r.Group, "inspired_by": strPtr(r.InspiredBy),
+					"note_primary": r.Note1, "note_secondary": r.Note2, "sort_order": len(groupIDs), "is_active": true}).Error
+				rep.ScentGroups.Updated++
+			} else {
+				g = repository.ScentGroup{Code: r.GroupCode, Grade: r.Grade, Name: r.Group, InspiredBy: strPtr(r.InspiredBy),
+					NotePrimary: r.Note1, NoteSecondary: r.Note2, SortOrder: len(groupIDs), IsActive: true}
+				err = tx.Create(&g).Error
+				rep.ScentGroups.Created++
+			}
+			if err != nil {
+				return nil, fmt.Errorf("grup wangian %s: %w", r.GroupCode, err)
+			}
+			gid = g.ID
+			groupIDs[r.GroupCode] = gid
+		}
+
+		var sc repository.Scent
+		found, err := findActive(tx, &sc, "code = ?", r.Code)
+		if err != nil {
+			return nil, err
+		}
+		order := inGroup[r.GroupCode]
+		inGroup[r.GroupCode]++
+		if found {
+			err = tx.Model(&sc).Updates(map[string]any{"group_id": gid, "name": r.Name, "sort_order": order, "is_active": true}).Error
+			rep.Scents.Updated++
+		} else {
+			sc = repository.Scent{GroupID: gid, Code: r.Code, Name: r.Name, SortOrder: order, IsActive: true}
+			err = tx.Create(&sc).Error
+			rep.Scents.Created++
+		}
+		if err != nil {
+			return nil, fmt.Errorf("wangian %s (wangian.csv baris %d): %w", r.Code, r.Line, err)
+		}
+		ids[r.Code] = sc.ID
+	}
+
+	codes := make([]string, 0, len(ids))
+	for c := range ids {
+		codes = append(codes, c)
+	}
+	res := tx.Model(&repository.Scent{}).Where("is_active AND code NOT IN ?", codes).Update("is_active", false)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	rep.ScentsDeactivated = int(res.RowsAffected)
+	gcodes := make([]string, 0, len(groupIDs))
+	for c := range groupIDs {
+		gcodes = append(gcodes, c)
+	}
+	if err := tx.Model(&repository.ScentGroup{}).Where("is_active AND code NOT IN ?", gcodes).Update("is_active", false).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func scentIDPtr(ids map[string]uint, code string) *uint {
+	if code == "" {
+		return nil
+	}
+	id := ids[code]
+	return &id
+}
+
+func upsertProduct(tx *gorm.DB, p *productPlan, categoryID uint, scentIDs map[string]uint, rep *CatalogReport) error {
 	var prod repository.Product
 	found, err := findActive(tx, &prod, "slug = ?", p.Slug)
 	if err != nil {
 		return err
 	}
 	if found {
-		upd := map[string]any{"name": p.Name, "category_id": categoryID, "parent_sku": strPtr(p.ParentSKU), "weight_gram": p.WeightGram}
+		upd := map[string]any{"name": p.Name, "category_id": categoryID, "scent_id": scentIDPtr(scentIDs, p.Scent),
+			"parent_sku": strPtr(p.ParentSKU), "weight_gram": p.WeightGram}
 		if p.ShopeeItemID != nil {
 			upd["shopee_item_id"] = *p.ShopeeItemID
 		}
@@ -245,7 +370,7 @@ func upsertProduct(tx *gorm.DB, p *productPlan, categoryID uint, rep *CatalogRep
 		}
 		rep.Products.Updated++
 	} else {
-		prod = repository.Product{Name: p.Name, Slug: p.Slug, CategoryID: categoryID, Status: repository.ProductStatusActive,
+		prod = repository.Product{Name: p.Name, Slug: p.Slug, CategoryID: categoryID, ScentID: scentIDPtr(scentIDs, p.Scent), Status: repository.ProductStatusActive,
 			ParentSKU: strPtr(p.ParentSKU), WeightGram: p.WeightGram, ShopeeItemID: p.ShopeeItemID}
 		if err := tx.Create(&prod).Error; err != nil {
 			return err
@@ -279,7 +404,14 @@ func upsertProduct(tx *gorm.DB, p *productPlan, categoryID uint, rep *CatalogRep
 			}
 			rep.Variations.Created++
 		}
-		ids, err := upsertOptions(tx, prod.ID, pv.ID, v.opts, rep)
+		var optScents map[string]*uint
+		if tier == p.ScentTier {
+			optScents = map[string]*uint{}
+			for label, code := range p.OptionScents {
+				optScents[label] = scentIDPtr(scentIDs, code)
+			}
+		}
+		ids, err := upsertOptions(tx, prod.ID, pv.ID, v.opts, optScents, rep)
 		if err != nil {
 			return fmt.Errorf("variasi %q: %w", v.name, err)
 		}
@@ -345,7 +477,7 @@ func whereOpt(q *gorm.DB, col string, id *uint) *gorm.DB {
 
 // upsertOptions menyimpan pilihan dengan option_index = urutan di CSV.
 // Pilihan lama yang tidak ada di CSV tidak dihapus, tapi dipindah ke urutan paling belakang.
-func upsertOptions(tx *gorm.DB, productID, variationID uint, labels []string, rep *CatalogReport) (map[string]uint, error) {
+func upsertOptions(tx *gorm.DB, productID, variationID uint, labels []string, scents map[string]*uint, rep *CatalogReport) (map[string]uint, error) {
 	var existing []repository.ProductVariationOption
 	if err := tx.Where("variation_id = ?", variationID).Find(&existing).Error; err != nil {
 		return nil, err
@@ -367,7 +499,7 @@ func upsertOptions(tx *gorm.DB, productID, variationID uint, labels []string, re
 	for i, label := range labels {
 		key := normLabel(label)
 		if o, ok := byLabel[key]; ok {
-			err := tx.Model(o).Updates(map[string]any{"option_index": i, "label": label}).Error
+			err := tx.Model(o).Updates(map[string]any{"option_index": i, "label": label, "scent_id": scents[key]}).Error
 			if err != nil {
 				return nil, fmt.Errorf("pilihan %q: %w", label, err)
 			}
@@ -376,7 +508,7 @@ func upsertOptions(tx *gorm.DB, productID, variationID uint, labels []string, re
 			rep.Options.Updated++
 			continue
 		}
-		o := repository.ProductVariationOption{VariationID: variationID, ProductID: productID, OptionIndex: int16(i), Label: label}
+		o := repository.ProductVariationOption{VariationID: variationID, ProductID: productID, OptionIndex: int16(i), Label: label, ScentID: scents[key]}
 		if err := tx.Create(&o).Error; err != nil {
 			return nil, fmt.Errorf("pilihan %q: %w", label, err)
 		}

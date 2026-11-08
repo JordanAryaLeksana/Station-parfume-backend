@@ -2,11 +2,13 @@
 
 | File | Isi |
 |---|---|
-| [`schema.sql`](schema.sql) | DDL lengkap PostgreSQL: 14 tabel, FK, CHECK, index, soft delete |
+| [`schema.sql`](schema.sql) | DDL lengkap PostgreSQL: 16 tabel, FK, CHECK, index, soft delete |
 | [`../../src/repository/`](../../src/repository/) | Struct GORM (`user.go`, `catalog.go`, `order.go`) + konstanta status. Menggantikan `repository.go` lama. |
 | [`../../src/config/seeders/`](../../src/config/seeders/) | Seeder katalog (CSV) + admin, dijalankan lewat `go run ./seed` |
 
 **Status:** dipakai semua modul (auth, user, admin, products, cart, order, payment). `config.ConnectDatabase()` **tidak lagi** menjalankan `AutoMigrate`/`DropColumn`, jadi database harus dibuat dari `schema.sql` dulu. Database lama (tabel `parfumes`, `order_statuses`, dll.) tidak kompatibel. Lihat §7.
+
+**Wangian dari foto produk (2026-11-08).** Tabel `scent_groups` (1 foto = 1 grup: Regular/Exclusive, inspired by, 2 label aroma) dan `scents` (1 varian per bullet di foto), diisi dari `seed/wangian.csv` (62 foto → 53 grup Regular + 9 grup Exclusive, 123 varian). Listing menunjuk ke wangian lewat `products.scent_id` (listing 1 wangian) atau `product_variation_options.scent_id` (pilihan di variasi "Aroma"). Endpoint `GET /scents?grade=&note=`. Diuji di Postgres 17: seed idempoten, wangian yang hilang dari CSV dinonaktifkan, 17 cek HTTP lolos.
 
 **Katalog disamakan dengan toko Shopee (2026-11-08).** Tabel `brands`, `aromas`, `bottles`, dan `product_shop_categories` dihapus. Kategori sekarang 1 per produk (`products.category_id`), sama seperti Shopee. Diuji di Postgres 17 sementara: schema ter-apply bersih, seed kategori + katalog idempoten, dan 20 cek HTTP lolos (kategori/produk publik, filter kategori, keranjang → checkout, stok berkurang, stok 0 ditolak).
 
@@ -45,7 +47,7 @@ Customer harus melihat hal yang **sama persis** di website dan di Shopee: katego
 - **Stok per kombinasi variasi** (mis. "Murni, 25 ML" punya stok sendiri). Itu `product_models.stock`.
 - **Botol spray, kantong kain, souvenir = listing biasa** di kategorinya masing-masing.
 
-Jadi schema **tidak** punya tabel master aroma, botol, atau brand (Shopee juga tidak punya). Semua yang dilihat pembeli ada di `products` → `product_variations` → `product_variation_options` → `product_models`:
+Jadi schema **tidak** punya tabel botol atau brand. Yang dijual ada di `products` → `product_variations` → `product_variation_options` → `product_models`. Wangiannya ada di tabel terpisah (§1b) dan ditautkan lewat `scent_id`:
 
 ```
 categories          Parfum & Wewangian (shopee_category_id 11043198)
@@ -59,6 +61,24 @@ product_models      (Campur, 15 ML) → Rp155.000  stok 5
 
 > ⚠️ Nama, harga, dan stok di contoh ini dari kartu produk Shopee yang sempat terbaca. Data **lengkap** 88 listing harus diisi dari export Seller Center (§6), karena halaman toko dilindungi captcha.
 
+### 1b. Wangian dari foto produk
+
+Listing Shopee berantakan (wangian yang satu foto tersebar di beberapa listing, nama variasi tidak seragam), jadi **struktur wangian diambil dari foto produk**, bukan dari listing:
+
+```
+grade      scent_groups (1 foto)                 scents (bullet di foto)
+regular    Annasui   · Inspired by Anna sui      Sweet Dream, Dolly Girl
+           · SWEET + FRUITY
+regular    1000 Bunga · FLORAL + WOODY           1000 Bunga  (tanpa varian = 1 baris)
+exclusive  Exclusive  · AROMATIC + MUSK          Doga Blue, Grey Uomo, Intenso, Killer Queen, Lady Avanue
+```
+
+- **Regular dan Exclusive adalah 2 jenis parfum berbeda**, walaupun namanya sama (Moonlight, Bali, Scandalouse, Pink Chiffon). Karena itu kuncinya `code` (`escada-moonlight` ≠ `exclusive-4-moonlight`), bukan nama.
+- **Label aroma** = 13 nilai tetap (CHECK di DB): amber, aromatic, balsamic, citrus, creamy, floral, fresh, fruity, musk, oud, powdery, sweet, woody. Di foto tertulis juga "MUSKY" dan "CYTRUS"; keduanya disatukan ke `musk` dan `citrus` supaya filter tidak terpecah.
+- **Nama varian disalin persis seperti di foto** (Dunhil, Burberies, Screetwish, Avanue, …).
+- **Tautan ke listing:** `products.scent_id` untuk listing 1 wangian (mis. "Anggelina Jolie" dengan variasi Warna × Ukuran), atau `product_variation_options.scent_id` untuk pilihan di variasi bernama "Aroma". Diisi lewat kolom `scent` di `catalog.csv`.
+- Catatan data: "Blue Motion" dan "Lady Avanue" masing-masing muncul di 2 foto Exclusive, jadi tercatat 2 kali (kode berbeda). Gabungkan di `wangian.csv` kalau ternyata parfum yang sama.
+
 ---
 
 ## 2. ERD
@@ -70,6 +90,9 @@ erDiagram
     users ||--o{ orders : places
 
     categories ||--o{ products : "groups"
+    scent_groups ||--|{ scents : "photo lists"
+    scents |o--o{ products : "single-scent listing"
+    scents |o--o{ product_variation_options : "Aroma option"
     products ||--o{ product_images : has
     products ||--o{ product_variations : "has (max 2 tiers)"
     product_variations ||--o{ product_variation_options : has
@@ -92,6 +115,21 @@ erDiagram
         varchar role "user|admin"
         timestamptz deleted_at
     }
+    scent_groups {
+        bigint id PK
+        varchar code "unique"
+        varchar grade "regular|exclusive"
+        varchar name "Annasui, Exclusive"
+        varchar inspired_by
+        varchar note_primary "CHECK 13 label"
+        varchar note_secondary
+    }
+    scents {
+        bigint id PK
+        bigint group_id FK
+        varchar code "unique"
+        varchar name "Dolly Girl"
+    }
     categories {
         bigint id PK
         bigint shopee_category_id "unique"
@@ -102,6 +140,7 @@ erDiagram
         bigint id PK
         bigint shopee_item_id "unique"
         bigint category_id FK
+        bigint scent_id FK "nullable"
         varchar name
         varchar status "draft|active|unlisted"
     }
@@ -117,6 +156,7 @@ erDiagram
         bigint product_id FK
         smallint option_index
         varchar label "Murni, 25 ML"
+        bigint scent_id FK "nullable"
     }
     product_models {
         bigint id PK
@@ -172,7 +212,7 @@ erDiagram
 
 ## 3. Keputusan desain
 
-1. **Parfum = 1 produk, tanpa master aroma/botol/brand.** Di Shopee parfum dijual utuh (botol + isi). Nama parfum ada di judul atau pilihan variasi, dan jenisnya (Campur/Murni, ukuran ml) juga pilihan variasi. Tabel `aromas`, `bottles`, `brands` dihapus supaya tidak ada data yang hanya ada di website dan bisa beda dengan Shopee.
+1. **Parfum = 1 produk, tanpa master botol/brand; wangian dari foto produk.** Parfum dijual utuh (botol + isi); jenis (Campur/Murni) dan ukuran ml adalah pilihan variasi. Struktur wangian (Regular/Exclusive → grup → varian + 2 label aroma) disimpan di `scent_groups`/`scents` sesuai foto produk, karena listing Shopee tidak konsisten. Tabel `aromas`, `bottles`, `brands` lama tidak dipakai lagi.
 2. **Kategori = kategori toko Shopee, 1 per produk.** Shopee membuat kategori toko otomatis dari kategori produk, jadi tiap listing tepat di 1 kategori. Karena itu cukup `products.category_id NOT NULL` (FK `RESTRICT`: kategori yang masih dipakai tidak bisa dihapus). Kolom `product_type` dihapus karena kategorilah yang membedakan parfum, botol, dan souvenir.
 3. **Harga dan stok di `product_models`**, sama seperti Shopee (per kombinasi variasi). Harga diisi angka yang sama dengan di Shopee. Model lama (`price_ml` × ukuran + harga botol) sudah dihapus karena hasilnya bisa beda dengan Shopee.
 4. **Uang = `BIGINT` rupiah, `int64` di Go.** Tidak ada `float`. Total order divalidasi DB: `total = subtotal + shipping_fee - discount`, dan `order_items.subtotal = unit_price × quantity`.

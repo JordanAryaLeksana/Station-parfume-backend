@@ -13,8 +13,53 @@ import (
 //   ProductVariation        = nama tingkat variasi ("Warna", "Ukuran", "Aroma")
 //   ProductVariationOption  = pilihan di tingkat itu ("Murni", "25 ML")
 //   ProductModel            = kombinasi pilihan = SKU (harga & stok)
-// Tidak ada master aroma/botol/brand: Shopee juga tidak punya.
+// Tidak ada master botol/brand. Wangian ditautkan lewat ScentID.
 // ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Wangian: struktur dari foto produk (1 foto = 1 grup, bullet = varian).
+// Regular dan Exclusive adalah 2 jenis berbeda walaupun namanya sama
+// (mis. "Moonlight" Escada ≠ "Moonlight" Exclusive), jadi kuncinya Code.
+// ---------------------------------------------------------------------
+
+const (
+	GradeRegular   = "regular"
+	GradeExclusive = "exclusive"
+)
+
+// ScentNotes = label karakter aroma yang dipakai di foto produk.
+var ScentNotes = []string{"amber", "aromatic", "balsamic", "citrus", "creamy", "floral", "fresh", "fruity", "musk", "oud", "powdery", "sweet", "woody"}
+
+type ScentGroup struct {
+	ID            uint           `gorm:"primaryKey" json:"id"`
+	Code          string         `gorm:"size:100;not null" json:"code"`
+	Grade         string         `gorm:"size:20;not null" json:"grade"`
+	Name          string         `gorm:"size:100;not null" json:"name"`
+	InspiredBy    *string        `gorm:"size:255" json:"inspired_by,omitempty"`
+	NotePrimary   string         `gorm:"size:20;not null" json:"note_primary"`
+	NoteSecondary string         `gorm:"size:20;not null" json:"note_secondary"`
+	ImageURL      *string        `json:"image_url,omitempty"`
+	SortOrder     int            `gorm:"not null" json:"sort_order"`
+	IsActive      bool           `gorm:"not null" json:"is_active"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `json:"-"`
+
+	Scents []Scent `gorm:"foreignKey:GroupID" json:"scents,omitempty"`
+}
+
+type Scent struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	GroupID   uint           `gorm:"not null" json:"group_id"`
+	Group     *ScentGroup    `gorm:"foreignKey:GroupID" json:"group,omitempty"`
+	Code      string         `gorm:"size:150;not null" json:"code"`
+	Name      string         `gorm:"size:100;not null" json:"name"`
+	SortOrder int            `gorm:"not null" json:"sort_order"`
+	IsActive  bool           `gorm:"not null" json:"is_active"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-"`
+}
 
 const (
 	ProductStatusDraft    = "draft"
@@ -39,6 +84,8 @@ type Product struct {
 	ShopeeItemID *int64         `json:"shopee_item_id,omitempty"`
 	CategoryID   uint           `gorm:"not null" json:"category_id"`
 	Category     *Category      `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	ScentID      *uint          `json:"scent_id,omitempty"` // listing 1 wangian
+	Scent        *Scent         `gorm:"foreignKey:ScentID" json:"scent,omitempty"`
 	Name         string         `gorm:"size:255;not null" json:"name"`
 	Slug         string         `gorm:"size:255;not null" json:"slug"`
 	Description  string         `gorm:"not null" json:"description"`
@@ -81,6 +128,8 @@ type ProductVariationOption struct {
 	OptionIndex int16     `gorm:"not null" json:"option_index"`
 	Label       string    `gorm:"size:100;not null" json:"label"`
 	ImageURL    *string   `json:"image_url,omitempty"`
+	ScentID     *uint     `json:"scent_id,omitempty"` // pilihan ini = wangian ini
+	Scent       *Scent    `gorm:"foreignKey:ScentID" json:"scent,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
