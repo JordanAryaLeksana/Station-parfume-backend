@@ -26,6 +26,8 @@ func GenerateAccessToken(user repository.User) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			// jti wajib: AuthMiddleware menolak token tanpa jti dan memakainya untuk blacklist.
+			ID: uuid.NewString(),
 		},
 	}
 

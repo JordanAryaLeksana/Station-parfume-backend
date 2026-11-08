@@ -9,6 +9,7 @@
 package repository
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -21,6 +22,13 @@ const (
 	ProviderLocal  = "local"
 	ProviderGoogle = "google"
 )
+
+// NormalizeEmail: email disimpan & dicari dalam huruf kecil, sesuai unique
+// index users_email_uq ON lower(email). Selalu cari dengan
+// Where("lower(email) = ?", NormalizeEmail(x)).
+func NormalizeEmail(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
 
 type User struct {
 	ID           uint           `gorm:"primaryKey" json:"id"`

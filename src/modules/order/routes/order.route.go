@@ -7,9 +7,8 @@ import (
 	"os"
 )
 
-// RegisterOrderRoutes BELUM dipanggil di src/routes/routes.go (sama seperti sebelumnya).
-// Daftarkan setelah M3 (middleware auth memanggil Abort), supaya endpoint admin
-// /orders/:id/status tidak bisa diakses tanpa token yang valid.
+// RegisterOrderRoutes: order milik user di token; /orders/:id/status khusus admin.
+// Aman didaftarkan karena middleware auth/role sekarang memanggil Abort.
 func RegisterOrderRoutes(rg *gin.RouterGroup) {
 	orderGroup := rg.Group("/orders", authMiddleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	{

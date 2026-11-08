@@ -25,8 +25,7 @@ func AuthMiddleware(secretKey string) gin.HandlerFunc {
 		tokenStr := parts[1]
 		token, err := jwtv5.ParseWithClaims(tokenStr, &jwt.JwtCustomClaims{}, func(token *jwtv5.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwtv5.SigningMethodHMAC); !ok {
-				httperror.UnauthorizedError(c, "Unexpected signing method")
-				return nil, jwtv5.ErrSignatureInvalid
+				return nil, jwtv5.ErrSignatureInvalid // ditangani sebagai "Invalid token" di bawah
 			}
 			return []byte(secretKey), nil
 		})
@@ -116,15 +115,16 @@ func RefreshTokenMiddleware(secretKey string) gin.HandlerFunc {
 	}
 }
 
+// RoleBasedAccess harus dipasang SETELAH AuthMiddleware dan SEBELUM handler.
+// Semua helper httperror memanggil Abort, jadi request yang ditolak tidak
+// pernah sampai ke handler.
 func RoleBasedAccess(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, exist := c.Get("role")
-		if !exist {
+		userRole, ok := c.Get("role")
+		if !ok {
 			httperror.UnauthorizedError(c, "Role not found in token")
 			return
 		}
-
-		userRole := role.(string)
 		for _, allowedRole := range allowedRoles {
 			if userRole == allowedRole {
 				c.Next()
@@ -132,6 +132,5 @@ func RoleBasedAccess(allowedRoles ...string) gin.HandlerFunc {
 			}
 		}
 		httperror.ForbiddenError(c, "You don't have permission to access this resource")
-		c.Abort()
 	}
 }

@@ -22,7 +22,7 @@ func CreateAdmin(input *models.AdminRequest) (*models.AdminResponse, error) {
 		return nil, fmt.Errorf("invalid email")
 	}
 	var user repository.User
-	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err == nil {
+	if err := config.DB.Where("lower(email) = ?", repository.NormalizeEmail(input.Email)).First(&user).Error; err == nil {
 		return nil, fmt.Errorf("email already exists")
 	}
 
@@ -33,7 +33,7 @@ func CreateAdmin(input *models.AdminRequest) (*models.AdminResponse, error) {
 	hash := string(hashedPassword)
 	createAdmin := repository.User{
 		Name:         input.Name,
-		Email:        input.Email,
+		Email:        repository.NormalizeEmail(input.Email),
 		PasswordHash: &hash,
 		Provider:     repository.ProviderLocal,
 		Role:         repository.RoleAdmin,
@@ -66,7 +66,7 @@ func UpdateAdmin(id string, input *models.AdminRequest) (*models.AdminResponse, 
 
 	updates := map[string]any{}
 	if input.Email != "" {
-		updates["email"] = input.Email
+		updates["email"] = repository.NormalizeEmail(input.Email)
 	}
 	if input.Name != "" {
 		updates["name"] = input.Name
@@ -109,8 +109,9 @@ func findAdmin(id string) (*repository.User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("admin not found with id:%s", id)
 	}
+	// Hanya baris ber-role admin: /admins/:id tidak boleh menyentuh user biasa.
 	var admin repository.User
-	if err := config.DB.First(&admin, uid).Error; err != nil {
+	if err := config.DB.Where("role = ?", repository.RoleAdmin).First(&admin, uid).Error; err != nil {
 		return nil, fmt.Errorf("admin not found with id:%s", id)
 	}
 	return &admin, nil

@@ -17,7 +17,7 @@ import (
 // ada yang diubah (aman dijalankan berulang kali). created=false berarti dilewati.
 func SeedAdmin(db *gorm.DB) (created bool, err error) {
 	name := strings.TrimSpace(os.Getenv("ADMIN_NAME"))
-	email := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_EMAIL")))
+	email := repository.NormalizeEmail(os.Getenv("ADMIN_EMAIL"))
 	password := os.Getenv("ADMIN_PASSWORD")
 	if name == "" || email == "" || len(password) < 8 {
 		return false, errors.New("ADMIN_NAME dan ADMIN_EMAIL wajib diisi, ADMIN_PASSWORD minimal 8 karakter")

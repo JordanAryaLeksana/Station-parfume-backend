@@ -43,9 +43,10 @@ func PaymentNotificationHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	// Endpoint publik (dipanggil Midtrans): jangan kirim balik detail pembayaran.
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Payment notification processed successfully",
-		"data":    paymentResp,
+		"status":  paymentResp.Status,
 	})
 }
 

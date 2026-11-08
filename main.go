@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	// "backend/src/routes"
 	"backend/src/routes"
 	"backend/src/utils/AuthHandler"
 )
@@ -15,7 +14,8 @@ import (
 func main() {
 	config.InitRedis()
 	config.ConnectDatabase()
-	// Seeder (src/config/seeders) dijalankan terpisah: go run ./cmd/seed — lihat seed/README.md.
+	config.InitMidtrans()
+	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
 	router := gin.Default()
 	routes.InitRoutes(router)
 	authhandler.InitGoogleOauthConfig()

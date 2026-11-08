@@ -2,7 +2,7 @@
 
 Seeder mengisi tabel katalog dari 3 file CSV di folder ini, supaya isi website **sama persis** dengan listing di Shopee.
 
-Kode seeder ada di [`src/config/seeders/`](../src/config/seeders/) (sama seperti seeder lama), model GORM di [`src/repository/`](../src/repository/). [`cmd/seed`](../cmd/seed/main.go) hanya titik masuk untuk menjalankannya tanpa menyalakan server.
+Kode seeder ada di [`src/config/seeders/`](../src/config/seeders/) (sama seperti seeder lama), model GORM di [`src/repository/`](../src/repository/). [`main.go`](main.go) di folder ini hanya titik masuk untuk menjalankannya tanpa menyalakan server.
 
 | File | Isi | Status |
 |---|---|---|
@@ -32,19 +32,19 @@ export DATABASE_URL="host=localhost port=5432 user=postgres password=... dbname=
 Cek dulu tanpa menyimpan apa pun:
 
 ```bash
-go run ./cmd/seed -dry-run
+go run ./seed -dry-run
 ```
 
 Simpan:
 
 ```bash
-go run ./cmd/seed
+go run ./seed
 ```
 
-Buat juga akun admin (password di-hash bcrypt, dilewati kalau email sudah ada):
+Buat akun admin. Perintah ini **hanya** membuat admin dan tidak membaca CSV katalog, jadi bisa dijalankan walaupun `catalog.csv` masih berisi TODO. Password di-hash bcrypt, dan perintah ini dilewati kalau email sudah terdaftar. Endpoint `/admins` hanya bisa dipakai admin yang sudah login, jadi admin pertama **harus** dibuat lewat perintah ini:
 
 ```bash
-ADMIN_NAME="Admin" ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="minimal-8-karakter" go run ./cmd/seed -admin
+ADMIN_NAME="Admin" ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="minimal-8-karakter" go run ./seed -admin
 ```
 
 - Semua berjalan dalam **satu transaksi**. Kalau ada satu error, tidak ada yang tersimpan.

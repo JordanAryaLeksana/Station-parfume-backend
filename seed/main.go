@@ -1,10 +1,10 @@
 // Command seed menjalankan seeder di src/config/seeders (katalog dari CSV
-// di folder seed/, dan admin dari env kalau pakai -admin).
+// di folder seed/, atau admin dari env kalau pakai -admin).
 //
 //	DATABASE_URL="host=localhost user=postgres password=... dbname=station_parfume sslmode=disable" \
-//	  go run ./cmd/seed -dry-run      # cek dulu, semua di-rollback
-//	go run ./cmd/seed                 # simpan
-//	go run ./cmd/seed -admin          # + buat admin dari ADMIN_NAME/ADMIN_EMAIL/ADMIN_PASSWORD
+//	  go run ./seed -dry-run      # cek dulu, semua di-rollback
+//	go run ./seed                 # simpan
+//	go run ./seed -admin          # HANYA buat admin dari ADMIN_NAME/ADMIN_EMAIL/ADMIN_PASSWORD
 //
 // Lihat seed/README.md untuk format CSV.
 package main
@@ -31,25 +31,12 @@ func main() {
 	dir := flag.String("dir", "seed", "folder berisi aromas.csv, bottles.csv, catalog.csv")
 	dsn := flag.String("dsn", os.Getenv("DATABASE_URL"), "DSN PostgreSQL (default: env DATABASE_URL)")
 	dryRun := flag.Bool("dry-run", false, "jalankan semua lalu rollback (tidak ada yang tersimpan)")
-	withAdmin := flag.Bool("admin", false, "buat akun admin dari env ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD")
+	withAdmin := flag.Bool("admin", false, "hanya buat akun admin dari env ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD (katalog dilewati)")
 	flag.Parse()
 
 	if *dsn == "" {
 		log.Fatal("DATABASE_URL kosong: set env DATABASE_URL atau pakai -dsn")
 	}
-
-	var data seeders.CatalogData
-	var err error
-	if data.Aromas, err = load(*dir, "aromas.csv", seeders.LoadAromas); err != nil {
-		log.Fatal(err)
-	}
-	if data.Bottles, err = load(*dir, "bottles.csv", seeders.LoadBottles); err != nil {
-		log.Fatal(err)
-	}
-	if data.Catalog, err = load(*dir, "catalog.csv", seeders.LoadCatalog); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("CSV OK: %d aroma, %d botol, %d model\n", len(data.Aromas), len(data.Bottles), len(data.Catalog))
 
 	gormLog := logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{
 		SlowThreshold:             time.Second,
@@ -61,17 +48,36 @@ func main() {
 		log.Fatalf("koneksi DB: %v", err)
 	}
 
+	// -admin: hanya buat admin, CSV katalog tidak dibaca (jadi tetap bisa
+	// dijalankan walaupun catalog.csv masih berisi TODO).
 	if *withAdmin {
 		if *dryRun {
-			fmt.Println("lewati admin (dry run)")
-		} else if created, err := seeders.SeedAdmin(db); err != nil {
-			log.Fatalf("seed admin: %v", err)
-		} else if created {
-			fmt.Println("admin: dibuat")
-		} else {
-			fmt.Println("admin: sudah ada, dilewati")
+			fmt.Println("dry run: admin tidak dibuat")
+			return
 		}
+		created, err := seeders.SeedAdmin(db)
+		switch {
+		case err != nil:
+			log.Fatalf("seed admin: %v", err)
+		case created:
+			fmt.Println("admin: dibuat")
+		default:
+			fmt.Println("admin: email sudah terdaftar, dilewati")
+		}
+		return
 	}
+
+	var data seeders.CatalogData
+	if data.Aromas, err = load(*dir, "aromas.csv", seeders.LoadAromas); err != nil {
+		log.Fatal(err)
+	}
+	if data.Bottles, err = load(*dir, "bottles.csv", seeders.LoadBottles); err != nil {
+		log.Fatal(err)
+	}
+	if data.Catalog, err = load(*dir, "catalog.csv", seeders.LoadCatalog); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("CSV OK: %d aroma, %d botol, %d model\n", len(data.Aromas), len(data.Bottles), len(data.Catalog))
 
 	rep, err := seeders.SeedCatalog(db, data, *dryRun)
 	if rep != nil {

@@ -28,7 +28,7 @@ func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
 	}
 	newUser := repository.User{
 		Name:         input.Name,
-		Email:        input.Email,
+		Email:        repository.NormalizeEmail(input.Email),
 		PasswordHash: &hash,
 		Role:         role,
 		PictureURL:   optionalString(input.Picture),
@@ -80,7 +80,7 @@ func UpdateUser(id string, request *models.UserDTORequest) (*models.UserDTORespo
 	}
 	updates := map[string]any{
 		"name":          request.Name,
-		"email":         request.Email,
+		"email":         repository.NormalizeEmail(request.Email),
 		"password_hash": string(hashedPassword),
 		"picture_url":   optionalString(request.Picture),
 	}

@@ -28,7 +28,7 @@ func Register(input *models.RegisterRequest) (*models.RegisterResponse, error) {
 	}
 
 	var user repository.User
-	err := config.DB.Where("email = ?", input.Email).First(&user).Error
+	err := config.DB.Where("lower(email) = ?", repository.NormalizeEmail(input.Email)).First(&user).Error
 	if err == nil {
 		return nil, fmt.Errorf("user with email %s already exists", input.Email)
 	}
@@ -40,7 +40,7 @@ func Register(input *models.RegisterRequest) (*models.RegisterResponse, error) {
 	hash := string(hashedPassword)
 	newUser := repository.User{
 		Name:         input.Name,
-		Email:        input.Email,
+		Email:        repository.NormalizeEmail(input.Email),
 		PasswordHash: &hash,
 		Role:         repository.RoleUser,
 		Provider:     repository.ProviderLocal,
@@ -62,7 +62,7 @@ func Register(input *models.RegisterRequest) (*models.RegisterResponse, error) {
 
 func LoginManual(input *models.LoginRequest) (*models.LoginResponse, error) {
 	var user repository.User
-	err := config.DB.Where("email = ?", input.Email).First(&user).Error
+	err := config.DB.Where("lower(email) = ?", repository.NormalizeEmail(input.Email)).First(&user).Error
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %v", err)
 	}
@@ -96,7 +96,7 @@ func LoginManual(input *models.LoginRequest) (*models.LoginResponse, error) {
 }
 func LoginAdmin(input *models.LoginRequest) (*models.LoginResponse, error) {
 	var user repository.User
-	err := config.DB.Where("email = ?", input.Email).First(&user).Error
+	err := config.DB.Where("lower(email) = ?", repository.NormalizeEmail(input.Email)).First(&user).Error
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %v", err)
 	}
@@ -177,7 +177,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// direct into the database
 	var user repository.User
-	err = config.DB.Where("email = ?", userInfo.Email).First(&user).Error
+	err = config.DB.Where("lower(email) = ?", repository.NormalizeEmail(userInfo.Email)).First(&user).Error
 	if err == nil {
 		if user.Provider != "google" {
 			http.Error(w, "Email already registered with a different provider", http.StatusConflict)
@@ -186,7 +186,7 @@ func HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	} else {
 		user = repository.User{
 			Name:        userInfo.Name,
-			Email:       userInfo.Email,
+			Email:       repository.NormalizeEmail(userInfo.Email),
 			PictureURL:  optionalString(userInfo.Picture),
 			ProviderSub: userInfo.Sub,
 			Provider:    repository.ProviderGoogle,

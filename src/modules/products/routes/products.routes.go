@@ -9,33 +9,39 @@ import (
 )
 
 // RegisterProductsRoutes: katalog (listing Shopee) + master data aroma, brand, botol.
-// Listing (products/models/variasi) diisi lewat seeder dari seed/catalog.csv,
-// jadi di API hanya bisa dibaca. Middleware role ditaruh SEBELUM handler.
+// Semua GET publik (pengunjung bisa lihat produk tanpa login, seperti di Shopee).
+// Endpoint tulis hanya untuk admin: auth + role dipasang SEBELUM handler.
+// Listing (products/models/variasi) diisi lewat seeder dari seed/catalog.csv.
 func RegisterProductsRoutes(router *gin.RouterGroup) {
-	auth := authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET"))
-	admin := authmiddlewares.RoleBasedAccess("admin")
+	admin := []gin.HandlerFunc{
+		authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")),
+		authmiddlewares.RoleBasedAccess("admin"),
+	}
+	with := func(h gin.HandlerFunc) []gin.HandlerFunc {
+		return append(append([]gin.HandlerFunc{}, admin...), h)
+	}
 
-	productGroup := router.Group("/products", auth)
+	productGroup := router.Group("/products")
 	{
 		productGroup.GET("/", controller.GetAllProducts) // ?type=perfume|empty_bottle|other
 		productGroup.GET("/:id", controller.GetProductByID)
 	}
-	aromaGroup := router.Group("/aromas", auth)
+	aromaGroup := router.Group("/aromas")
 	{
 		aromaGroup.GET("/", controller.GetAllAromas)
 		aromaGroup.GET("/:id", controller.GetAromaByID)
-		aromaGroup.PATCH("/:id", admin, controller.UpdateAroma)
+		aromaGroup.PATCH("/:id", with(controller.UpdateAroma)...)
 	}
-	brandGroup := router.Group("/brands", auth)
+	brandGroup := router.Group("/brands")
 	{
 		brandGroup.GET("/", controller.GetAllBrands)
-		brandGroup.POST("/", admin, controller.CreateBrand)
+		brandGroup.POST("/", with(controller.CreateBrand)...)
 	}
-	bottleGroup := router.Group("/bottles", auth)
+	bottleGroup := router.Group("/bottles")
 	{
 		bottleGroup.GET("/", controller.GetAllBottles)
 		bottleGroup.GET("/:id", controller.GetBottleByID)
-		bottleGroup.POST("/", admin, controller.CreateBottle)
-		bottleGroup.PUT("/:id", admin, controller.UpdateBottle)
+		bottleGroup.POST("/", with(controller.CreateBottle)...)
+		bottleGroup.PUT("/:id", with(controller.UpdateBottle)...)
 	}
 }
