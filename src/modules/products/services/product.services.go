@@ -7,15 +7,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 )
 
-var validate = validator.New()
-
 var (
 	ErrNotFound   = errors.New("not found")
-	ErrConflict   = errors.New("already exists")
 	ErrValidation = errors.New("validation error")
 )
 
@@ -25,22 +21,21 @@ func productQuery() *gorm.DB {
 		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("Variations", func(db *gorm.DB) *gorm.DB { return db.Order("tier_index") }).
 		Preload("Variations.Options", func(db *gorm.DB) *gorm.DB { return db.Order("option_index") }).
-		Preload("Variations.Options.Aroma").
-		Preload("Variations.Options.Bottle").
 		Preload("Models", func(db *gorm.DB) *gorm.DB { return db.Where("is_active = ?", true).Order("id") }).
-		Preload("ShopCategories").
-		Where("status = ?", repository.ProductStatusActive)
+		Preload("Category").
+		Where("products.status = ?", repository.ProductStatusActive)
 }
 
-// GetAllProducts mengembalikan semua listing aktif. productType opsional
-// (perfume / empty_bottle / other).
-func GetAllProducts(productType string) ([]models.ProductResponseDTO, error) {
+// GetAllProducts mengembalikan semua listing aktif. categorySlug opsional
+// (slug kategori toko, mis. "parfum-wewangian"), sama seperti filter Kategori di Shopee.
+func GetAllProducts(categorySlug string) ([]models.ProductResponseDTO, error) {
 	q := productQuery()
-	if productType != "" {
-		q = q.Where("product_type = ?", productType)
+	if categorySlug != "" {
+		q = q.Where("products.category_id IN (?)",
+			config.DB.Model(&repository.Category{}).Select("id").Where("slug = ? AND is_active", categorySlug))
 	}
 	var products []repository.Product
-	if err := q.Order("sort_order, id").Find(&products).Error; err != nil {
+	if err := q.Order("products.sort_order, products.id").Find(&products).Error; err != nil {
 		return nil, fmt.Errorf("failed to retrieve products: %w", err)
 	}
 	out := make([]models.ProductResponseDTO, 0, len(products))

@@ -1,9 +1,8 @@
 // Package seeders mengisi database dari file CSV di folder seed/ (root repo).
 //
-//   - aromas.csv  : master aroma (nama persis seperti label variasi di Shopee)
-//   - bottles.csv : master botol
-//   - catalog.csv : satu baris = satu model/SKU, bentuknya sama dengan export
-//     "Ubah Massal" Seller Center (produk, variasi 1/2, SKU, harga, stok)
+//   - categories.csv : "Kategori" di halaman toko Shopee (nama + shop_category_id)
+//   - catalog.csv    : satu baris = satu model/SKU, bentuknya sama dengan export
+//     "Ubah Massal" Seller Center (produk, kategori, variasi 1/2, SKU, harga, stok)
 //
 // Semua parsing & validasi terjadi sebelum database disentuh.
 package seeders
@@ -17,32 +16,21 @@ import (
 	"strconv"
 	"strings"
 
-	"backend/src/repository"
 	"backend/src/utils/slug"
 )
 
-type AromaRow struct {
-	Line        int
-	Name        string
-	Gender      string
-	Grade       string
-	Brand       string
-	Description string
-}
-
-type BottleRow struct {
-	Line        int
-	Name        string
-	BottleType  string
-	VolumeML    int
-	Description string
+// CategoryRow = satu kategori toko. Urutan baris = urutan tampil di Shopee.
+type CategoryRow struct {
+	Line             int
+	Name             string
+	ShopeeCategoryID *int64
 }
 
 // CatalogRow = satu kombinasi variasi (model) yang bisa dibeli.
 type CatalogRow struct {
 	Line          int
 	ProductName   string
-	ProductType   string
+	Category      string // nama kategori, harus ada di categories.csv
 	ParentSKU     string
 	Variation1    string
 	Option1       string
@@ -110,71 +98,42 @@ func readCSV(r io.Reader, required []string) ([]map[string]string, []int, error)
 	return rows, lines, nil
 }
 
-func LoadAromas(r io.Reader) ([]AromaRow, error) {
+func LoadCategories(r io.Reader) ([]CategoryRow, error) {
 	rows, lines, err := readCSV(r, []string{"name"})
 	if err != nil {
-		return nil, fmt.Errorf("aromas.csv: %w", err)
+		return nil, fmt.Errorf("categories.csv: %w", err)
 	}
-	var out []AromaRow
+	var out []CategoryRow
 	seen := map[string]int{}
+	shopeeIDs := map[int64]int{}
 	for i, m := range rows {
-		a := AromaRow{Line: lines[i], Name: m["name"], Gender: strings.ToLower(m["gender"]), Grade: strings.ToLower(m["grade"]), Brand: m["brand"], Description: m["description"]}
-		if a.Name == "" {
-			return nil, fmt.Errorf("aromas.csv baris %d: name kosong", a.Line)
+		c := CategoryRow{Line: lines[i], Name: m["name"]}
+		if c.Name == "" {
+			return nil, fmt.Errorf("categories.csv baris %d: name kosong", c.Line)
 		}
-		if a.Gender == "" {
-			a.Gender = repository.GenderUnisex
+		if c.ShopeeCategoryID, err = optInt64(m["shopee_category_id"]); err != nil {
+			return nil, fmt.Errorf("categories.csv baris %d: shopee_category_id %q bukan angka", c.Line, m["shopee_category_id"])
 		}
-		if a.Grade == "" {
-			a.Grade = repository.GradeRegular
-		}
-		if !oneOf(a.Gender, repository.GenderMen, repository.GenderWomen, repository.GenderUnisex) {
-			return nil, fmt.Errorf("aromas.csv baris %d: gender %q harus men/women/unisex", a.Line, a.Gender)
-		}
-		if !oneOf(a.Grade, repository.GradeRegular, repository.GradeExclusive, repository.GradeSuperExclusive) {
-			return nil, fmt.Errorf("aromas.csv baris %d: grade %q harus regular/exclusive/super_exclusive", a.Line, a.Grade)
-		}
-		slug := Slugify(a.Name)
+		slug := Slugify(c.Name)
 		if prev, ok := seen[slug]; ok {
-			return nil, fmt.Errorf("aromas.csv baris %d: %q bentrok dengan baris %d (slug %q)", a.Line, a.Name, prev, slug)
+			return nil, fmt.Errorf("categories.csv baris %d: %q bentrok dengan baris %d (slug %q)", c.Line, c.Name, prev, slug)
 		}
-		seen[slug] = a.Line
-		out = append(out, a)
+		seen[slug] = c.Line
+		if c.ShopeeCategoryID != nil {
+			if prev, ok := shopeeIDs[*c.ShopeeCategoryID]; ok {
+				return nil, fmt.Errorf("categories.csv baris %d: shopee_category_id %d sudah dipakai di baris %d", c.Line, *c.ShopeeCategoryID, prev)
+			}
+			shopeeIDs[*c.ShopeeCategoryID] = c.Line
+		}
+		out = append(out, c)
 	}
 	return out, nil
 }
 
-func LoadBottles(r io.Reader) ([]BottleRow, error) {
-	rows, lines, err := readCSV(r, []string{"name", "bottle_type", "volume_ml"})
-	if err != nil {
-		return nil, fmt.Errorf("bottles.csv: %w", err)
-	}
-	var out []BottleRow
-	seen := map[string]int{}
-	for i, m := range rows {
-		b := BottleRow{Line: lines[i], Name: m["name"], BottleType: strings.ToLower(m["bottle_type"]), Description: m["description"]}
-		if b.Name == "" || b.BottleType == "" {
-			return nil, fmt.Errorf("bottles.csv baris %d: name dan bottle_type wajib", b.Line)
-		}
-		v, err := strconv.Atoi(m["volume_ml"])
-		if err != nil || v <= 0 {
-			return nil, fmt.Errorf("bottles.csv baris %d: volume_ml %q harus angka > 0", b.Line, m["volume_ml"])
-		}
-		b.VolumeML = v
-		slug := Slugify(b.Name)
-		if prev, ok := seen[slug]; ok {
-			return nil, fmt.Errorf("bottles.csv baris %d: %q bentrok dengan baris %d", b.Line, b.Name, prev)
-		}
-		seen[slug] = b.Line
-		out = append(out, b)
-	}
-	return out, nil
-}
-
-var catalogCols = []string{"product_name", "product_type", "variation1", "option1", "variation2", "option2", "sku", "price", "stock"}
+var catalogCols = []string{"product_name", "category", "variation1", "option1", "variation2", "option2", "sku", "price", "stock"}
 
 // allCatalogCols = semua kolom catalog.csv, urut seperti header (untuk cek placeholder).
-var allCatalogCols = []string{"product_name", "product_type", "parent_sku", "variation1", "option1", "variation2", "option2",
+var allCatalogCols = []string{"product_name", "category", "parent_sku", "variation1", "option1", "variation2", "option2",
 	"sku", "price", "original_price", "stock", "weight_gram", "shopee_item_id", "shopee_model_id"}
 
 func LoadCatalog(r io.Reader) ([]CatalogRow, error) {
@@ -185,7 +144,7 @@ func LoadCatalog(r io.Reader) ([]CatalogRow, error) {
 	var out []CatalogRow
 	for i, m := range rows {
 		c := CatalogRow{
-			Line: lines[i], ProductName: m["product_name"], ProductType: strings.ToLower(m["product_type"]), ParentSKU: m["parent_sku"],
+			Line: lines[i], ProductName: m["product_name"], Category: m["category"], ParentSKU: m["parent_sku"],
 			Variation1: m["variation1"], Option1: m["option1"], Variation2: m["variation2"], Option2: m["option2"], SKU: m["sku"],
 		}
 		fail := func(format string, a ...any) error {
@@ -199,11 +158,8 @@ func LoadCatalog(r io.Reader) ([]CatalogRow, error) {
 		if c.ProductName == "" {
 			return nil, fail("product_name kosong")
 		}
-		if c.ProductType == "" {
-			c.ProductType = repository.ProductTypePerfume
-		}
-		if !oneOf(c.ProductType, repository.ProductTypePerfume, repository.ProductTypeEmptyBottle, repository.ProductTypeOther) {
-			return nil, fail("product_type %q harus perfume/empty_bottle/other", c.ProductType)
+		if c.Category == "" {
+			return nil, fail("category kosong (isi dengan nama kategori dari categories.csv)")
 		}
 		if (c.Variation1 == "") != (c.Option1 == "") || (c.Variation2 == "") != (c.Option2 == "") {
 			return nil, fail("nama variasi dan pilihannya harus diisi berpasangan")
@@ -270,19 +226,10 @@ func optInt64(s string) (*int64, error) {
 	return &v, nil
 }
 
-func oneOf(v string, opts ...string) bool {
-	for _, o := range opts {
-		if v == o {
-			return true
-		}
-	}
-	return false
-}
-
 // Slugify: "D & G" → "d-g", "1000 Bunga" → "1000-bunga".
 func Slugify(s string) string { return slug.Make(s) }
 
-// normLabel dipakai untuk mencocokkan label variasi dengan nama aroma/botol.
+// normLabel: perbandingan label tanpa beda huruf besar/kecil dan spasi ganda.
 func normLabel(s string) string {
 	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
 }

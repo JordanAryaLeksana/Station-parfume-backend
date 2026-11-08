@@ -2,11 +2,13 @@
 
 | File | Isi |
 |---|---|
-| [`schema.sql`](schema.sql) | DDL lengkap PostgreSQL: 18 tabel, FK, CHECK, index, soft delete |
+| [`schema.sql`](schema.sql) | DDL lengkap PostgreSQL: 14 tabel, FK, CHECK, index, soft delete |
 | [`../../src/repository/`](../../src/repository/) | Struct GORM (`user.go`, `catalog.go`, `order.go`) + konstanta status. Menggantikan `repository.go` lama. |
-| [`../../src/config/seeders/`](../../src/config/seeders/) | Seeder katalog (CSV) + admin, dijalankan lewat `go run ./cmd/seed` |
+| [`../../src/config/seeders/`](../../src/config/seeders/) | Seeder katalog (CSV) + admin, dijalankan lewat `go run ./seed` |
 
 **Status:** dipakai semua modul (auth, user, admin, products, cart, order, payment). `config.ConnectDatabase()` **tidak lagi** menjalankan `AutoMigrate`/`DropColumn`, jadi database harus dibuat dari `schema.sql` dulu. Database lama (tabel `parfumes`, `order_statuses`, dll.) tidak kompatibel. Lihat §7.
+
+**Katalog disamakan dengan toko Shopee (2026-11-08).** Tabel `brands`, `aromas`, `bottles`, dan `product_shop_categories` dihapus. Kategori sekarang 1 per produk (`products.category_id`), sama seperti Shopee. Diuji di Postgres 17 sementara: schema ter-apply bersih, seed kategori + katalog idempoten, dan 20 cek HTTP lolos (kategori/produk publik, filter kategori, keranjang → checkout, stok berkurang, stok 0 ditolak).
 
 **Sudah diuji (2026-11-06)** di Postgres 17 sementara: `schema.sql` ter-apply bersih, lalu 36 skenario lewat struct GORM + 2 cek langsung via psql lolos semua (insert/preload, constraint menolak data salah, snapshot order, dedup webhook, soft delete). `go build` dan `go vet` hijau.
 
@@ -14,12 +16,12 @@
 
 ## 1. Tujuan: website = cermin Shopee
 
-Customer harus melihat hal yang **sama persis** di website dan di Shopee: judul produk, nama variasi ("Aroma", "Ukuran"), urutan pilihan, harga, harga coret, dan SKU. Karena itu struktur katalog meniru model listing Shopee 1:1:
+Customer harus melihat hal yang **sama persis** di website dan di Shopee: kategori, judul produk, nama variasi, urutan pilihan, harga, harga coret, stok, dan SKU. Karena itu struktur katalog meniru toko Shopee 1:1:
 
-| Di Shopee Seller Center | Tabel | Catatan |
+| Di Shopee | Tabel | Catatan |
 |---|---|---|
+| "Kategori" di halaman toko | `categories` | `shopee_category_id` = ID kategori toko. 1 produk = 1 kategori |
 | Produk / listing | `products` | `shopee_item_id` = ID listing di Shopee |
-| Etalase toko | `shop_categories` + `product_shop_categories` | many-to-many, sama seperti Shopee |
 | Foto produk | `product_images` | `sort_order = 0` = foto sampul |
 | Variasi 1 & Variasi 2 (nama) | `product_variations` | `tier_index` 0/1, maks 2 tingkat seperti Shopee |
 | Pilihan variasi | `product_variation_options` | `option_index` = urutan tampil |
@@ -27,22 +29,35 @@ Customer harus melihat hal yang **sama persis** di website dan di Shopee: judul 
 | SKU Induk | `products.parent_sku` | |
 | Status pesanan: Belum Bayar / Dikemas / Dikirim / Selesai / Dibatalkan / Pengembalian | `orders.status` | mapping di §4 |
 
-Contoh listing "Parfum Refill Exclusive":
+### Yang terlihat di toko `shopee.co.id/stationparfume` (dicek 2026-11-08)
+
+- **88 produk, 7 kategori.** Kategorinya dibuat otomatis oleh Shopee dari kategori produk, bukan etalase buatan sendiri. Urutannya: Parfum & Wewangian (75), Souvenir & Hadiah (3), Kecantikan Lainnya (3), Aksesoris Interior Mobil (2), Perlengkapan Rumah Lainnya (1), Alat Pemeliharaan Rumah (1), Pengharum Ruangan & Aromaterapi (1). Isinya ada di [`seed/categories.csv`](../../seed/categories.csv).
+- **Parfum dijual sebagai satu produk**: botol dan isi jadi satu. Tidak ada pilihan "botol" yang terpisah dari parfum.
+- **Nama parfum** ada di judul listing (mis. "Anggelina Jolie", "SELENA GOMESH") atau sebagai pilihan variasi (listing "[NEW!] STATION PARFUME …" punya variasi "Aroma").
+- **Jenis parfum dan ukuran adalah pilihan variasi.** Contoh dari toko:
+
+  | Listing | Variasi 1 | Variasi 2 |
+  |---|---|---|
+  | MASTER Inspired parfume by MAHERZEIN | Warna: Campur, Murni | Ukuran: 15 ML, 25 ML, 35 ML, 50 ML |
+  | [NEW!] STATION PARFUME Eau De Parfume … | Ukuran: 20ml campur, 20ml murni, 50ml campur, 50ml murni | Aroma: senses doga blue, … |
+  | Refil parfum sholat / wangi arab | Ukuran: 20 | |
+
+- **Stok per kombinasi variasi** (mis. "Murni, 25 ML" punya stok sendiri). Itu `product_models.stock`.
+- **Botol spray, kantong kain, souvenir = listing biasa** di kategorinya masing-masing.
+
+Jadi schema **tidak** punya tabel master aroma, botol, atau brand (Shopee juga tidak punya). Semua yang dilihat pembeli ada di `products` → `product_variations` → `product_variation_options` → `product_models`:
 
 ```
-products            Parfum Refill Exclusive
-product_variations  tier 0 = "Aroma"            tier 1 = "Ukuran"
-options             0 Baccarat Rouge            0 30ml Spray
-                    1 Aventus                   1 50ml Spray
-                    … (50+ aroma)
-product_models      (Baccarat Rouge, 30ml Spray) → Rp45.000  SKU EXC-BR-30
-                    (Baccarat Rouge, 50ml Spray) → Rp65.000  SKU EXC-BR-50
-                    (Aventus, 30ml Spray)        → Rp85.000  …
+categories          Parfum & Wewangian (shopee_category_id 11043198)
+products            MASTER Inspired parfume by MAHERZEIN
+product_variations  tier 0 = "Warna"     tier 1 = "Ukuran"
+options             0 Campur             0 15 ML
+                    1 Murni              1 25 ML …
+product_models      (Campur, 15 ML) → Rp155.000  stok 5
+                    (Murni, 25 ML)  → Rp205.000  stok 3
 ```
 
-Botol kosong = listing terpisah (`product_type = 'empty_bottle'`) dengan 1 tingkat variasi ("Model/Ukuran"), atau tanpa variasi (1 model dengan `option1_id = NULL`).
-
-> ⚠️ **Data Shopee belum diambil.** Halaman toko `shopee.co.id/stationparfume` menolak akses otomatis (halaman verifikasi trafik), dan file `Produk_Station_Parfume.xlsx` yang dipakai seeder tidak ada di mesin ini. Jadi nama listing, daftar aroma, ukuran botol, dan harga di dokumen ini hanya **contoh**. Data asli sebaiknya diisi dari export Seller Center (§6).
+> ⚠️ Nama, harga, dan stok di contoh ini dari kartu produk Shopee yang sempat terbaca. Data **lengkap** 88 listing harus diisi dari export Seller Center (§6), karena halaman toko dilindungi captcha.
 
 ---
 
@@ -54,16 +69,12 @@ erDiagram
     users ||--o| carts : owns
     users ||--o{ orders : places
 
-    brands ||--o{ aromas : "inspires"
-
+    categories ||--o{ products : "groups"
     products ||--o{ product_images : has
     products ||--o{ product_variations : "has (max 2 tiers)"
     product_variations ||--o{ product_variation_options : has
     products ||--o{ product_models : "sold as (SKU)"
     product_variation_options ||--o{ product_models : "option1 / option2"
-    aromas |o--o{ product_variation_options : "linked by"
-    bottles |o--o{ product_variation_options : "linked by"
-    products }o--o{ shop_categories : "product_shop_categories"
 
     carts ||--o{ cart_items : contains
     product_models ||--o{ cart_items : "added as"
@@ -81,39 +92,31 @@ erDiagram
         varchar role "user|admin"
         timestamptz deleted_at
     }
-    aromas {
+    categories {
         bigint id PK
-        bigint brand_id FK
-        varchar name
-        varchar gender "men|women|unisex"
-        varchar grade "regular|exclusive|super_exclusive"
-    }
-    bottles {
-        bigint id PK
-        varchar bottle_type
-        int volume_ml
+        bigint shopee_category_id "unique"
+        varchar name "Parfum & Wewangian"
+        int sort_order
     }
     products {
         bigint id PK
         bigint shopee_item_id "unique"
+        bigint category_id FK
         varchar name
-        varchar product_type "perfume|empty_bottle|other"
         varchar status "draft|active|unlisted"
     }
     product_variations {
         bigint id PK
         bigint product_id FK
         smallint tier_index "0|1"
-        varchar name "Aroma, Ukuran"
+        varchar name "Warna, Ukuran, Aroma"
     }
     product_variation_options {
         bigint id PK
         bigint variation_id FK
         bigint product_id FK
         smallint option_index
-        varchar label
-        bigint aroma_id FK
-        bigint bottle_id FK
+        varchar label "Murni, 25 ML"
     }
     product_models {
         bigint id PK
@@ -169,18 +172,19 @@ erDiagram
 
 ## 3. Keputusan desain
 
-1. **Listing ≠ aroma.** `aromas` dan `bottles` adalah master data internal (catatan aroma, brand inspirasi, volume botol). Yang dilihat dan dibeli customer adalah `products` → `product_models`, persis seperti Shopee. Pilihan variasi boleh menunjuk ke `aroma_id`/`bottle_id`, jadi filter "semua produk beraroma Aventus" tetap bisa.
-2. **Harga di `product_models`, bukan di aroma atau botol.** Ini memenuhi "harga berbeda per kombinasi parfum + botol" tanpa rumus. Harga di website diisi angka yang sama dengan di Shopee. Model lama (`price_ml` × ukuran + harga botol) dihapus karena hasilnya bisa beda dengan Shopee.
-3. **Uang = `BIGINT` rupiah, `int64` di Go.** Tidak ada `float`. Total order divalidasi DB: `total = subtotal + shipping_fee - discount`, dan `order_items.subtotal = unit_price × quantity`.
-4. **Snapshot di `order_items`.** Nama produk, nama variasi, SKU, gambar, harga, dan harga coret disalin saat checkout. FK ke `product_models`/`products` hanya referensi (`ON DELETE SET NULL`). Sudah diuji: harga model diubah atau produk dihapus, order tetap sama.
-5. **Status = `VARCHAR` + `CHECK`**, dengan konstanta Go di `src/repository/order.go` dan `CanOrderTransition()` (transisi hanya maju). Tabel lookup `order_statuses` beserta ID magic-nya dihapus.
-6. **Integritas variasi dijaga DB, bukan cuma kode:**
+1. **Parfum = 1 produk, tanpa master aroma/botol/brand.** Di Shopee parfum dijual utuh (botol + isi). Nama parfum ada di judul atau pilihan variasi, dan jenisnya (Campur/Murni, ukuran ml) juga pilihan variasi. Tabel `aromas`, `bottles`, `brands` dihapus supaya tidak ada data yang hanya ada di website dan bisa beda dengan Shopee.
+2. **Kategori = kategori toko Shopee, 1 per produk.** Shopee membuat kategori toko otomatis dari kategori produk, jadi tiap listing tepat di 1 kategori. Karena itu cukup `products.category_id NOT NULL` (FK `RESTRICT`: kategori yang masih dipakai tidak bisa dihapus). Kolom `product_type` dihapus karena kategorilah yang membedakan parfum, botol, dan souvenir.
+3. **Harga dan stok di `product_models`**, sama seperti Shopee (per kombinasi variasi). Harga diisi angka yang sama dengan di Shopee. Model lama (`price_ml` × ukuran + harga botol) sudah dihapus karena hasilnya bisa beda dengan Shopee.
+4. **Uang = `BIGINT` rupiah, `int64` di Go.** Tidak ada `float`. Total order divalidasi DB: `total = subtotal + shipping_fee - discount`, dan `order_items.subtotal = unit_price × quantity`.
+5. **Snapshot di `order_items`.** Nama produk, nama variasi, SKU, gambar, harga, dan harga coret disalin saat checkout. FK ke `product_models`/`products` hanya referensi (`ON DELETE SET NULL`). Sudah diuji: harga model diubah atau produk dihapus, order tetap sama.
+6. **Status = `VARCHAR` + `CHECK`**, dengan konstanta Go di `src/repository/order.go` dan `CanOrderTransition()` (transisi hanya maju). Tabel lookup `order_statuses` beserta ID magic-nya dihapus.
+7. **Integritas variasi dijaga DB, bukan cuma kode:**
    - `tier_index IN (0,1)`, jadi maksimal 2 tingkat seperti Shopee.
    - FK komposit `(option_id, product_id)`, sehingga model tidak bisa memakai pilihan milik produk lain.
    - Unique `(product_id, option1, option2)`, sehingga kombinasi tidak dobel (produk tanpa variasi juga hanya bisa punya 1 model).
-7. **Soft delete + partial unique index.** Semua tabel utama punya `deleted_at`. Unique `email`, `slug`, `sku`, `shopee_item_id` hanya berlaku untuk baris aktif (`WHERE deleted_at IS NULL`), sehingga email atau slug yang sudah dihapus bisa dipakai lagi (memperbaiki D10 di audit). Yang sengaja **tanpa** soft delete: `order_items` (ikut order), `payment_events` (log append-only), tabel anak katalog yang ikut induknya (`product_images`, `product_variations`, `product_variation_options`), dan `cart_items`.
-8. **Keranjang tanpa harga.** `carts` 1 per user, `cart_items` unik per model. Harga selalu dibaca live dari `product_models`, seperti di Shopee. Kolom `total_price` lama dihapus karena bisa basi.
-9. **Xendit (Payment Sessions)** sesuai desain §9 audit:
+8. **Soft delete + partial unique index.** Semua tabel utama punya `deleted_at`. Unique `email`, `slug`, `sku`, `shopee_item_id` hanya berlaku untuk baris aktif (`WHERE deleted_at IS NULL`), sehingga email atau slug yang sudah dihapus bisa dipakai lagi (memperbaiki D10 di audit). Yang sengaja **tanpa** soft delete: `order_items` (ikut order), `payment_events` (log append-only), tabel anak katalog yang ikut induknya (`product_images`, `product_variations`, `product_variation_options`), dan `cart_items`.
+9. **Keranjang tanpa harga.** `carts` 1 per user, `cart_items` unik per model. Harga selalu dibaca live dari `product_models`, seperti di Shopee. Kolom `total_price` lama dihapus karena bisa basi.
+10. **Xendit (Payment Sessions)** sesuai desain §9 audit:
    - `reference_id` UUID milik kita disimpan **sebelum** memanggil Xendit, sehingga aman di-retry.
    - `provider_session_id`, `provider_payment_id`, dan `checkout_url` disimpan dari respons.
    - Maksimal 1 payment `PENDING` dan 1 `PAID` per order (partial unique index).
@@ -188,7 +192,7 @@ erDiagram
    - `payment_events` dengan unique `(provider, event_type, provider_payment_id)` membuat webhook duplikat jadi no-op.
    - Index `expires_at WHERE status='PENDING'` untuk job rekonsiliasi.
    - `provider` juga menerima `'midtrans'` untuk data lama.
-10. **`TIMESTAMPTZ` di semua kolom waktu, ID `BIGINT IDENTITY`.** Di Go tetap `uint` agar cocok dengan kode JWT yang ada.
+11. **`TIMESTAMPTZ` di semua kolom waktu, ID `BIGINT IDENTITY`.** Di Go tetap `uint` agar cocok dengan kode JWT yang ada.
 
 ### Catatan GORM
 
@@ -218,16 +222,17 @@ Payment: `PENDING → PAID | EXPIRED | CANCELLED | FAILED`, dan `PAID → REFUND
 
 ## 5. Yang belum dicakup (sengaja)
 
-- **Stok per aroma (ml minyak) dan per botol (pcs).** Saat ini stok ada di `product_models`, sama seperti Shopee. Kalau satu aroma dipakai di beberapa ukuran, stok riilnya sebenarnya berbagi. Kalau nanti perlu, tambahkan `aromas.stock_ml` dan `bottles.stock_qty`, lalu stok model dihitung.
+- **Stok bahan (ml minyak, pcs botol kosong).** Stok hanya ada per kombinasi variasi, sama seperti Shopee. Kalau satu parfum dijual di beberapa ukuran, stok bahannya sebenarnya berbagi, tapi itu dicatat di luar sistem (seperti di Shopee).
+- **Etalase buatan sendiri (many-to-many).** Toko ini hanya memakai kategori otomatis Shopee. Kalau nanti membuat etalase manual di Shopee, tambahkan tabel join `product_collections`.
 - **Voucher/promo, ongkir otomatis, ulasan, sinkronisasi otomatis ke Shopee API.** Kolom `shopee_item_id` dan `shopee_model_id` sudah disiapkan untuk sinkronisasi nanti.
 
 ---
 
 ## 6. Mengisi data dari Shopee
 
-Cara paling akurat agar website identik dengan Shopee: di **Seller Center → Produk Saya → Mass Update / Ubah Massal**, download file Excel produk. File itu berisi ID produk, ID variasi, nama variasi, SKU, harga, dan stok. Salin datanya ke `seed/catalog.csv`, lalu jalankan `go run ./cmd/seed` (lihat [`seed/README.md`](../../seed/README.md)). Seeder mengisi `products`, `product_variations`, `product_variation_options`, dan `product_models`, termasuk `shopee_item_id`/`shopee_model_id`. ⚠️ Nama kolom di file export Shopee berbeda dengan kolom `catalog.csv`, jadi perlu dipetakan saat menyalin.
+Cara paling akurat agar website identik dengan Shopee: di **Seller Center → Produk Saya → Mass Update / Ubah Massal**, download file Excel produk. File itu berisi ID produk, ID variasi, nama variasi, SKU, harga, dan stok. Salin datanya ke `seed/catalog.csv`, lalu jalankan `go run ./seed` (lihat [`seed/README.md`](../../seed/README.md)). Seeder mengisi `products`, `product_variations`, `product_variation_options`, dan `product_models`, termasuk `shopee_item_id`/`shopee_model_id`. ⚠️ Nama kolom di file export Shopee berbeda dengan kolom `catalog.csv`, jadi perlu dipetakan saat menyalin.
 
 ## 7. Menerapkan ke database
 
 - **DB baru / data dev boleh dibuang:** jadikan `schema.sql` migrasi goose pertama (`migrations/00001_init.sql`, tambahkan `-- +goose Up` / `-- +goose Down` berisi `DROP TABLE … CASCADE`).
-- **DB sudah ada isinya:** buat migrasi expand → backfill → contract (tabel lama `parfumes`, `bottles`, `order_statuses` dipetakan ke tabel baru), dikerjakan di M6/M7 setelah M2 (goose) selesai. Jawab dulu Open Question #1 di audit (apakah ada data produksi).
+- **DB sudah ada isinya:** buat migrasi expand → backfill → contract (tabel lama `parfumes`, `bottles`, `order_statuses` dipetakan ke tabel baru; parfum + botol lama menjadi pilihan variasi), dikerjakan di M6/M7 setelah M2 (goose) selesai. Jawab dulu Open Question #1 di audit (apakah ada data produksi).

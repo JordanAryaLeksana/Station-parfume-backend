@@ -7,99 +7,41 @@ import (
 )
 
 // ---------------------------------------------------------------------
-// Master data (internal): brand, aroma, botol
-// ---------------------------------------------------------------------
-
-const (
-	GenderMen    = "men"
-	GenderWomen  = "women"
-	GenderUnisex = "unisex"
-
-	GradeRegular        = "regular"
-	GradeExclusive      = "exclusive"
-	GradeSuperExclusive = "super_exclusive"
-)
-
-type Brand struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	Name        string         `gorm:"size:255;not null" json:"name"`
-	Slug        string         `gorm:"size:255;not null" json:"slug"`
-	Description *string        `json:"description,omitempty"`
-	LogoURL     *string        `json:"logo_url,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-"`
-}
-
-type Aroma struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	BrandID     *uint          `gorm:"index" json:"brand_id,omitempty"`
-	Brand       *Brand         `gorm:"foreignKey:BrandID" json:"brand,omitempty"`
-	Name        string         `gorm:"size:255;not null" json:"name"`
-	Slug        string         `gorm:"size:255;not null" json:"slug"`
-	Description *string        `json:"description,omitempty"`
-	Gender      string         `gorm:"size:10;not null;default:'unisex'" json:"gender"`
-	Grade       string         `gorm:"size:20;not null;default:'regular'" json:"grade"`
-	TopNotes    *string        `json:"top_notes,omitempty"`
-	MiddleNotes *string        `json:"middle_notes,omitempty"`
-	BaseNotes   *string        `json:"base_notes,omitempty"`
-	ImageURL    *string        `json:"image_url,omitempty"`
-	IsActive    bool           `gorm:"not null" json:"is_active"` // tanpa tag default: false harus bisa disimpan
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-"`
-}
-
-type Bottle struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	Name        string         `gorm:"size:255;not null" json:"name"`
-	Slug        string         `gorm:"size:255;not null" json:"slug"`
-	BottleType  string         `gorm:"size:30;not null" json:"bottle_type"`
-	VolumeML    int            `gorm:"column:volume_ml;not null" json:"volume_ml"`
-	Description *string        `json:"description,omitempty"`
-	ImageURL    *string        `json:"image_url,omitempty"`
-	IsActive    bool           `gorm:"not null" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-"`
-}
-
-// ---------------------------------------------------------------------
-// Katalog: meniru listing Shopee 1:1
-//   Product                 = Item/listing Shopee
-//   ProductVariation        = nama tingkat variasi ("Aroma", "Ukuran")
-//   ProductVariationOption  = pilihan di tingkat itu
+// Katalog: meniru toko & listing Shopee 1:1
+//   Category                = "Kategori" di halaman toko Shopee (1 produk = 1 kategori)
+//   Product                 = Item/listing Shopee (parfum = 1 produk, botol + isi jadi satu)
+//   ProductVariation        = nama tingkat variasi ("Warna", "Ukuran", "Aroma")
+//   ProductVariationOption  = pilihan di tingkat itu ("Murni", "25 ML")
 //   ProductModel            = kombinasi pilihan = SKU (harga & stok)
+// Tidak ada master aroma/botol/brand: Shopee juga tidak punya.
 // ---------------------------------------------------------------------
 
 const (
-	ProductTypePerfume     = "perfume"
-	ProductTypeEmptyBottle = "empty_bottle"
-	ProductTypeOther       = "other"
-
 	ProductStatusDraft    = "draft"
 	ProductStatusActive   = "active"
 	ProductStatusUnlisted = "unlisted"
 )
 
-type ShopCategory struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	Name      string         `gorm:"size:100;not null" json:"name"`
-	Slug      string         `gorm:"size:100;not null" json:"slug"`
-	SortOrder int            `gorm:"not null" json:"sort_order"`
-	IsActive  bool           `gorm:"not null" json:"is_active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-"`
+type Category struct {
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	ShopeeCategoryID *int64         `json:"shopee_category_id,omitempty"`
+	Name             string         `gorm:"size:100;not null" json:"name"`
+	Slug             string         `gorm:"size:100;not null" json:"slug"`
+	SortOrder        int            `gorm:"not null" json:"sort_order"`
+	IsActive         bool           `gorm:"not null" json:"is_active"` // tanpa tag default: false harus bisa disimpan
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `json:"-"`
 }
 
 type Product struct {
 	ID           uint           `gorm:"primaryKey" json:"id"`
 	ShopeeItemID *int64         `json:"shopee_item_id,omitempty"`
+	CategoryID   uint           `gorm:"not null" json:"category_id"`
+	Category     *Category      `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Name         string         `gorm:"size:255;not null" json:"name"`
 	Slug         string         `gorm:"size:255;not null" json:"slug"`
 	Description  string         `gorm:"not null" json:"description"`
-	ProductType  string         `gorm:"size:20;not null" json:"product_type"`
 	Status       string         `gorm:"size:20;not null;default:'draft'" json:"status"`
 	ParentSKU    *string        `gorm:"column:parent_sku;size:100" json:"parent_sku,omitempty"`
 	WeightGram   int            `gorm:"not null" json:"weight_gram"`
@@ -108,16 +50,9 @@ type Product struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `json:"-"`
 
-	Images         []ProductImage     `gorm:"foreignKey:ProductID" json:"images,omitempty"`
-	Variations     []ProductVariation `gorm:"foreignKey:ProductID" json:"variations,omitempty"`
-	Models         []ProductModel     `gorm:"foreignKey:ProductID" json:"models,omitempty"`
-	ShopCategories []ShopCategory     `gorm:"many2many:product_shop_categories;joinForeignKey:ProductID;joinReferences:ShopCategoryID" json:"shop_categories,omitempty"`
-}
-
-// ProductShopCategory adalah tabel join etalase ↔ produk.
-type ProductShopCategory struct {
-	ProductID      uint `gorm:"primaryKey"`
-	ShopCategoryID uint `gorm:"primaryKey"`
+	Images     []ProductImage     `gorm:"foreignKey:ProductID" json:"images,omitempty"`
+	Variations []ProductVariation `gorm:"foreignKey:ProductID" json:"variations,omitempty"`
+	Models     []ProductModel     `gorm:"foreignKey:ProductID" json:"models,omitempty"`
 }
 
 type ProductImage struct {
@@ -146,10 +81,6 @@ type ProductVariationOption struct {
 	OptionIndex int16     `gorm:"not null" json:"option_index"`
 	Label       string    `gorm:"size:100;not null" json:"label"`
 	ImageURL    *string   `json:"image_url,omitempty"`
-	AromaID     *uint     `json:"aroma_id,omitempty"`
-	Aroma       *Aroma    `gorm:"foreignKey:AromaID" json:"aroma,omitempty"`
-	BottleID    *uint     `json:"bottle_id,omitempty"`
-	Bottle      *Bottle   `gorm:"foreignKey:BottleID" json:"bottle,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -174,7 +105,7 @@ type ProductModel struct {
 	DeletedAt     gorm.DeletedAt          `json:"-"`
 }
 
-// VariationName menghasilkan teks variasi seperti di Shopee: "Baccarat Rouge, 30ml Spray".
+// VariationName menghasilkan teks variasi seperti di Shopee: "Murni, 25 ML".
 // Option1/Option2 harus sudah di-Preload.
 func (m ProductModel) VariationName() string {
 	switch {

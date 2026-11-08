@@ -10,7 +10,7 @@ import (
 )
 
 func GetAllProducts(c *gin.Context) {
-	products, err := services.GetAllProducts(c.Query("type"))
+	products, err := services.GetAllProducts(c.Query("category"))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -52,8 +52,6 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrNotFound):
 		httperror.NotFoundError(c, err.Error())
-	case errors.Is(err, services.ErrConflict):
-		httperror.ConflictError(c, err.Error())
 	case errors.Is(err, services.ErrValidation):
 		httperror.BadRequestError(c, err.Error())
 	default:
