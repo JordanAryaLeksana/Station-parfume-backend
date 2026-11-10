@@ -4,7 +4,9 @@ import (
 	"backend/src/config"
 	"backend/src/modules/user/models"
 	"backend/src/repository"
+	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/go-playground/validator/v10"
@@ -13,9 +15,37 @@ import (
 
 var validate = validator.New()
 
-func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
+var (
+	ErrNotFound   = errors.New("not found")
+	ErrValidation = errors.New("validation error")
+	ErrForbidden  = errors.New("forbidden")
+)
+
+// Aturan peran di /users (dipanggil owner atau admin):
+//   - admin hanya boleh mengelola pembeli (role "user");
+//   - owner boleh juga mengelola staf (admin, warehouse, cs);
+//   - akun owner tidak pernah bisa dibuat/diubah/dihapus lewat endpoint ini
+//     (owner pertama dibuat lewat `go run ./seed -admin`).
+func canManageRole(caller, role string) bool {
+	if role == repository.RoleUser {
+		return caller == repository.RoleOwner || caller == repository.RoleAdmin
+	}
+	return caller == repository.RoleOwner && role != repository.RoleOwner && slices.Contains(repository.StaffRoles, role)
+}
+
+func checkRole(caller, role string) error {
+	if role != repository.RoleUser && !slices.Contains(repository.StaffRoles, role) {
+		return fmt.Errorf("%w: role %q tidak dikenal", ErrValidation, role)
+	}
+	if !canManageRole(caller, role) {
+		return fmt.Errorf("%w: role %s tidak boleh mengelola akun ber-role %s", ErrForbidden, caller, role)
+	}
+	return nil
+}
+
+func CreateUser(callerRole string, input *models.UserDTORequest) (*models.UserDTOResponse, error) {
 	if err := validate.Struct(input); err != nil {
-		return nil, fmt.Errorf("validation error: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 	}
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -25,6 +55,9 @@ func CreateUser(input *models.UserDTORequest) (*models.UserDTOResponse, error) {
 	role := input.Role
 	if role == "" {
 		role = repository.RoleUser
+	}
+	if err := checkRole(callerRole, role); err != nil {
+		return nil, err
 	}
 	newUser := repository.User{
 		Name:         input.Name,
@@ -66,13 +99,22 @@ func GetUserById(id string) (*models.UserDTOResponse, error) {
 	return &resp, nil
 }
 
-func UpdateUser(id string, request *models.UserDTORequest) (*models.UserDTOResponse, error) {
+func UpdateUser(callerRole, id string, request *models.UserDTORequest) (*models.UserDTOResponse, error) {
 	if err := validate.Struct(request); err != nil {
-		return nil, fmt.Errorf("validation error: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 	}
 	user, err := findUser(id)
 	if err != nil {
 		return nil, err
+	}
+	// Akun yang diubah harus boleh dikelola pemanggil, begitu juga role barunya.
+	if err := checkRole(callerRole, user.Role); err != nil {
+		return nil, err
+	}
+	if request.Role != "" {
+		if err := checkRole(callerRole, request.Role); err != nil {
+			return nil, err
+		}
 	}
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -97,9 +139,12 @@ func UpdateUser(id string, request *models.UserDTORequest) (*models.UserDTORespo
 	return &resp, nil
 }
 
-func DeleteUser(id string) error {
+func DeleteUser(callerRole, id string) error {
 	user, err := findUser(id)
 	if err != nil {
+		return err
+	}
+	if err := checkRole(callerRole, user.Role); err != nil {
 		return err
 	}
 	if err := config.DB.Delete(user).Error; err != nil {
@@ -113,11 +158,11 @@ func DeleteUser(id string) error {
 func findUser(id string) (*repository.User, error) {
 	uid, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("user not found with id:%s", id)
+		return nil, fmt.Errorf("user %s: %w", id, ErrNotFound)
 	}
 	var user repository.User
 	if err := config.DB.First(&user, uid).Error; err != nil {
-		return nil, fmt.Errorf("user not found with id:%s", id)
+		return nil, fmt.Errorf("user %s: %w", id, ErrNotFound)
 	}
 	return &user, nil
 }

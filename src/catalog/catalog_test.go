@@ -152,3 +152,11 @@ func TestStock(t *testing.T) {
 		t.Fatal("tanpa baris stok = 0")
 	}
 }
+
+func TestResellerOverrideCappedAtListPrice(t *testing.T) {
+	v := perfume(3000, 1500, 30, 5000, "murni") // 95.000
+	p := &Pricing{Level: &repository.ResellerLevel{ID: 1, IsActive: true}, overrides: map[uint]int64{7: 120000}}
+	if got := p.UnitPrice(v); got != 95000 {
+		t.Fatalf("harga khusus reseller > harga normal harus dibatasi: %d", got)
+	}
+}

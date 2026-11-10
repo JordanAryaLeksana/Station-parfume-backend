@@ -7,6 +7,8 @@
 | [`../../src/catalog/`](../../src/catalog/) | Aturan bersama: varian bisa dibeli atau tidak, harga reseller, stok tersedia, `SetStock`, "buat kombinasi" |
 | [`../../src/config/seeders/`](../../src/config/seeders/) + [`../../seed/`](../../seed/) | Seeder dari CSV (`go run ./seed`), lihat [`seed/README.md`](../../seed/README.md) |
 
+**Update pembayaran (2026-11-10) — M8 Xendit:** Midtrans dihapus; pembayaran lewat **Xendit Payment Sessions** (hosted checkout). Alur & kontrak API di §5b. Tabel tidak berubah (`payments`, `payment_events` sudah ada); transisi baru di Go: order `EXPIRED/CANCELLED → PAID` khusus untuk pembayaran yang terverifikasi datang terlambat. Diuji: 26 skenario dengan server Xendit palsu + regresi 40 cek.
+
 **Update stok & foto (2026-11-10):** `products.track_stock` — parfum diracik sendiri → `false` (selalu tersedia, tidak di-reserve, tidak ada riwayat stok; bibit habis = nonaktifkan wangian/varian). Produk umum (barang jadi) → `true`. Bisa diubah admin per produk; `order_items.track_stock` menyimpan snapshot-nya. Foto: `product_images.url` = link CDN (file di-upload ke storage/CDN, bukan ke backend); endpoint admin tambah/ubah/hapus foto. Diuji: 40 cek HTTP lolos.
 
 **Update harga (2026-11-10):** harga parfum dihitung, bukan diketik per varian: `tarif per ml wangian (murni = bibit / campur = parfum) × ml + harga botol ukuran`. Tarif ada di `scents`, harga botol di `sizes` (Rp5.000 semua ukuran), ukuran default 20/30/50 ml dan ukuran khusus per produk di `product_sizes`. `variants.price` sekarang = harga khusus opsional (mengalahkan rumus). Exclusive diganti 4 foto baru (11 wangian). Diuji: 28 cek HTTP lolos (harga rumus, ubah tarif, harga khusus, ukuran 10 ml khusus, reseller, snapshot order).
@@ -181,10 +183,29 @@ Foto (owner, admin): `POST /admin/products/:id/images` (`url` = link CDN, `scent
 
 Stok (owner, admin, warehouse): `POST /admin/inventory/adjustments` (`mode: set|add`), `GET /admin/inventory/movements?variant_id=`.
 
+## 5b. Pembayaran (Xendit Payment Sessions)
+
+```
+FE: POST /orders (checkout, stok di-reserve)          → order PENDING_PAYMENT (expires_at = +24 jam)
+FE: POST /orders/:id/pay                               → {payment: {checkout_url, expires_at, status}}
+     (idempoten: selama sesi masih aktif, checkout_url yang sama dikembalikan)
+FE: redirect ke checkout_url → pembeli bayar di halaman Xendit (VA/QRIS/e-wallet)
+Xendit → POST /api/v1/webhooks/xendit (header x-callback-token)
+     → event disimpan di payment_events (dedup) → status dicek ulang: GET /sessions/{id}
+     → COMPLETED + nominal cocok → payment PAID, order PAID (stok terpotong)
+FE: kembali ke CHECKOUT_SUCCESS_URL?order=SP… → polling GET /orders/:id sampai status PAID
+```
+
+- **Isi webhook tidak dipercaya.** Status dan nominal selalu dari `GET /sessions/{id}`. Nominal ≠ `orders.total` → payment `FAILED`. Event yang statusnya belum sesuai dijawab 503 supaya Xendit mengirim ulang.
+- **Kedaluwarsa:** loop tiap 5 menit (`ReconcileAndExpire`) mengecek payment PENDING > 10 menit (webhook terlewat), lalu untuk order yang lewat batas bayar: sesi Xendit dicek & **dibatalkan dulu** (link bayar mati), baru order `EXPIRED` dan reservasi dilepas. Pembeli yang membatalkan order juga membatalkan sesinya.
+- **Pembayaran telat** (uang masuk tepat saat order kedaluwarsa): order tetap diterima sebagai `PAID`, stok dipotong tanpa menyentuh reservasi order lain, dicatat di `audit_logs` (`order.late_payment`). Pembayaran ganda untuk order yang sudah lunas → `FAILED` + catatan refund manual.
+- **Env:** `XENDIT_SECRET_KEY`, `XENDIT_WEBHOOK_TOKEN`, `CHECKOUT_SUCCESS_URL`, `CHECKOUT_CANCEL_URL` (HTTPS), opsional `XENDIT_API_URL`, `XENDIT_SESSION_MAX_TTL`. Lihat `.env.example`.
+- **Ongkir:** ditanggung pemilik → `shipping_fee = 0`. `shipments` tetap dipakai untuk kurir/resi.
+
 ## 6. Belum dibangun (tabel sudah siap)
 
 - Voucher & flash sale (`vouchers`, `promotions`), ongkir otomatis (`shipments.provider`, `area_id`), endpoint kelola level reseller, akses CS.
-- Integrasi Xendit di kode (sekarang Midtrans), dibangun di M8.
+- ~~Integrasi Xendit~~ ✅ M8 (lihat §5b). Refund masih manual lewat Dashboard Xendit.
 
 ## 7. Menerapkan ke database
 

@@ -4,6 +4,7 @@ import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/order/models"
 	"backend/src/modules/order/services"
+	paymentservices "backend/src/modules/payment/services"
 	"errors"
 	"strconv"
 
@@ -75,6 +76,8 @@ func CancelOrderHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	// Link bayar Xendit yang masih aktif ikut dimatikan (best effort).
+	paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	c.JSON(200, gin.H{"message": "order canceled successfully"})
 }
 

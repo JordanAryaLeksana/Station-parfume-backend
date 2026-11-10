@@ -2,32 +2,18 @@ package models
 
 import "time"
 
-// PaymentRequestDTO: nominal TIDAK dikirim klien; selalu diambil dari orders.total.
-// (Gateway lama Midtrans, VA bank transfer. Xendit menyusul di M8.)
-type PaymentRequestDTO struct {
-	OrderID     uint   `json:"order_id" validate:"required"`
-	PaymentType string `json:"payment_type" validate:"required,oneof=bank_transfer"`
-	Bank        string `json:"bank" validate:"required,oneof=bca bni bri permata cimb"`
-}
-
-type VANumberDTO struct {
-	Bank     string `json:"bank"`
-	VANumber string `json:"va_number"`
-}
-
+// PaymentResponseDTO: 1 percobaan pembayaran Xendit untuk 1 order.
+// Nominal selalu dari orders.total (klien tidak pernah mengirim harga).
 type PaymentResponseDTO struct {
-	ID                uint          `json:"id"`
-	OrderID           uint          `json:"order_id"`
-	Provider          string        `json:"provider"`
-	ReferenceID       string        `json:"reference_id"`
-	ProviderPaymentID *string       `json:"provider_payment_id,omitempty"`
-	PaymentMethod     *string       `json:"payment_method,omitempty"`
-	PaymentChannel    *string       `json:"payment_channel,omitempty"`
-	Amount            int64         `json:"amount"`
-	Currency          string        `json:"currency"`
-	Status            string        `json:"status"`
-	VANumbers         []VANumberDTO `json:"va_numbers,omitempty"`
-	ExpiresAt         *time.Time    `json:"expires_at,omitempty"`
-	PaidAt            *time.Time    `json:"paid_at,omitempty"`
-	CreatedAt         time.Time     `json:"created_at"`
+	ID          uint       `json:"id"`
+	OrderID     uint       `json:"order_id"`
+	Provider    string     `json:"provider"`
+	ReferenceID string     `json:"reference_id"`
+	Status      string     `json:"status"`       // PENDING, PAID, EXPIRED, CANCELLED, FAILED
+	CheckoutURL *string    `json:"checkout_url"` // redirect pembeli ke halaman bayar Xendit
+	Amount      int64      `json:"amount"`
+	Currency    string     `json:"currency"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	PaidAt      *time.Time `json:"paid_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }

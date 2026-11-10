@@ -176,7 +176,8 @@ func (p *Pricing) UnitPrice(v *repository.Variant) int64 {
 		return price.Total
 	}
 	if o, ok := p.overrides[v.ID]; ok {
-		return o
+		// Harga reseller tidak boleh lebih mahal dari harga normal (CHECK order_items).
+		return min(o, price.Total)
 	}
 	return ApplyDiscount(price.Total, int(p.Level.DiscountPercent))
 }

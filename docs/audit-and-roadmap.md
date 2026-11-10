@@ -6,13 +6,19 @@
 
 ---
 
-## Status Terkini (2026-11-06)
+## Status Terkini (2026-11-10)
 
 | Milestone | Status | Bukti |
 |---|---|---|
 | Audit (§1–§10) | ✅ Selesai | dokumen ini |
-| **M1** Build Stabilization | ✅ **Selesai**, menunggu review/merge Pilot | branch `chore/build-stabilization`: `8bf0e59` (fix import casing + rename `Order`→`order`), `eb8368c` (gofmt). `go build` / `go vet` rc=0, `gofmt -l .` bersih, `go.mod`/`go.sum` tidak berubah. |
-| M2 – M11 | ⏳ Belum dimulai | menunggu persetujuan Pilot |
+| **M1** Build Stabilization | ✅ Selesai | `8bf0e59`, `eb8368c` |
+| **M2** Startup & Migration Safety | 🟡 Sebagian | AutoMigrate/DropColumn dihapus (`faa6654`); `.env` dimuat di awal `main`. **Belum:** DSN dari env (masih hardcode + password), logger GORM Warn, migrasi goose, rotasi password DB |
+| **M3** Security Hotfix | ✅ Hampir selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (M8 commit). Sisa kecil: register belum wajib password ≥ 8 |
+| M4, M5, M10, M11 | ⏳ Belum dimulai | |
+| **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
+| **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
+| **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
+| **M9** Midtrans | ✅ Dihapus | Midtrans tidak pernah berjalan & tidak ada data produksi, jadi langsung dihapus bersama M8 |
 
 > **Catatan:** setelah M1, jalur file `src/modules/Order/...` yang disebut di dokumen ini sekarang menjadi `src/modules/order/...`. Nomor baris di file yang terkena `gofmt` bisa bergeser beberapa baris. Referensi baris di dokumen ini mengacu ke commit `8f6479d` (sebelum M1).
 

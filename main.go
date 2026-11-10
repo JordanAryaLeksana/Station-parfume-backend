@@ -2,24 +2,34 @@ package main
 
 import (
 	"backend/src/config"
-	orderservices "backend/src/modules/order/services"
+	paymentservices "backend/src/modules/payment/services"
+	"context"
 	"log"
 	"time"
 
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
 	"backend/src/routes"
 	"backend/src/utils/AuthHandler"
 )
 
 func main() {
+	// .env (khusus dev) dimuat PALING AWAL, sebelum config apa pun membaca env.
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found (memakai environment variable sistem)")
+	}
 	config.InitRedis()
 	config.ConnectDatabase()
-	config.InitMidtrans()
+	// Pembayaran: Xendit Payment Sessions. Kalau env belum lengkap, server tetap
+	// jalan tapi endpoint bayar & webhook menjawab 503.
+	if err := paymentservices.ConfigureFromEnv(); err != nil {
+		log.Printf("PERINGATAN pembayaran: %v", err)
+	}
 	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
-	go expireOrdersLoop(5 * time.Minute)
+	go reconcileLoop(5 * time.Minute)
 	router := gin.Default()
 	routes.InitRoutes(router)
 	authhandler.InitGoogleOauthConfig()
@@ -30,15 +40,18 @@ func main() {
 	router.Run(":" + port)
 }
 
-// expireOrdersLoop menandai order yang tidak dibayar melewati batas waktu sebagai
-// EXPIRED secara berkala, supaya stok yang di-reserve kembali tersedia.
-func expireOrdersLoop(every time.Duration) {
+// reconcileLoop berkala: cek pembayaran yang webhook-nya terlewat, lalu order yang
+// lewat batas bayar dibatalkan sesi Xendit-nya dan ditandai EXPIRED (reservasi
+// stok dilepas).
+func reconcileLoop(every time.Duration) {
 	for {
-		if n, err := orderservices.ExpireOverdueOrders(time.Now()); err != nil {
-			log.Printf("expire orders: %v", err)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if n, err := paymentservices.ReconcileAndExpire(ctx, time.Now()); err != nil {
+			log.Printf("rekonsiliasi pembayaran: %v", err)
 		} else if n > 0 {
-			log.Printf("expire orders: %d order kedaluwarsa", n)
+			log.Printf("rekonsiliasi pembayaran: %d order kedaluwarsa", n)
 		}
+		cancel()
 		time.Sleep(every)
 	}
 }

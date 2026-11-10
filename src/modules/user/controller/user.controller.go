@@ -4,26 +4,37 @@ import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/user/models"
 	"backend/src/modules/user/services"
-	"fmt"
+	"errors"
+
 	"github.com/gin-gonic/gin"
 )
 
+// writeError memetakan error service ke status HTTP.
+func writeError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrForbidden):
+		httperror.ForbiddenError(c, err.Error())
+	case errors.Is(err, services.ErrNotFound):
+		httperror.NotFoundError(c, "User not found")
+	case errors.Is(err, services.ErrValidation):
+		httperror.BadRequestError(c, err.Error())
+	default:
+		httperror.InternalServerError(c, "Internal server error")
+	}
+}
+
 func CreateUser(c *gin.Context) {
 	var input models.UserDTORequest
-	fmt.Println("Creating user...")
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httperror.BadRequestError(c, "Invalid input data")
-		fmt.Printf("Error binding JSON: %v\n", err)
 		return
 	}
 
-	userResponse, err := services.CreateUser(&input)
+	userResponse, err := services.CreateUser(c.GetString("role"), &input)
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
-		fmt.Println("Error creating user:", err)
+		writeError(c, err)
 		return
 	}
-	fmt.Printf("User created successfully: %+v\n", userResponse)
 	c.JSON(201, gin.H{
 		"message": "User Created",
 		"user":    userResponse,
@@ -61,9 +72,9 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	userResponse, err := services.UpdateUser(id, &input)
+	userResponse, err := services.UpdateUser(c.GetString("role"), id, &input)
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+		writeError(c, err)
 		return
 	}
 
@@ -75,8 +86,8 @@ func UpdateUser(c *gin.Context) {
 
 func DeleteUser(c *gin.Context) {
 	id := c.Param("id")
-	if err := services.DeleteUser(id); err != nil {
-		httperror.NotFoundError(c, "User not found")
+	if err := services.DeleteUser(c.GetString("role"), id); err != nil {
+		writeError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{

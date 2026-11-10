@@ -241,7 +241,7 @@ func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string
 	switch to {
 	case repository.OrderPaid:
 		updates["paid_at"] = now
-		if err := commitStock(tx, order); err != nil {
+		if err := commitStock(tx, order, true); err != nil {
 			return err
 		}
 	case repository.OrderShipped:
@@ -273,8 +273,28 @@ func orderItemsWithVariant(tx *gorm.DB, orderID uint) ([]repository.OrderItem, e
 	return items, err
 }
 
-// commitStock: order dibayar → on_hand dan reserved dikurangi, dicatat sebagai "sale".
-func commitStock(tx *gorm.DB, order *repository.Order) error {
+// ApplyLatePayment: pembayaran sukses datang untuk order yang sudah EXPIRED/CANCELLED
+// (mis. dibayar tepat saat batas waktu habis). Uang sudah diterima, jadi order
+// diterima sebagai PAID. Reservasi stoknya sudah dilepas, jadi stok dipotong
+// TANPA menyentuh reserved (milik order lain). Hanya dipanggil dari jalur pembayaran
+// yang sudah diverifikasi ke Xendit — admin tetap memakai ApplyStatus.
+func ApplyLatePayment(tx *gorm.DB, order *repository.Order) error {
+	if order.Status != repository.OrderExpired && order.Status != repository.OrderCancelled {
+		return fmt.Errorf("%w: pembayaran telat hanya untuk order EXPIRED/CANCELLED (status %s)", ErrValidation, order.Status)
+	}
+	if err := commitStock(tx, order, false); err != nil {
+		return err
+	}
+	if err := tx.Model(order).Updates(map[string]any{"status": repository.OrderPaid, "paid_at": time.Now()}).Error; err != nil {
+		return fmt.Errorf("failed to update order status: %w", err)
+	}
+	order.Status = repository.OrderPaid
+	return nil
+}
+
+// commitStock: order dibayar → on_hand dikurangi (dicatat sebagai "sale"). reserved
+// ikut dikurangi kalau stok order ini masih di-reserve (fromReservation).
+func commitStock(tx *gorm.DB, order *repository.Order, fromReservation bool) error {
 	items, err := orderItemsWithVariant(tx, order.ID)
 	if err != nil {
 		return err
@@ -290,7 +310,10 @@ func commitStock(tx *gorm.DB, order *repository.Order) error {
 		// Pesanan yang sudah dibayar tetap dipenuhi; kalau admin sudah menurunkan
 		// stok di bawah jumlah ini, on_hand berhenti di 0 (perlu dicek manual).
 		onHand := max(lvl.OnHand-it.Quantity, 0)
-		reserved := max(lvl.Reserved-it.Quantity, 0)
+		reserved := lvl.Reserved
+		if fromReservation {
+			reserved = max(lvl.Reserved-it.Quantity, 0)
+		}
 		if err := tx.Model(&repository.InventoryLevel{}).Where("variant_id = ? AND location_id = ?", lvl.VariantID, lvl.LocationID).
 			Updates(map[string]any{"on_hand": onHand, "reserved": reserved, "updated_at": gorm.Expr("now()")}).Error; err != nil {
 			return err
@@ -323,30 +346,49 @@ func releaseStock(tx *gorm.DB, order *repository.Order) error {
 	return nil
 }
 
-// ExpireOverdueOrders menandai order PENDING_PAYMENT yang lewat expires_at
-// sebagai EXPIRED (reservasi stok dilepas). Dipanggil berkala dari main.go.
-func ExpireOverdueOrders(now time.Time) (int, error) {
+// OverdueOrderIDs: order PENDING_PAYMENT yang sudah lewat expires_at.
+func OverdueOrderIDs(now time.Time) ([]uint, error) {
 	var ids []uint
-	if err := config.DB.Model(&repository.Order{}).
-		Where("status = ? AND expires_at < ?", repository.OrderPendingPayment, now).Pluck("id", &ids).Error; err != nil {
+	err := config.DB.Model(&repository.Order{}).
+		Where("status = ? AND expires_at < ?", repository.OrderPendingPayment, now).Order("id").Pluck("id", &ids).Error
+	return ids, err
+}
+
+// ExpireOrder menandai 1 order PENDING_PAYMENT sebagai EXPIRED (reservasi stok
+// dilepas). false = order sudah tidak PENDING_PAYMENT (dibayar/dibatalkan duluan).
+func ExpireOrder(orderID uint) (bool, error) {
+	expired := false
+	reason := "batas waktu pembayaran habis"
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		order, err := lockOrder(tx, orderID, nil)
+		if err != nil {
+			return err
+		}
+		if order.Status != repository.OrderPendingPayment {
+			return nil
+		}
+		expired = true
+		return ApplyStatus(tx, order, repository.OrderExpired, &reason)
+	})
+	return expired, err
+}
+
+// ExpireOverdueOrders menandai semua order yang lewat batas bayar sebagai EXPIRED.
+// Catatan: modul payment memakai OverdueOrderIDs + ExpireOrder supaya sesi Xendit
+// dicek & dibatalkan dulu (lihat payment services ReconcileAndExpire).
+func ExpireOverdueOrders(now time.Time) (int, error) {
+	ids, err := OverdueOrderIDs(now)
+	if err != nil {
 		return 0, err
 	}
 	n := 0
-	reason := "batas waktu pembayaran habis"
 	for _, id := range ids {
-		err := config.DB.Transaction(func(tx *gorm.DB) error {
-			order, err := lockOrder(tx, id, nil)
-			if err != nil {
-				return err
-			}
-			if order.Status != repository.OrderPendingPayment { // sudah dibayar/dibatalkan di antara query dan lock
-				return nil
-			}
-			n++
-			return ApplyStatus(tx, order, repository.OrderExpired, &reason)
-		})
+		ok, err := ExpireOrder(id)
 		if err != nil {
 			return n, err
+		}
+		if ok {
+			n++
 		}
 	}
 	return n, nil
