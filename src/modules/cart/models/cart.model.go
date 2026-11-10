@@ -1,33 +1,38 @@
 package models
 
 type AddCartItemDTO struct {
-	ProductModelID uint `json:"product_model_id" validate:"required"`
-	Quantity       int  `json:"quantity" validate:"required,gte=1,lte=999"`
+	VariantID uint `json:"variant_id" validate:"required"`
+	Quantity  int  `json:"quantity" validate:"required,gte=1,lte=999"`
 }
 
 type UpdateCartItemDTO struct {
 	Quantity int `json:"quantity" validate:"required,gte=1,lte=999"`
 }
 
-// CartItemResponseDTO: harga selalu dibaca live dari product_models (seperti Shopee).
+// CartItemResponseDTO: harga selalu dihitung live (termasuk harga reseller).
 type CartItemResponseDTO struct {
 	ID             uint    `json:"id"`
-	ProductModelID uint    `json:"product_model_id"`
+	VariantID      uint    `json:"variant_id"`
 	ProductID      uint    `json:"product_id"`
 	ProductName    string  `json:"product_name"`
-	VariationName  string  `json:"variation_name"`
-	SKU            *string `json:"sku,omitempty"`
-	UnitPrice      int64   `json:"unit_price"`
-	OriginalPrice  *int64  `json:"original_price,omitempty"`
+	ProductSlug    string  `json:"product_slug"`
+	Grade          *string `json:"grade,omitempty"`
+	VariantName    string  `json:"variant_name"` // "Dolly Girl, 30 ml, Murni"
+	VariantCode    string  `json:"variant_code"`
+	ImageURL       *string `json:"image_url,omitempty"`
+	UnitPrice      int64   `json:"unit_price"`                 // yang dibayar (harga reseller kalau ada)
+	ListPrice      int64   `json:"list_price"`                 // harga normal
+	CompareAtPrice *int64  `json:"compare_at_price,omitempty"` // harga coret
 	Quantity       int     `json:"quantity"`
 	Subtotal       int64   `json:"subtotal"`
-	Stock          int     `json:"stock"`
-	Available      bool    `json:"available"` // false = model nonaktif / produk tidak dijual / stok kurang
+	Stock          *int    `json:"stock"`     // stok tersedia; null = tidak dihitung (selalu tersedia)
+	Available      bool    `json:"available"` // false = varian nonaktif / produk tidak dijual / stok kurang
 }
 
 type CartResponseDTO struct {
-	ID            uint                  `json:"id"`
-	Items         []CartItemResponseDTO `json:"items"`
-	TotalQuantity int                   `json:"total_quantity"` // hanya item yang available
-	TotalPrice    int64                 `json:"total_price"`    // hanya item yang available
+	ID                uint                  `json:"id"`
+	Items             []CartItemResponseDTO `json:"items"`
+	ResellerLevelName *string               `json:"reseller_level_name,omitempty"`
+	TotalQuantity     int                   `json:"total_quantity"` // hanya item yang available
+	TotalPrice        int64                 `json:"total_price"`    // hanya item yang available
 }

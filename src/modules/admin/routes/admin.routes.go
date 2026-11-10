@@ -3,6 +3,7 @@ package routes
 import (
 	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/admin/controller"
+	"backend/src/repository"
 	"fmt"
 	"os"
 
@@ -14,7 +15,7 @@ import (
 func RegisterAdminRoutes(router *gin.RouterGroup) {
 	AdminGroup := router.Group("/admins",
 		authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")),
-		authmiddlewares.RoleBasedAccess("admin"),
+		authmiddlewares.RoleBasedAccess(repository.RoleOwner), // kelola akun staf: hanya owner
 	)
 	{
 		AdminGroup.POST("/", controller.CreateAdminHandler)

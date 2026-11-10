@@ -8,7 +8,7 @@ import (
 )
 
 // ---------------------------------------------------------------------
-// Keranjang — tidak menyimpan harga; harga selalu dibaca live dari ProductModel.
+// Keranjang — tidak menyimpan harga; harga selalu dihitung live dari Variant.
 // ---------------------------------------------------------------------
 
 type Cart struct {
@@ -22,13 +22,13 @@ type Cart struct {
 }
 
 type CartItem struct {
-	ID             uint          `gorm:"primaryKey" json:"id"`
-	CartID         uint          `gorm:"not null" json:"cart_id"`
-	ProductModelID uint          `gorm:"not null" json:"product_model_id"`
-	ProductModel   *ProductModel `gorm:"foreignKey:ProductModelID" json:"product_model,omitempty"`
-	Quantity       int           `gorm:"not null" json:"quantity"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CartID    uint      `gorm:"not null" json:"cart_id"`
+	VariantID uint      `gorm:"not null" json:"variant_id"`
+	Variant   *Variant  `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
+	Quantity  int       `gorm:"not null" json:"quantity"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ---------------------------------------------------------------------
@@ -36,14 +36,14 @@ type CartItem struct {
 // ---------------------------------------------------------------------
 
 const (
-	OrderPendingPayment = "PENDING_PAYMENT" // Shopee: Belum Bayar
-	OrderPaid           = "PAID"            // Shopee: Dikemas
-	OrderProcessing     = "PROCESSING"      // Shopee: Dikemas
-	OrderShipped        = "SHIPPED"         // Shopee: Dikirim
-	OrderCompleted      = "COMPLETED"       // Shopee: Selesai
-	OrderCancelled      = "CANCELLED"       // Shopee: Dibatalkan
-	OrderExpired        = "EXPIRED"         // Shopee: Dibatalkan (otomatis)
-	OrderRefunded       = "REFUNDED"        // Shopee: Pengembalian
+	OrderPendingPayment = "PENDING_PAYMENT" // Belum Bayar (stok di-reserve)
+	OrderPaid           = "PAID"            // Sudah bayar (stok terpotong)
+	OrderProcessing     = "PROCESSING"      // Dikemas
+	OrderShipped        = "SHIPPED"         // Dikirim
+	OrderCompleted      = "COMPLETED"       // Selesai
+	OrderCancelled      = "CANCELLED"       // Dibatalkan
+	OrderExpired        = "EXPIRED"         // Dibatalkan otomatis (tidak dibayar)
+	OrderRefunded       = "REFUNDED"        // Dana dikembalikan
 )
 
 // orderTransitions: transisi yang diizinkan (hanya maju).
@@ -65,16 +65,21 @@ func CanOrderTransition(from, to string) bool {
 }
 
 type Order struct {
-	ID            uint   `gorm:"primaryKey" json:"id"`
-	OrderNo       string `gorm:"size:32;not null" json:"order_no"`
-	UserID        uint   `gorm:"not null" json:"user_id"`
-	User          *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Status        string `gorm:"size:20;not null;default:'PENDING_PAYMENT'" json:"status"`
-	Subtotal      int64  `gorm:"not null" json:"subtotal"`
-	ShippingFee   int64  `gorm:"not null" json:"shipping_fee"`
-	Discount      int64  `gorm:"not null" json:"discount"`
-	Total         int64  `gorm:"not null" json:"total"`
-	TotalQuantity int    `gorm:"not null" json:"total_quantity"`
+	ID                uint    `gorm:"primaryKey" json:"id"`
+	OrderNo           string  `gorm:"size:32;not null" json:"order_no"`
+	UserID            uint    `gorm:"not null" json:"user_id"`
+	User              *User   `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	LocationID        uint    `gorm:"not null" json:"location_id"`
+	Status            string  `gorm:"size:20;not null;default:'PENDING_PAYMENT'" json:"status"`
+	Subtotal          int64   `gorm:"not null" json:"subtotal"`
+	ShippingFee       int64   `gorm:"not null" json:"shipping_fee"`
+	Discount          int64   `gorm:"not null" json:"discount"`
+	Total             int64   `gorm:"not null" json:"total"`
+	TotalQuantity     int     `gorm:"not null" json:"total_quantity"`
+	VoucherID         *uint   `json:"voucher_id,omitempty"`
+	VoucherCode       *string `gorm:"size:40" json:"voucher_code,omitempty"`
+	ResellerLevelID   *uint   `json:"reseller_level_id,omitempty"`
+	ResellerLevelName *string `gorm:"size:50" json:"reseller_level_name,omitempty"`
 
 	// snapshot alamat
 	RecipientName    string  `gorm:"size:255;not null" json:"recipient_name"`
@@ -84,8 +89,7 @@ type Order struct {
 	ShippingDistrict string  `gorm:"size:100;not null" json:"shipping_district"`
 	ShippingPostal   string  `gorm:"size:10;not null" json:"shipping_postal"`
 	ShippingAddress  string  `gorm:"not null" json:"shipping_address"`
-	Courier          *string `gorm:"size:50" json:"courier,omitempty"`
-	TrackingNumber   *string `gorm:"size:100" json:"tracking_number,omitempty"`
+	ShippingAreaID   *string `gorm:"size:64" json:"shipping_area_id,omitempty"`
 	BuyerNote        *string `json:"buyer_note,omitempty"`
 
 	PaidAt       *time.Time `json:"paid_at,omitempty"`
@@ -93,34 +97,43 @@ type Order struct {
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 	CancelledAt  *time.Time `json:"cancelled_at,omitempty"`
 	CancelReason *string    `json:"cancel_reason,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-"`
 
-	Items    []OrderItem `gorm:"foreignKey:OrderID" json:"items,omitempty"`
-	Payments []Payment   `gorm:"foreignKey:OrderID" json:"payments,omitempty"`
+	Items     []OrderItem `gorm:"foreignKey:OrderID" json:"items,omitempty"`
+	Payments  []Payment   `gorm:"foreignKey:OrderID" json:"payments,omitempty"`
+	Shipments []Shipment  `gorm:"foreignKey:OrderID" json:"shipments,omitempty"`
 }
 
 // OrderItem menyimpan SNAPSHOT saat checkout. Jangan pernah membaca harga
-// order dari ProductModel — selalu dari UnitPrice/Subtotal di sini.
+// order dari Variant — selalu dari UnitPrice/Subtotal di sini.
 type OrderItem struct {
-	ID                uint      `gorm:"primaryKey" json:"id"`
-	OrderID           uint      `gorm:"not null" json:"order_id"`
-	ProductModelID    *uint     `json:"product_model_id,omitempty"` // referensi saja, bisa NULL
-	ProductID         *uint     `json:"product_id,omitempty"`
-	ProductName       string    `gorm:"size:255;not null" json:"product_name"`
-	VariationName     *string   `gorm:"size:255" json:"variation_name,omitempty"`
-	Option1Label      *string   `gorm:"column:option1_label;size:100" json:"option1_label,omitempty"`
-	Option2Label      *string   `gorm:"column:option2_label;size:100" json:"option2_label,omitempty"`
-	SKU               *string   `gorm:"column:sku;size:100" json:"sku,omitempty"`
-	ImageURL          *string   `json:"image_url,omitempty"`
-	UnitPrice         int64     `gorm:"not null" json:"unit_price"`
-	OriginalUnitPrice *int64    `json:"original_unit_price,omitempty"`
-	Quantity          int       `gorm:"not null" json:"quantity"`
-	Subtotal          int64     `gorm:"not null" json:"subtotal"` // = UnitPrice * Quantity (dicek CHECK)
-	WeightGram        int       `gorm:"not null" json:"weight_gram"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	OrderID       uint      `gorm:"not null" json:"order_id"`
+	VariantID     *uint     `json:"variant_id,omitempty"` // referensi saja, bisa NULL
+	ProductID     *uint     `json:"product_id,omitempty"`
+	ProductName   string    `gorm:"size:255;not null" json:"product_name"`
+	Grade         *string   `gorm:"size:20" json:"grade,omitempty"`
+	ScentName     *string   `gorm:"size:100" json:"scent_name,omitempty"`
+	SizeLabel     *string   `gorm:"size:20" json:"size_label,omitempty"`
+	VolumeML      *int      `gorm:"column:volume_ml" json:"volume_ml,omitempty"`
+	Concentration *string   `gorm:"size:10" json:"concentration,omitempty"`
+	VariantLabel  *string   `gorm:"size:100" json:"variant_label,omitempty"`
+	VariantName   *string   `gorm:"size:255" json:"variant_name,omitempty"`
+	VariantCode   string    `gorm:"size:120;not null" json:"variant_code"`
+	ImageURL      *string   `json:"image_url,omitempty"`
+	UnitPrice     int64     `gorm:"not null" json:"unit_price"`                        // yang dibayar per unit
+	ListPrice     int64     `gorm:"not null" json:"list_price"`                        // harga normal saat checkout
+	PricePerML    *int64    `gorm:"column:price_per_ml" json:"price_per_ml,omitempty"` // snapshot tarif (parfum)
+	BottlePrice   *int64    `json:"bottle_price,omitempty"`                            // snapshot harga botol
+	Quantity      int       `gorm:"not null" json:"quantity"`
+	Subtotal      int64     `gorm:"not null" json:"subtotal"` // = UnitPrice * Quantity (dicek CHECK)
+	WeightGram    int       `gorm:"not null" json:"weight_gram"`
+	TrackStock    bool      `gorm:"not null" json:"track_stock"` // snapshot: stok di-reserve saat checkout
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // ---------------------------------------------------------------------

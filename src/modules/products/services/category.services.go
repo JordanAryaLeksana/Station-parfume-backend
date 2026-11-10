@@ -6,26 +6,33 @@ import (
 	"fmt"
 )
 
-// CategoryWithCount = kategori toko + jumlah produk aktif, seperti di halaman
-// toko Shopee ("Parfum & Wewangian (75)").
+// CategoryWithCount = kategori + jumlah produk yang tampil di website.
 type CategoryWithCount struct {
 	repository.Category
-	ProductCount int64 `json:"product_count"`
+	ProductCount int `json:"product_count"`
 }
 
-// GetAllCategories mengembalikan kategori aktif dengan urutan yang sama seperti di Shopee.
-// Isinya diatur lewat seed/categories.csv, bukan lewat API.
+// GetAllCategories mengembalikan kategori aktif urut sort_order (diisi dari seed/categories.csv).
+// Jumlah produk dihitung dengan aturan yang sama dengan daftar produk publik
+// (hanya produk yang punya varian bisa dibeli).
 func GetAllCategories() ([]CategoryWithCount, error) {
-	var out []CategoryWithCount
-	err := config.DB.Model(&repository.Category{}).
-		Select("categories.*, COUNT(p.id) AS product_count").
-		Joins("LEFT JOIN products p ON p.category_id = categories.id AND p.status = ? AND p.deleted_at IS NULL", repository.ProductStatusActive).
-		Where("categories.is_active").
-		Group("categories.id").
-		Order("categories.sort_order, categories.id").
-		Scan(&out).Error
-	if err != nil {
+	var cats []repository.Category
+	if err := config.DB.Where("is_active").Order("sort_order, id").Find(&cats).Error; err != nil {
 		return nil, fmt.Errorf("failed to retrieve categories: %w", err)
+	}
+	products, err := GetAllProducts(ProductFilter{})
+	if err != nil {
+		return nil, err
+	}
+	count := map[uint]int{}
+	for _, p := range products {
+		if p.Category != nil {
+			count[p.Category.ID]++
+		}
+	}
+	out := make([]CategoryWithCount, 0, len(cats))
+	for _, c := range cats {
+		out = append(out, CategoryWithCount{Category: c, ProductCount: count[c.ID]})
 	}
 	return out, nil
 }

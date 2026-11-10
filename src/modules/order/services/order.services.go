@@ -1,6 +1,7 @@
 package services
 
 import (
+	"backend/src/catalog"
 	"backend/src/config"
 	cartservices "backend/src/modules/cart/services"
 	"backend/src/modules/order/models"
@@ -23,8 +24,13 @@ var (
 	ErrValidation = errors.New("validation error")
 )
 
+// PaymentWindow: batas waktu bayar setelah checkout. Lewat dari ini order
+// EXPIRED dan stok yang di-reserve dilepas (lihat ExpireOverdueOrders).
+const PaymentWindow = 24 * time.Hour
+
 // Checkout membuat order PENDING_PAYMENT dari seluruh isi keranjang user dalam
-// satu transaksi: harga & nama disalin (snapshot), stok dikurangi, keranjang dikosongkan.
+// satu transaksi: harga & nama disalin (snapshot), stok di-RESERVE (belum
+// dipotong; dipotong saat PAID), keranjang dikosongkan.
 func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order, error) {
 	if err := validate.Struct(input); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
@@ -39,16 +45,31 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 			return err
 		}
 		var items []repository.CartItem
-		if err := cartservices.PreloadCartItem(tx).Where("cart_id = ?", cart.ID).Order("id").Find(&items).Error; err != nil {
+		// Urut variant_id: semua checkout mengunci baris stok dengan urutan sama → tidak deadlock.
+		if err := cartservices.PreloadCartItem(tx).Where("cart_id = ?", cart.ID).Order("variant_id").Find(&items).Error; err != nil {
 			return err
 		}
 		if len(items) == 0 {
 			return fmt.Errorf("%w: keranjang kosong", ErrValidation)
 		}
+		loc, err := catalog.DefaultLocationID(tx)
+		if err != nil {
+			return err
+		}
+		ids := make([]uint, 0, len(items))
+		for _, it := range items {
+			ids = append(ids, it.VariantID)
+		}
+		pricing, err := catalog.PricingForUser(tx, userID, ids)
+		if err != nil {
+			return err
+		}
 
+		expires := time.Now().Add(PaymentWindow)
 		order := repository.Order{
 			OrderNo:          newOrderNo(),
 			UserID:           userID,
+			LocationID:       loc,
 			Status:           repository.OrderPendingPayment,
 			RecipientName:    input.RecipientName,
 			RecipientPhone:   input.RecipientPhone,
@@ -58,24 +79,25 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 			ShippingPostal:   input.PostalCode,
 			ShippingAddress:  input.Address,
 			BuyerNote:        input.BuyerNote,
+			ExpiresAt:        &expires,
+		}
+		if pricing.Level != nil {
+			order.ResellerLevelID, order.ResellerLevelName = &pricing.Level.ID, &pricing.Level.Name
 		}
 		for _, it := range items {
-			m := it.ProductModel
-			if !cartservices.IsPurchasable(m) {
+			v := it.Variant
+			if !catalog.Purchasable(v) {
 				return fmt.Errorf("%w: produk di keranjang (item %d) sudah tidak tersedia", ErrValidation, it.ID)
 			}
-			// Kurangi stok secara atomik; gagal kalau stok tidak cukup.
-			res := tx.Model(&repository.ProductModel{}).
-				Where("id = ? AND stock >= ?", m.ID, it.Quantity).
-				Update("stock", gorm.Expr("stock - ?", it.Quantity))
-			if res.Error != nil {
-				return res.Error
+			// Stok hanya di-reserve untuk produk yang stoknya dihitung (parfum diracik → selalu tersedia).
+			if v.Product.TrackStock {
+				if err := reserve(tx, v.ID, loc, it.Quantity); err != nil {
+					return fmt.Errorf("%w: %s %s", err, v.Product.Name, v.DisplayName())
+				}
 			}
-			if res.RowsAffected == 0 {
-				return fmt.Errorf("%w: stok %s %s tidak cukup", ErrValidation, m.Product.Name, m.VariationName())
-			}
-			order.Items = append(order.Items, snapshotItem(m, it.Quantity))
-			order.Subtotal += m.Price * int64(it.Quantity)
+			item := snapshotItem(v, pricing.UnitPrice(v), it.Quantity)
+			order.Items = append(order.Items, item)
+			order.Subtotal += item.Subtotal
 			order.TotalQuantity += it.Quantity
 		}
 		order.Total = order.Subtotal + order.ShippingFee - order.Discount
@@ -95,32 +117,60 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 	return GetOrderForUser(orderID, userID)
 }
 
-func snapshotItem(m *repository.ProductModel, qty int) repository.OrderItem {
-	modelID, productID := m.ID, m.ProductID
-	// berat per unit: model boleh override berat produk
-	weight := m.Product.WeightGram
-	if m.WeightGram != nil {
-		weight = *m.WeightGram
+// lockLevel mengunci baris stok varian di lokasi (SELECT ... FOR UPDATE).
+func lockLevel(tx *gorm.DB, variantID, locationID uint) (*repository.InventoryLevel, error) {
+	var lvl repository.InventoryLevel
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("variant_id = ? AND location_id = ?", variantID, locationID).First(&lvl).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	var image *string
-	if len(m.Product.Images) > 0 {
-		image = &m.Product.Images[0].URL
+	return &lvl, err
+}
+
+func reserve(tx *gorm.DB, variantID, locationID uint, qty int) error {
+	lvl, err := lockLevel(tx, variantID, locationID)
+	if err != nil {
+		return err
 	}
-	return repository.OrderItem{
-		ProductModelID:    &modelID,
-		ProductID:         &productID,
-		ProductName:       m.Product.Name,
-		VariationName:     optionalString(m.VariationName()),
-		Option1Label:      optionLabel(m.Option1),
-		Option2Label:      optionLabel(m.Option2),
-		SKU:               m.SKU,
-		ImageURL:          image,
-		UnitPrice:         m.Price,
-		OriginalUnitPrice: m.OriginalPrice,
-		Quantity:          qty,
-		Subtotal:          m.Price * int64(qty),
-		WeightGram:        weight,
+	if lvl == nil || lvl.Available() < qty {
+		return fmt.Errorf("%w: stok tidak cukup", ErrValidation)
 	}
+	return tx.Model(&repository.InventoryLevel{}).Where("variant_id = ? AND location_id = ?", variantID, locationID).
+		Updates(map[string]any{"reserved": gorm.Expr("reserved + ?", qty), "updated_at": gorm.Expr("now()")}).Error
+}
+
+func snapshotItem(v *repository.Variant, unitPrice int64, qty int) repository.OrderItem {
+	variantID, productID := v.ID, v.ProductID
+	price, _ := catalog.ListPrice(v) // Purchasable sudah memastikan harga bisa dihitung
+	item := repository.OrderItem{
+		VariantID:     &variantID,
+		ProductID:     &productID,
+		ProductName:   v.Product.Name,
+		Grade:         v.Product.Grade,
+		Concentration: v.Concentration,
+		VariantLabel:  v.Label,
+		VariantName:   optionalString(v.DisplayName()),
+		VariantCode:   v.Code,
+		UnitPrice:     unitPrice,
+		ListPrice:     price.Total,
+		PricePerML:    price.PerML,
+		BottlePrice:   price.BottlePrice,
+		Quantity:      qty,
+		Subtotal:      unitPrice * int64(qty),
+		WeightGram:    v.ShippingWeight(),
+		TrackStock:    v.Product.TrackStock,
+	}
+	if v.Scent != nil {
+		item.ScentName = &v.Scent.Name
+	}
+	if v.Size != nil {
+		item.SizeLabel, item.VolumeML = &v.Size.Label, &v.Size.VolumeML
+	}
+	if len(v.Product.Images) > 0 {
+		item.ImageURL = &v.Product.Images[0].URL
+	}
+	return item
 }
 
 func GetOrderForUser(orderID, userID uint) (*repository.Order, error) {
@@ -167,15 +217,8 @@ func UpdateOrderStatus(orderID uint, input *models.UpdateOrderStatusDTO) error {
 		if err != nil {
 			return err
 		}
-		extra := map[string]any{}
-		if input.Courier != nil {
-			extra["courier"] = *input.Courier
-		}
-		if input.TrackingNumber != nil {
-			extra["tracking_number"] = *input.TrackingNumber
-		}
-		if len(extra) > 0 {
-			if err := tx.Model(order).Updates(extra).Error; err != nil {
+		if input.Courier != nil || input.TrackingNumber != nil {
+			if err := upsertShipment(tx, order, input.Courier, input.TrackingNumber); err != nil {
 				return err
 			}
 		}
@@ -184,7 +227,10 @@ func UpdateOrderStatus(orderID uint, input *models.UpdateOrderStatusDTO) error {
 }
 
 // ApplyStatus memindahkan status order (hanya maju, lihat repository.CanOrderTransition)
-// dan mengisi timestamp terkait. Order yang batal/kedaluwarsa mengembalikan stok.
+// dan mengisi timestamp terkait. Stok: PAID memotong stok yang di-reserve
+// (tercatat di stock_movements); CANCELLED/EXPIRED dari PENDING_PAYMENT
+// melepas reservasi. REFUNDED tidak mengubah stok (barang kembali dicatat
+// admin lewat penyesuaian stok "return").
 // Harus dipanggil di dalam transaksi dengan order yang sudah di-lock.
 func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string) error {
 	if !repository.CanOrderTransition(order.Status, to) {
@@ -195,6 +241,9 @@ func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string
 	switch to {
 	case repository.OrderPaid:
 		updates["paid_at"] = now
+		if err := commitStock(tx, order); err != nil {
+			return err
+		}
 	case repository.OrderShipped:
 		updates["shipped_at"] = now
 	case repository.OrderCompleted:
@@ -204,8 +253,10 @@ func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string
 		if reason != nil {
 			updates["cancel_reason"] = *reason
 		}
-		if err := restoreStock(tx, order.ID); err != nil {
-			return err
+		if order.Status == repository.OrderPendingPayment {
+			if err := releaseStock(tx, order); err != nil {
+				return err
+			}
 		}
 	}
 	if err := tx.Model(order).Updates(updates).Error; err != nil {
@@ -215,18 +266,112 @@ func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string
 	return nil
 }
 
-func restoreStock(tx *gorm.DB, orderID uint) error {
+func orderItemsWithVariant(tx *gorm.DB, orderID uint) ([]repository.OrderItem, error) {
 	var items []repository.OrderItem
-	if err := tx.Where("order_id = ? AND product_model_id IS NOT NULL", orderID).Find(&items).Error; err != nil {
+	// Hanya item yang stoknya di-reserve saat checkout (snapshot track_stock).
+	err := tx.Where("order_id = ? AND variant_id IS NOT NULL AND track_stock", orderID).Order("variant_id").Find(&items).Error
+	return items, err
+}
+
+// commitStock: order dibayar → on_hand dan reserved dikurangi, dicatat sebagai "sale".
+func commitStock(tx *gorm.DB, order *repository.Order) error {
+	items, err := orderItemsWithVariant(tx, order.ID)
+	if err != nil {
 		return err
 	}
 	for _, it := range items {
-		if err := tx.Model(&repository.ProductModel{}).Where("id = ?", *it.ProductModelID).
-			Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
-			return fmt.Errorf("failed to restore stock: %w", err)
+		lvl, err := lockLevel(tx, *it.VariantID, order.LocationID)
+		if err != nil {
+			return err
+		}
+		if lvl == nil {
+			continue
+		}
+		// Pesanan yang sudah dibayar tetap dipenuhi; kalau admin sudah menurunkan
+		// stok di bawah jumlah ini, on_hand berhenti di 0 (perlu dicek manual).
+		onHand := max(lvl.OnHand-it.Quantity, 0)
+		reserved := max(lvl.Reserved-it.Quantity, 0)
+		if err := tx.Model(&repository.InventoryLevel{}).Where("variant_id = ? AND location_id = ?", lvl.VariantID, lvl.LocationID).
+			Updates(map[string]any{"on_hand": onHand, "reserved": reserved, "updated_at": gorm.Expr("now()")}).Error; err != nil {
+			return err
+		}
+		if delta := onHand - lvl.OnHand; delta != 0 {
+			oid := order.ID
+			m := repository.StockMovement{VariantID: lvl.VariantID, LocationID: lvl.LocationID, Delta: delta, OnHandAfter: onHand,
+				Reason: repository.MovementSale, OrderID: &oid}
+			if err := tx.Create(&m).Error; err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// releaseStock: order batal/kedaluwarsa sebelum dibayar → reservasi dilepas.
+func releaseStock(tx *gorm.DB, order *repository.Order) error {
+	items, err := orderItemsWithVariant(tx, order.ID)
+	if err != nil {
+		return err
+	}
+	for _, it := range items {
+		if err := tx.Model(&repository.InventoryLevel{}).
+			Where("variant_id = ? AND location_id = ?", *it.VariantID, order.LocationID).
+			Updates(map[string]any{"reserved": gorm.Expr("GREATEST(reserved - ?, 0)", it.Quantity), "updated_at": gorm.Expr("now()")}).Error; err != nil {
+			return fmt.Errorf("failed to release stock: %w", err)
+		}
+	}
+	return nil
+}
+
+// ExpireOverdueOrders menandai order PENDING_PAYMENT yang lewat expires_at
+// sebagai EXPIRED (reservasi stok dilepas). Dipanggil berkala dari main.go.
+func ExpireOverdueOrders(now time.Time) (int, error) {
+	var ids []uint
+	if err := config.DB.Model(&repository.Order{}).
+		Where("status = ? AND expires_at < ?", repository.OrderPendingPayment, now).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	n := 0
+	reason := "batas waktu pembayaran habis"
+	for _, id := range ids {
+		err := config.DB.Transaction(func(tx *gorm.DB) error {
+			order, err := lockOrder(tx, id, nil)
+			if err != nil {
+				return err
+			}
+			if order.Status != repository.OrderPendingPayment { // sudah dibayar/dibatalkan di antara query dan lock
+				return nil
+			}
+			n++
+			return ApplyStatus(tx, order, repository.OrderExpired, &reason)
+		})
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}
+
+// upsertShipment: admin mengisi kurir/resi → disimpan di shipments (provider manual).
+func upsertShipment(tx *gorm.DB, order *repository.Order, courier, tracking *string) error {
+	var sh repository.Shipment
+	err := tx.Where("order_id = ?", order.ID).Order("id DESC").First(&sh).Error
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		sh = repository.Shipment{OrderID: order.ID, Provider: repository.ShipmentProviderManual, CourierCode: courier,
+			TrackingNumber: tracking, Cost: order.ShippingFee, Status: repository.ShipmentPending}
+		return tx.Create(&sh).Error
+	case err != nil:
+		return err
+	}
+	upd := map[string]any{}
+	if courier != nil {
+		upd["courier_code"] = *courier
+	}
+	if tracking != nil {
+		upd["tracking_number"] = *tracking
+	}
+	return tx.Model(&sh).Updates(upd).Error
 }
 
 // LockOrder mengunci baris order (SELECT ... FOR UPDATE). userID nil = tanpa cek pemilik.
@@ -251,20 +396,14 @@ func lockOrder(tx *gorm.DB, orderID uint, userID *uint) (*repository.Order, erro
 
 func orderQuery(db *gorm.DB) *gorm.DB {
 	return db.Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("id") }).
-		Preload("Payments", func(db *gorm.DB) *gorm.DB { return db.Order("id") })
+		Preload("Payments", func(db *gorm.DB) *gorm.DB { return db.Order("id") }).
+		Preload("Shipments", func(db *gorm.DB) *gorm.DB { return db.Order("id") })
 }
 
 // newOrderNo: "SP" + yymmdd + 8 karakter acak, mis. SP261106A1B2C3D4.
 func newOrderNo() string {
 	r := strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", ""))[:8]
 	return "SP" + time.Now().Format("060102") + r
-}
-
-func optionLabel(o *repository.ProductVariationOption) *string {
-	if o == nil {
-		return nil
-	}
-	return &o.Label
 }
 
 func optionalString(s string) *string {

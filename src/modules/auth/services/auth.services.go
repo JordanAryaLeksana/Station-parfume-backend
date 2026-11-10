@@ -15,6 +15,7 @@ import (
 	"golang.org/x/oauth2"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	// "google.golang.org/api/idtoken"
@@ -101,9 +102,9 @@ func LoginAdmin(input *models.LoginRequest) (*models.LoginResponse, error) {
 		return nil, fmt.Errorf("user not found: %v", err)
 	}
 
-	// Validasi role khusus admin
-	if user.Role != "admin" {
-		return nil, fmt.Errorf("only admin can login here")
+	// Login staf: owner, admin, gudang, CS (peran tetap, lihat repository.StaffRoles).
+	if !slices.Contains(repository.StaffRoles, user.Role) {
+		return nil, fmt.Errorf("only staff can login here")
 	}
 
 	if user.Provider != "local" {

@@ -1,5 +1,5 @@
-// Package repository berisi semua model GORM (schema v2, Shopee-aligned)
-// untuk Station Parfume: user.go, catalog.go, order.go.
+// Package repository berisi semua model GORM (schema v3) untuk Station Parfume:
+// user.go, catalog.go, commerce.go (stok, reseller, promo, pengiriman, audit), order.go.
 //
 // Sumber kebenaran schema adalah docs/schema/schema.sql (migrasi SQL),
 // BUKAN AutoMigrate: partial unique index, CHECK constraint, dan FK komposit
@@ -16,8 +16,13 @@ import (
 )
 
 const (
-	RoleUser  = "user"
-	RoleAdmin = "admin"
+	// Pembeli.
+	RoleUser = "user"
+	// Staf toko (peran tetap).
+	RoleOwner     = "owner"     // semua akses, termasuk kelola akun staf
+	RoleAdmin     = "admin"     // produk, harga, stok, pesanan
+	RoleWarehouse = "warehouse" // stok & pengiriman
+	RoleCS        = "cs"        // lihat pesanan & pelanggan
 
 	ProviderLocal  = "local"
 	ProviderGoogle = "google"
@@ -31,18 +36,21 @@ func NormalizeEmail(s string) string {
 }
 
 type User struct {
-	ID           uint           `gorm:"primaryKey" json:"id"`
-	Name         string         `gorm:"size:255;not null" json:"name"`
-	Email        string         `gorm:"size:255;not null" json:"email"`
-	Phone        *string        `gorm:"size:20" json:"phone,omitempty"`
-	PasswordHash *string        `gorm:"size:255" json:"-"`
-	PictureURL   *string        `json:"picture_url,omitempty"`
-	Provider     string         `gorm:"size:20;not null;default:'local'" json:"provider"`
-	ProviderSub  *string        `gorm:"size:255" json:"-"`
-	Role         string         `gorm:"size:10;not null;default:'user'" json:"role"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	ID           uint    `gorm:"primaryKey" json:"id"`
+	Name         string  `gorm:"size:255;not null" json:"name"`
+	Email        string  `gorm:"size:255;not null" json:"email"`
+	Phone        *string `gorm:"size:20" json:"phone,omitempty"`
+	PasswordHash *string `gorm:"size:255" json:"-"`
+	PictureURL   *string `json:"picture_url,omitempty"`
+	Provider     string  `gorm:"size:20;not null;default:'local'" json:"provider"`
+	ProviderSub  *string `gorm:"size:255" json:"-"`
+	Role         string  `gorm:"size:10;not null;default:'user'" json:"role"`
+	// ResellerLevelID: NULL = harga normal.
+	ResellerLevelID *uint          `json:"reseller_level_id,omitempty"`
+	ResellerLevel   *ResellerLevel `gorm:"foreignKey:ResellerLevelID" json:"reseller_level,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Addresses []UserAddress `gorm:"foreignKey:UserID" json:"addresses,omitempty"`
 }
@@ -58,8 +66,14 @@ type UserAddress struct {
 	District      string         `gorm:"size:100;not null" json:"district"`
 	PostalCode    string         `gorm:"size:10;not null" json:"postal_code"`
 	AddressLine   string         `gorm:"not null" json:"address_line"`
+	AreaID        *string        `gorm:"size:64" json:"area_id,omitempty"`
+	Latitude      *float64       `json:"latitude,omitempty"`
+	Longitude     *float64       `json:"longitude,omitempty"`
 	IsDefault     bool           `gorm:"not null" json:"is_default"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `json:"-"`
 }
+
+// StaffRoles: semua peran staf toko.
+var StaffRoles = []string{RoleOwner, RoleAdmin, RoleWarehouse, RoleCS}

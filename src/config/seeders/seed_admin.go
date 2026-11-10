@@ -42,7 +42,7 @@ func SeedAdmin(db *gorm.DB) (created bool, err error) {
 		Email:        email,
 		PasswordHash: &h,
 		Provider:     repository.ProviderLocal,
-		Role:         repository.RoleAdmin,
+		Role:         repository.RoleOwner, // akun pertama = owner (semua akses)
 	}
 	if err := db.Create(&admin).Error; err != nil {
 		return false, fmt.Errorf("buat admin: %w", err)
