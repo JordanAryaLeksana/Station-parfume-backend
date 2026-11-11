@@ -150,4 +150,3 @@ func checkArgs(args []string) error {
 	}
 	return fmt.Errorf("argumen tidak dikenal: %q%s (pemakaian: go run ./seed [-dry-run] [-admin] [-dir DIR] [-dsn DSN])", args[0], hint)
 }
-
