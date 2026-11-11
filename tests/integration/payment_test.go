@@ -7,6 +7,7 @@ import (
 	paymentservices "backend/src/modules/payment/services"
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -124,4 +125,39 @@ func TestPaymentsAndRoles(t *testing.T) {
 	paymentservices.Configure(fake, paymentservices.Settings{WebhookToken: webhookToken,
 		SuccessURL: frontendOrigin + "/bayar/sukses", CancelURL: frontendOrigin + "/bayar/batal"})
 	check(t, "pembayaran belum dikonfigurasi → 503", r.Status == 503, r.Status)
+
+	// ---------------- PUT /orders/:id/status oleh staf
+	call(t, "POST", "/api/v1/users", owner, map[string]any{"name": "Gudang", "email": "gudang@test.local", "password": buyerPassword, "role": "warehouse"})
+	gudang, _ := login(t, "/api/v1/auth/login/admin", "gudang@test.local", buyerPassword)
+	o7 := checkout(map[uint]int{bs: 1})
+	pay(o7)
+	sid7 := session(o7)
+	setStatus := func(token string, o uint, status string) resp {
+		return call(t, "PUT", fmt.Sprintf("/api/v1/orders/%d/status", o), token, map[string]any{"status": status, "reason": "uji"})
+	}
+	check(t, "staf set PAID manual → 400 (hanya dari Xendit)", setStatus(owner, o7, "PAID").Status == 400 && orderStatus(o7) == "PENDING_PAYMENT")
+	check(t, "staf set EXPIRED manual → 400", setStatus(owner, o7, "EXPIRED").Status == 400)
+	check(t, "warehouse membatalkan → 403", setStatus(gudang, o7, "CANCELLED").Status == 403 && orderStatus(o7) == "PENDING_PAYMENT")
+	r = setStatus(owner, o7, "CANCELLED")
+	check(t, "owner membatalkan → link bayar Xendit ikut mati, payment CANCELLED, reserve dilepas",
+		r.Status == 200 && orderStatus(o7) == "CANCELLED" && fake.status(sid7) == "CANCELED" && payStatus(o7) == "CANCELLED" && stock("reserved") == 0,
+		r.Status, fake.status(sid7), payStatus(o7), stock("reserved"))
+	check(t, "warehouse refund → 403", setStatus(gudang, o1, "REFUNDED").Status == 403)
+	r = setStatus(owner, o1, "REFUNDED")
+	check(t, "owner REFUNDED → pembayaran lunas ikut REFUNDED", r.Status == 200 && orderStatus(o1) == "REFUNDED" && payStatus(o1) == "REFUNDED",
+		r.Status, orderStatus(o1), payStatus(o1))
+
+	// ---------------- data internal Xendit tidak terlihat pembeli
+	r = call(t, "GET", fmt.Sprintf("/api/v1/orders/%d", o2), buyer, nil)
+	raw := string(r.Raw)
+	check(t, "response pembeli tanpa ID internal Xendit & failure_reason", r.Status == 200 && payStatus(o2) == "FAILED" &&
+		!strings.Contains(raw, "provider_session_id") && !strings.Contains(raw, "provider_payment") && !strings.Contains(raw, "failure_reason"), raw)
+
+	// ---------------- cari pesanan pakai nomor pesanan (halaman sukses Xendit ?order=SP…)
+	orderNo := scalar[string](t, "select order_no from orders where id = ?", o1)
+	r = call(t, "GET", "/api/v1/orders/"+orderNo, buyer, nil)
+	check(t, "GET /orders/SP… → pesanan yang sama", r.Status == 200 && uint(num(r.Data()["id"])) == o1, r.Status)
+	check(t, "nomor pesanan huruf kecil juga dikenali", call(t, "GET", "/api/v1/orders/"+strings.ToLower(orderNo), buyer, nil).Status == 200)
+	check(t, "nomor pesanan milik orang lain → 404", call(t, "GET", "/api/v1/orders/"+orderNo, admin, nil).Status == 404)
+	check(t, "nomor pesanan tidak ada → 404", call(t, "GET", "/api/v1/orders/SP000000NOTEXIST", buyer, nil).Status == 404)
 }

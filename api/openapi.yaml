@@ -1101,17 +1101,18 @@ paths:
     get:
       tags:
       - Pesanan
-      summary: Detail pesanan milik user
+      summary: Detail pesanan milik user (ID atau nomor pesanan)
       operationId: get_api_v1_orders_id
+      description: Halaman sukses bayar Xendit membawa `?order=SP…`; nomor itu bisa dipakai langsung di sini.
       security:
       - bearerAuth: []
       parameters:
       - name: id
         in: path
         required: true
+        description: ID angka atau nomor pesanan (mis. `SP261111A1B2C3D4`)
         schema:
-          type: integer
-          minimum: 1
+          type: string
       responses:
         '200':
           description: Berhasil
@@ -1207,7 +1208,7 @@ paths:
       summary: Ubah status pesanan (staf)
       operationId: put_api_v1_orders_id_status
       description: |-
-        Transisi yang diizinkan: PENDING_PAYMENT→PAID/CANCELLED/EXPIRED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. (Akan diganti aksi admin pesanan.)
+        Transisi: PENDING_PAYMENT→CANCELLED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. PAID & EXPIRED hanya dari sistem pembayaran. warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED & REFUNDED hanya owner/admin (lainnya 403). Pembatalan juga mematikan link bayar Xendit; REFUNDED menandai pembayaran lunas sebagai REFUNDED (uang dikembalikan manual lewat Dashboard Xendit).
 
         **Peran:** owner, admin, warehouse.
       security:
@@ -2502,12 +2503,6 @@ components:
         reference_id:
           type: string
           format: uuid
-        provider_session_id:
-          type: string
-        provider_payment_request_id:
-          type: string
-        provider_payment_id:
-          type: string
         checkout_url:
           type: string
         payment_method:
@@ -2530,8 +2525,6 @@ components:
           - CANCELLED
           - FAILED
           - REFUNDED
-        failure_reason:
-          type: string
         expires_at:
           type: string
           format: date-time
@@ -3462,17 +3455,16 @@ components:
       properties:
         status:
           type: string
+          description: PAID & EXPIRED hanya dari sistem pembayaran (ditolak 400)
           enum:
-          - PAID
           - PROCESSING
           - SHIPPED
           - COMPLETED
           - CANCELLED
-          - EXPIRED
           - REFUNDED
         reason:
           type: string
-          description: Disimpan untuk CANCELLED/EXPIRED
+          description: Disimpan untuk CANCELLED
       required:
       - status
     UpdatedCount:

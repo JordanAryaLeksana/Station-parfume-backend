@@ -23,6 +23,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"backend/migrations"
@@ -39,6 +40,9 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "jalankan semua lalu rollback (tidak ada yang tersimpan)")
 	withAdmin := flag.Bool("admin", false, "hanya buat akun owner (staf dengan semua akses) dari env ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD (katalog dilewati)")
 	flag.Parse()
+	if err := checkArgs(flag.Args()); err != nil {
+		log.Fatal(err)
+	}
 
 	if *dsn == "" {
 		v, err := config.DatabaseDSN()
@@ -132,3 +136,18 @@ func load[T any](dir, name string, parse func(io.Reader) ([]T, error)) ([]T, err
 	defer f.Close()
 	return parse(f)
 }
+
+// checkArgs: seed hanya menerima flag. Kata lepas (mis. "go run ./seed admin"
+// tanpa tanda minus) dulu diam-diam diabaikan lalu seed katalog berjalan.
+func checkArgs(args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	hint := ""
+	switch strings.TrimLeft(args[0], "-") {
+	case "admin", "dry-run", "dir", "dsn":
+		hint = fmt.Sprintf(" — maksud Anda -%s?", strings.TrimLeft(args[0], "-"))
+	}
+	return fmt.Errorf("argumen tidak dikenal: %q%s (pemakaian: go run ./seed [-dry-run] [-admin] [-dir DIR] [-dsn DSN])", args[0], hint)
+}
+

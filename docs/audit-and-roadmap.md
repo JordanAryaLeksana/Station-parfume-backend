@@ -822,3 +822,20 @@ Branch `chore/m5-server-hardening`. Tidak ada perubahan database maupun logika b
 - Domain frontend wajib ada di `CORS_ALLOWED_ORIGINS`.
 - Kontrak lengkap & coba langsung: `http://localhost:8080/docs`.
 
+---
+
+## Perbaikan pesanan & pembayaran (2026-11-11)
+Branch `fix/order-payment-safety`. Perilaku endpoint yang sudah ada; tidak ada perubahan database.
+
+| Sebelum | Sesudah |
+|---|---|
+| Staf bisa set `PAID` manual → stok terpotong padahal link bayar Xendit masih hidup (risiko bayar ganda) | `PAID` & `EXPIRED` hanya dari sistem pembayaran; staf → 400 |
+| Staf membatalkan → link bayar Xendit tetap hidup; pembeli masih bisa membayar | Pembatalan oleh staf juga membatalkan sesi Xendit (sama seperti pembatalan pembeli) |
+| `warehouse` bisa membatalkan & refund | warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED/REFUNDED hanya owner/admin (403) |
+| REFUNDED hanya status order | Pembayaran lunas ikut ditandai REFUNDED (uang tetap dikembalikan manual di Dashboard Xendit) |
+| Response pesanan pembeli memuat ID internal Xendit & `failure_reason` | Tidak lagi dikirim ke klien |
+| `GET /orders/:id` hanya angka | Juga menerima nomor pesanan `SP…` (dari `?order=` halaman sukses Xendit), hanya milik pembeli itu |
+| `go run ./seed admin` diam-diam menjalankan seed katalog | Argumen tak dikenal → error "maksud Anda -admin?" |
+
+Rancangan pelacakan pesanan yang ditunda + riset pengiriman: [`docs/rancangan-pelacakan-pesanan.md`](rancangan-pelacakan-pesanan.md).
+
