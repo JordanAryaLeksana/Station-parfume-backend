@@ -28,12 +28,12 @@ import (
 	"backend/migrations"
 	"backend/src/config"
 	"backend/src/config/seeders"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	_ = godotenv.Load() // khusus dev
+	if _, err := config.LoadDotEnv(".env"); err != nil { // khusus dev
+		log.Fatal(err)
+	}
 	dir := flag.String("dir", "seed", "folder berisi categories.csv, sizes.csv, wangian.csv, varian_parfum.csv, produk_umum.csv")
 	dsn := flag.String("dsn", "", "DSN PostgreSQL (default: dari env, sama seperti server)")
 	dryRun := flag.Bool("dry-run", false, "jalankan semua lalu rollback (tidak ada yang tersimpan)")
