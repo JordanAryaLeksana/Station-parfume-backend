@@ -23,7 +23,6 @@ import (
 	"backend/migrations"
 	"backend/src/config"
 
-	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
 )
 
@@ -39,7 +38,9 @@ perintah:
 }
 
 func main() {
-	_ = godotenv.Load() // khusus dev; di server pakai environment variable
+	if _, err := config.LoadDotEnv(".env"); err != nil { // khusus dev
+		log.Fatal(err)
+	}
 	dsnFlag := flag.String("dsn", "", "DSN PostgreSQL (default: dari env, sama seperti server)")
 	yes := flag.Bool("yes", false, "konfirmasi untuk perintah down")
 	flag.Usage = usage

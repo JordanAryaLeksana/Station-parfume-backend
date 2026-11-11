@@ -16,14 +16,14 @@ import (
 	"runtime/debug"
 	"syscall"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
 	// .env (khusus dev) dimuat PALING AWAL, sebelum config apa pun membaca env.
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found (memakai environment variable sistem)")
+	if found, err := config.LoadDotEnv(".env"); err != nil {
+		log.Fatal(err)
+	} else if !found {
+		log.Println("Tidak ada file .env (memakai environment variable sistem)")
 	}
 	// GIN_MODE dari .env baru berlaku setelah .env dimuat.
 	if err := config.ApplyGinMode(); err != nil {
