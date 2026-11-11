@@ -1,0 +1,7 @@
+# Ukuran botol parfum. 1 ukuran = 1 jenis botol; bottle_price ditambahkan ke harga (murni & campur).
+# default = ya: dijual untuk semua parfum. Ukuran lain (mis. 10/15 ml) hanya dipakai produk yang
+# mencantumkannya di kolom "ukuran" wangian.csv. weight_gram = berat kirim (isi kalau sudah ditimbang).
+label,volume_ml,bottle_price,weight_gram,default
+20 ml,20,5000,,ya
+30 ml,30,5000,,ya
+50 ml,50,5000,,ya

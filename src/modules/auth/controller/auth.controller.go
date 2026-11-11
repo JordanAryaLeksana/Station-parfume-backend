@@ -1,11 +1,38 @@
 package controller
 
 import (
-	"backend/src/middlewares/Error"
+	authmiddlewares "backend/src/middlewares/AuthMiddlewares"
+	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/auth/models"
 	"backend/src/modules/auth/services"
+	"backend/src/utils/jwt"
+	"errors"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 )
+
+// writeError: pesan error internal tidak pernah dikirim ke klien (hanya ke log).
+func writeError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrInvalidCredentials):
+		httperror.UnauthorizedError(c, services.ErrInvalidCredentials.Error())
+	case errors.Is(err, services.ErrUnauthorized):
+		httperror.UnauthorizedError(c, "Sesi tidak valid, silakan login ulang")
+	case errors.Is(err, services.ErrConflict):
+		httperror.ConflictError(c, services.ErrConflict.Error())
+	case errors.Is(err, services.ErrValidation):
+		httperror.BadRequestError(c, err.Error())
+	case errors.Is(err, services.ErrUnavailable):
+		log.Printf("auth: %v", err)
+		httperror.ServiceUnavailableError(c, "Layanan autentikasi sedang bermasalah, coba lagi")
+	default:
+		log.Printf("auth: %v", err)
+		httperror.InternalServerError(c, "Internal server error")
+	}
+}
 
 func Register(c *gin.Context) {
 	var input models.RegisterRequest
@@ -15,85 +42,70 @@ func Register(c *gin.Context) {
 	}
 	user, err := services.Register(&input)
 	if err != nil {
-		httperror.BadRequestError(c, err.Error())
+		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{
-		"message": "User Registered",
-		"user":    user,
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "User Registered", "user": user})
 }
 
 func LoginManual(c *gin.Context) {
 	var input models.LoginRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, "Invalid input data")
+		// format salah (mis. password < 8) → pesan yang sama dengan kredensial salah
+		httperror.UnauthorizedError(c, services.ErrInvalidCredentials.Error())
 		return
 	}
 	user, err := services.LoginManual(&input)
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "User Logged In",
-		"user":    user,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "User Logged In", "user": user})
 }
 
 func LoginAdmin(c *gin.Context) {
 	var input models.LoginRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, "Invalid input data")
+		httperror.UnauthorizedError(c, services.ErrInvalidCredentials.Error())
 		return
 	}
 	user, err := services.LoginAdmin(&input)
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "Admin Logged In",
-		"user":    user,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Admin Logged In", "user": user})
 }
 
-func GoogleLogin(c *gin.Context) {
-	services.HandleGoogleLogin(c.Writer, c.Request)
-}
+func GoogleLogin(c *gin.Context)    { services.HandleGoogleLogin(c) }
+func GoogleCallback(c *gin.Context) { services.HandleGoogleCallback(c) }
 
-func GoogleCallback(c *gin.Context) {
-	services.HandleGoogleCallback(c.Writer, c.Request)
-}
-
+// Logout: header Authorization = access token; body opsional {"refresh_token": "..."}.
 func Logout(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		httperror.UnauthorizedError(c, "Authorization header is missing")
+	var input models.LogoutRequest
+	_ = c.ShouldBindJSON(&input) // body opsional
+	exp, _ := c.Get(authmiddlewares.CtxExpiresAt)
+	expTime, _ := exp.(time.Time)
+	err := services.Logout(c.GetUint(authmiddlewares.CtxUserID), c.GetString(authmiddlewares.CtxJTI), expTime, input.RefreshToken)
+	if err != nil {
+		writeError(c, err)
 		return
 	}
-	if err := services.Logout(authHeader); err != nil {
-		httperror.InternalServerError(c, err.Error())
-		return
-	}
-	c.JSON(204, gin.H{
-		"message": "User Logged Out",
-	})
+	c.Status(http.StatusNoContent)
 }
 
+// RefreshToken: header Authorization = refresh token (diverifikasi RefreshTokenMiddleware).
 func RefreshToken(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		httperror.UnauthorizedError(c, "Authorization header is missing")
+	v, _ := c.Get(authmiddlewares.CtxRefreshClaims)
+	claims, ok := v.(*jwt.JwtCustomClaims)
+	if !ok {
+		httperror.UnauthorizedError(c, "Unauthorized")
 		return
 	}
-	newTokens, err := services.RefreshToken(authHeader)
+	tokens, err := services.RefreshToken(claims)
 	if err != nil {
-		httperror.UnauthorizedError(c, err.Error())
+		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "Token Refreshed",
-		"tokens":  newTokens,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Token Refreshed", "tokens": tokens})
 }

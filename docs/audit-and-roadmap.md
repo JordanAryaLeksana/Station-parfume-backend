@@ -6,13 +6,19 @@
 
 ---
 
-## Status Terkini (2026-11-06)
+## Status Terkini (2026-11-11)
 
 | Milestone | Status | Bukti |
 |---|---|---|
 | Audit (§1–§10) | ✅ Selesai | dokumen ini |
-| **M1** Build Stabilization | ✅ **Selesai**, menunggu review/merge Pilot | branch `chore/build-stabilization`: `8bf0e59` (fix import casing + rename `Order`→`order`), `eb8368c` (gofmt). `go build` / `go vet` rc=0, `gofmt -l .` bersih, `go.mod`/`go.sum` tidak berubah. |
-| M2 – M11 | ⏳ Belum dimulai | menunggu persetujuan Pilot |
+| **M1** Build Stabilization | ✅ Selesai | `8bf0e59`, `eb8368c` |
+| **M2** Startup & Migration Safety | ✅ Selesai (kode) | AutoMigrate/DropColumn dihapus (`faa6654`); fail-fast JWT & Redis (`8a23337`); DSN dari env, migrasi goose, logger Warn tanpa nilai parameter (lihat [Hasil Eksekusi M2](#hasil-eksekusi-m2--database-dari-env--migrasi-goose-2026-11-11)). **Tugas Pilot:** rotasi password DB (C5) |
+| **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
+| M4, M5, M10, M11 | ⏳ Belum dimulai | Rate limit & trusted proxy (bagian dari M5) sudah dikerjakan di M3 |
+| **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
+| **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
+| **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
+| **M9** Midtrans | ✅ Dihapus | Midtrans tidak pernah berjalan & tidak ada data produksi, jadi langsung dihapus bersama M8 |
 
 > **Catatan:** setelah M1, jalur file `src/modules/Order/...` yang disebut di dokumen ini sekarang menjadi `src/modules/order/...`. Nomor baris di file yang terkena `gofmt` bisa bergeser beberapa baris. Referensi baris di dokumen ini mengacu ke commit `8f6479d` (sebelum M1).
 
@@ -394,6 +400,8 @@ sequenceDiagram
 | C21 | Katalog produk (GET) mewajibkan login. Sementara itu POST parfum/brand/bottle tidak dibatasi admin. | `parfume.routes.go:12-33` | Medium |
 | — | **Positif:** bcrypt dipakai untuk password (register/admin), query `Where("x = ?", v)` sudah terparameterisasi, refresh token di-rotate dengan blacklist jti, dan cek `SigningMethodHMAC` (mencegah `alg` confusion). | | |
 
+> **Status 2026-11-11:** C12–C16 (kecuali CORS/batas body/security header), C18 dan H2/H16 sudah diperbaiki, dan modul `/admins` (C2, C19 sisi admin) dihapus. Lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11).
+
 ---
 
 ## 8. Go 1.27 Modernization Assessment
@@ -677,3 +685,92 @@ graph LR
 ---
 
 AUDIT COMPLETE — M1 DONE — AWAITING PILOT APPROVAL FOR M2
+
+---
+
+## Hasil Eksekusi M3 — hardening auth (2026-11-11)
+
+Branch `chore/m2-startup-safety`, di atas `e79373f`.
+
+### Temuan & perbaikan
+
+| Temuan | Bukti sebelum perbaikan | Perbaikan |
+|---|---|---|
+| **C18** `JWT_SECRET` kosong → token bisa dipalsukan (termasuk peran `owner`) | Terbukti: jwt v5 menerima key kosong untuk sign & verify | `config.LoadAuthConfig()` di awal `main`: kedua secret wajib ada, ≥ 32 karakter, dan berbeda. Kalau tidak, server tidak start. `Generate*Token` juga menolak secret kosong |
+| **H2** Logout selalu gagal (access token di-parse dengan secret refresh) → tidak ada token yang dicabut | Terbukti: `signature is invalid` → 500 | `jti` access token (dari context middleware) di-blacklist sampai `exp`; `refresh_token` di body (opsional, harus milik user yang sama) ikut dicabut. Jawab **204 tanpa body** (H16) |
+| Refresh tidak atomik: dua request bersamaan dengan refresh token yang sama bisa sama-sama berhasil | — | `ConsumeJti` = Redis `SET NX`: refresh token hanya bisa dipakai **sekali** |
+| Redis error di middleware refresh diloloskan (fail-open) | — | Kedua middleware **fail-closed** → 503 |
+| JWT: tanpa `iss`, metode tidak dikunci, parsing dobel | — | `jwt.ParseAccessToken/ParseRefreshToken`: hanya HS256, `iss=station-parfume`, `exp` wajib, leeway 30 dtk, `token_type` + `jti` + `user_id` wajib |
+| **C14** Pesan login membocorkan apakah email terdaftar; error mentah dikirim sebagai 500 | — | Satu pesan 401 "Email atau password salah" untuk email tidak ada, password salah, akun Google, dan bukan staf di `/auth/login/admin`. Waktu respons disamakan (bcrypt dummy). Error internal hanya ke log |
+| **C15** Register tanpa password | — | `password` wajib 8–72 karakter (batas bcrypt), nama & email maks 255. Email dobel → 409 (juga saat race, dari unique index) |
+| **C16** Tidak ada rate limit | — | `middlewares/RateLimit`: Redis `INCR`+`EXPIRE NX` per IP. login & login/admin 10/menit, register 5/menit, refresh 30/menit → 429 + `Retry-After`. Redis error → diloloskan & dicatat (supaya login tidak mati total) |
+| IP klien bisa dipalsukan lewat `X-Forwarded-For` (rate limit bisa dilewati) | — | `router.SetTrustedProxies` dari env `TRUSTED_PROXIES` (default kosong = IP koneksi langsung) |
+| Peran staf dibaca dari token → staf yang dihapus/diturunkan tetap punya akses sampai token habis (≤ 15 menit) | — | `RoleBasedAccess` membaca peran terbaru dari DB per request staf: dihapus → 401, diturunkan → 403 seketika |
+| **C12/C13** Google OAuth: `state` statis tanpa cek (CSRF), token di query string, redirect `localhost` hardcode, `verified_email` tidak dicek, `sub` selalu kosong | — | `state` acak 32 byte di cookie `oauth_state` (HttpOnly, SameSite=Lax, Secure kalau HTTPS, 10 menit) dicek constant-time; userinfo OIDC (`sub`, `email_verified` wajib true); user dicari lewat `sub` lalu email (email milik akun password **tidak** diambil alih); redirect ke `FRONTEND_URL` dengan token di **fragment** |
+| **C2** Modul `/admins` usang tanpa validasi | — | Dihapus. Kelola staf lewat `/users` (aturan owner, `e79373f`); owner pertama lewat `go run ./seed -admin` |
+
+### Kontrak frontend yang berubah
+
+| Endpoint | Sebelum | Sekarang |
+|---|---|---|
+| `POST /auth/logout` | Selalu gagal | Header `Authorization: Bearer <access>`, body opsional `{"refresh_token": "..."}` → **204 tanpa body** |
+| `POST /auth/refresh` | Refresh token bisa dipakai ulang | Header `Authorization: Bearer <refresh>` → `{"tokens": {"access_token", "refresh_token"}}`. Refresh token lama langsung mati: simpan yang baru, dan jangan kirim refresh paralel (hanya satu yang berhasil) |
+| `GET /auth/google/callback` | `http://localhost:3000/oauth-success?access_token=…` | `FRONTEND_URL/oauth-success#access_token=…&refresh_token=…` — baca dari `location.hash`, lalu hapus hash dari URL. Gagal: `#error=<kode>`, kode: `access_denied`, `google_failed`, `email_unverified`, `email_registered`, `server_error` |
+| `/auth/login`, `/auth/login/admin` | Pesan & status beragam | Semua kegagalan: 401 "Email atau password salah" |
+| `/auth/register` | Password opsional | Password 8–72 karakter; email dobel → 409 |
+| login/register/refresh | Tanpa batas | 429 + header `Retry-After` (detik) |
+| Endpoint ber-auth | — | 503 kalau Redis tidak bisa dicek |
+| `/admins/*` | CRUD terbuka | 404 (dihapus) |
+
+### Env baru / berubah (`.env.example`)
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`: wajib, ≥ 32 karakter, berbeda (contoh: `openssl rand -base64 48`).
+- `TRUSTED_PROXIES`: IP/CIDR reverse proxy dipisah koma (kosongkan kalau API langsung diakses).
+- `FRONTEND_URL`: tujuan redirect Google OAuth.
+
+### Verifikasi
+- `go build`, `go vet`, `gofmt -l` bersih; `go test ./...` lulus, termasuk test baru `src/config/auth_test.go` (secret kosong/pendek/sama) dan `src/utils/jwt/jwt_test.go` (tipe token tertukar, secret salah/kosong, HS512, `none`, issuer salah, tanpa `exp`, kedaluwarsa, tanpa `jti`).
+- Integrasi HTTP di Postgres 17 + Redis 7 sementara (dengan server Google palsu): **34/34 cek** — register, login seragam, logout, refresh sekali pakai (5 request bersamaan → tepat 1 berhasil), peran staf seketika, `/admins` 404, rate limit + `X-Forwarded-For` palsu, Google OAuth (state, fragment, `sub`, `email_verified`, akun password tidak diambil alih), Redis mati → 503.
+- Regresi: harness M8 Xendit **26/26**, harness katalog **40/40**.
+
+### Belum dikerjakan (sengaja)
+- CORS, timeout server, security header, batas ukuran body, `/healthz` → M5.
+- DSN dari env + rotasi password DB → M2.
+
+---
+
+## Hasil Eksekusi M2 — database dari env & migrasi goose (2026-11-11)
+
+### Perubahan
+| Bagian | Sebelum | Sekarang |
+|---|---|---|
+| Koneksi DB | DSN + password ditulis di `src/config/database.go` (menunjuk `localhost:5432`, bukan DB docker-compose) | `DATABASE_URL`, atau `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` (+ `DB_SSLMODE` default `prefer`, `DB_TIMEZONE` default `Asia/Jakarta`). Password di-escape; pesan error tidak memuat password. Env kosong/salah → server tidak start |
+| Pool | default `database/sql` (tanpa batas) | max 20 koneksi, 10 idle, umur 30 menit |
+| Log SQL | level Info, mencetak semua query **beserta nilainya** (C20) | level Warn (`DB_LOG_LEVEL`), query lambat > 500 ms, nilai parameter tidak pernah dicetak |
+| Schema | `docs/schema/schema.sql` (schema v3, 26 tabel) dijalankan manual | **disederhanakan ke kebutuhan sekarang (15 tabel)** dan menjadi `migrations/00001_init.sql`; `go run ./cmd/migrate up/status/version/down -yes`; advisory lock untuk proses bersamaan |
+| Start server | tidak tahu versi schema | menolak start kalau DB belum dimigrasi / ketinggalan; DB lebih baru dari kode → peringatan saja. Seeder juga menolak DB yang belum dimigrasi |
+| docker-compose | password Postgres ditulis di file; healthcheck memakai user yang salah (`sp_user`) | `POSTGRES_USER/PASSWORD/DB` dan port diambil dari `.env` (`DB_*`); healthcheck memakai user/db container. Nilai hasil resolve sama dengan sebelumnya |
+| Docker image | hanya server | + binary `migrate` (`./migrate up` sebagai langkah deploy) |
+
+### Schema disederhanakan (keputusan Pilot 2026-11-11)
+| Dihapus | Gantinya sekarang |
+|---|---|
+| `reseller_levels`, `variant_reseller_prices`, kolom reseller di `users`/`orders`, `order_items.list_price` | semua pembeli harga sama (`catalog.UnitPrice`) |
+| `vouchers`, `voucher_redemptions`, `promotions`, `promotion_items`, `orders.discount/voucher_*` | `orders.total = subtotal + shipping_fee` (CHECK) |
+| `user_addresses` | alamat diketik saat checkout dan disalin ke order (seperti sebelumnya) |
+| `audit_logs` | riwayat stok tetap di `stock_movements`; pembayaran telat terlihat dari order `PAID` dengan `cancelled_at` terisi + log server |
+| `locations`, `inventory_levels`, `orders.location_id` | `variants.stock` + `variants.reserved` (1 toko); `stock_movements.stock_after` |
+| `shipments`, `*.area_id`, kurir & resi | dikirim manual dari toko: status `SHIPPED` + `shipped_at`; ongkir 0. Tracking (kurir & resi) menyusul di MVP berikutnya |
+| CHECK provider `midtrans` | `payments.provider` hanya `xendit` |
+
+Kontrak API yang berubah: keranjang tanpa `list_price`/`reseller_level_name`; order tanpa `location_id`, `discount`, `voucher_*`, `reseller_*`, `shipments`; `PUT /orders/:id/status` hanya `{status, reason?}`; admin `GET /admin/products/:id` per varian `stock`/`reserved`/`available` (dulu `on_hand`/`reserved`); `POST /admin/inventory/adjustments` → `[{variant_id, stock, reserved, available}]`.
+
+### Verifikasi
+- Unit test `src/config/database_test.go`: DSN dari potongan env (password dengan karakter `@ : / ? # & ' " \ %` dan spasi, di-parse ulang dengan pgx), `DATABASE_URL` diprioritaskan, env kosong/port/sslmode/timezone salah ditolak tanpa membocorkan password, dan `TimeZone` terbaca benar oleh driver GORM (driver itu membaca nilainya mentah dari DSN — bug `Asia%2FJakarta` ditemukan di uji integrasi; test ini terbukti gagal di kode lama).
+- Unit test katalog diperbarui (stok = `stock − reserved`, tidak pernah negatif).
+- Integrasi di Postgres 17 + Redis 7 sementara: server & seed menolak DB kosong tanpa membuat tabel; `up` → 15 tabel; **15 struct GORM cocok dua arah dengan 15 tabel & kolomnya**; server start; `down` ke 0 lalu `up` lagi bersih; koneksi lewat `DB_*`, `DB_SSLMODE=require` ke server tanpa TLS ditolak, dua `up` bersamaan aman (advisory lock), log tanpa DSN/password.
+- Regresi di DB hasil migrasi: harness auth **34/34**, M8 Xendit **26/26** (stok di varian, pembayaran telat), katalog **44/44** (+4 cek: tanpa field reseller/voucher, alur PROCESSING → SHIPPED dengan `shipped_at`, stok di layar admin).
+
+### Tugas Pilot
+1. **Rotasi password DB (C5).** Password lama ada di git history (`src/config/database.go`, `docker-compose.yml`). Ganti password di PostgreSQL, lalu ubah `DB_PASSWORD` di `.env` — kode tidak perlu diubah.
+2. **Database dev:** buat baru → `go run ./cmd/migrate up` → `go run ./seed` → `go run ./seed -admin`. Database dari schema v3 lama tidak cocok lagi.
+3. Production: `DB_SSLMODE=require` (atau `verify-full`).

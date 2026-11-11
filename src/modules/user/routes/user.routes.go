@@ -3,6 +3,7 @@ package routes
 import (
 	"backend/src/middlewares/AuthMiddlewares"
 	"backend/src/modules/user/controller"
+	"backend/src/repository"
 	"fmt"
 	"os"
 
@@ -14,7 +15,7 @@ import (
 func RegisterUserRoutes(router *gin.RouterGroup) {
 	userGroup := router.Group("/users",
 		authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")),
-		authmiddlewares.RoleBasedAccess("admin"),
+		authmiddlewares.RoleBasedAccess(repository.RoleOwner, repository.RoleAdmin),
 	)
 	fmt.Println("Registering user routes...")
 	{

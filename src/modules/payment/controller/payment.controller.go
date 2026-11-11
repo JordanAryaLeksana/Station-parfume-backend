@@ -2,92 +2,74 @@ package controller
 
 import (
 	httperror "backend/src/middlewares/Error"
-	"backend/src/modules/payment/models"
 	"backend/src/modules/payment/services"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-func CreatePaymentHandler(c *gin.Context) {
-	userID, ok := currentUser(c)
-	if !ok {
-		return
-	}
-	var input models.PaymentRequestDTO
-	if err := c.ShouldBindJSON(&input); err != nil {
-		httperror.BadRequestError(c, "Invalid request body")
-		return
-	}
-	paymentResp, err := services.CreatePayment(userID, &input)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Payment created successfully",
-		"data":    paymentResp,
-	})
-}
-
-func PaymentNotificationHandler(c *gin.Context) {
-	var notificationPayload map[string]any
-	if err := c.ShouldBindJSON(&notificationPayload); err != nil {
-		httperror.BadRequestError(c, "Invalid request body")
-		return
-	}
-	paymentResp, err := services.HandleNotification(notificationPayload)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	// Endpoint publik (dipanggil Midtrans): jangan kirim balik detail pembayaran.
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Payment notification processed successfully",
-		"status":  paymentResp.Status,
-	})
-}
-
-func GetPaymentHandler(c *gin.Context) {
-	userID, ok := currentUser(c)
-	if !ok {
-		return
-	}
-	paymentID, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil || paymentID == 0 {
-		httperror.BadRequestError(c, "Invalid payment id format")
-		return
-	}
-	paymentResp, err := services.GetPayment(uint(paymentID), userID)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Payment retrieved successfully",
-		"data":    paymentResp,
-	})
-}
-
-func currentUser(c *gin.Context) (uint, bool) {
+// PayOrderHandler: POST /orders/:id/pay → {payment: {checkout_url, expires_at, status, ...}}.
+// Frontend redirect ke checkout_url; setelah kembali ke halaman sukses, polling GET /orders/:id.
+func PayOrderHandler(c *gin.Context) {
 	userID := c.GetUint("userID")
 	if userID == 0 {
-		if !c.Writer.Written() {
-			httperror.UnauthorizedError(c, "Unauthorized")
-		}
-		return 0, false
+		httperror.UnauthorizedError(c, "Unauthorized")
+		return
 	}
-	return userID, true
+	orderID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || orderID == 0 {
+		httperror.BadRequestError(c, "Invalid order id")
+		return
+	}
+	payment, err := services.PayOrder(c.Request.Context(), userID, uint(orderID))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Payment ready", "payment": payment})
+}
+
+// maxWebhookBody: batas body webhook Xendit.
+const maxWebhookBody = 64 << 10
+
+// XenditWebhookHandler: POST /webhooks/xendit (tanpa JWT; diverifikasi x-callback-token).
+// 2xx = diterima; selain itu Xendit mengirim ulang (maks 6×).
+func XenditWebhookHandler(c *gin.Context) {
+	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxWebhookBody))
+	if err != nil {
+		httperror.BadRequestError(c, "Body terlalu besar atau tidak terbaca")
+		return
+	}
+	if err := services.HandleWebhook(c.Request.Context(), c.GetHeader("x-callback-token"), body); err != nil {
+		if !errors.Is(err, services.ErrUnauthorized) {
+			log.Printf("webhook xendit: %v", err)
+		}
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"received": true})
 }
 
 func writeError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, services.ErrUnauthorized):
+		httperror.UnauthorizedError(c, "invalid callback token")
 	case errors.Is(err, services.ErrNotFound):
 		httperror.NotFoundError(c, err.Error())
 	case errors.Is(err, services.ErrValidation):
 		httperror.BadRequestError(c, err.Error())
+	case errors.Is(err, services.ErrConflict):
+		httperror.ConflictError(c, err.Error())
+	case errors.Is(err, services.ErrNotConfigured):
+		httperror.ServiceUnavailableError(c, "Pembayaran belum tersedia")
+	case errors.Is(err, services.ErrRetryLater):
+		httperror.ServiceUnavailableError(c, "Belum bisa diproses, kirim ulang nanti")
+	case errors.Is(err, services.ErrGateway):
+		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 	default:
 		httperror.InternalServerError(c, "Internal server error")
 	}

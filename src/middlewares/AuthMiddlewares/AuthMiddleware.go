@@ -1,136 +1,131 @@
 package authmiddlewares
 
 import (
+	"backend/src/config"
 	httperror "backend/src/middlewares/Error"
+	"backend/src/repository"
 	"backend/src/utils/jwt"
 	utils "backend/src/utils/redisUtils"
-	"github.com/gin-gonic/gin"
-	jwtv5 "github.com/golang-jwt/jwt/v5"
+	"errors"
+	"log"
+	"slices"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
+// Context keys yang diisi middleware.
+const (
+	CtxUserID        = "userID"
+	CtxEmail         = "email"
+	CtxRole          = "role"
+	CtxJTI           = "jti"           // jti access token (untuk logout)
+	CtxExpiresAt     = "tokenExpires"  // time.Time exp access token
+	CtxRefreshClaims = "refreshClaims" // *jwt.JwtCustomClaims (endpoint /auth/refresh)
+)
+
+// bearerToken mengambil token dari header "Authorization: Bearer <token>".
+func bearerToken(c *gin.Context) (string, bool) {
+	h := c.GetHeader("Authorization")
+	scheme, tok, ok := strings.Cut(h, " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(tok) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(tok), true
+}
+
+// checkNotRevoked: fail-closed — kalau Redis error, request ditolak 503.
+func checkNotRevoked(c *gin.Context, jti string) bool {
+	revoked, err := utils.IsJtiBlacklisted(jti)
+	if err != nil {
+		log.Printf("auth: cek blacklist gagal: %v", err)
+		httperror.ServiceUnavailableError(c, "Layanan autentikasi sedang bermasalah, coba lagi")
+		return false
+	}
+	if revoked {
+		httperror.UnauthorizedError(c, "Token sudah tidak berlaku")
+		return false
+	}
+	return true
+}
+
+// AuthMiddleware memverifikasi access token (HS256, issuer, tipe "access", jti,
+// exp) dan memastikan token belum dicabut (logout).
 func AuthMiddleware(secretKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authorizationHeader := c.GetHeader("Authorization")
-		if authorizationHeader == "" {
-			httperror.UnauthorizedError(c, "Authorization header is missing")
+		tok, ok := bearerToken(c)
+		if !ok {
+			httperror.UnauthorizedError(c, "Authorization header tidak ada atau formatnya salah")
 			return
 		}
-
-		parts := strings.Split(authorizationHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			httperror.UnauthorizedError(c, "Invalid authorization header format")
-			return
-		}
-		tokenStr := parts[1]
-		token, err := jwtv5.ParseWithClaims(tokenStr, &jwt.JwtCustomClaims{}, func(token *jwtv5.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwtv5.SigningMethodHMAC); !ok {
-				return nil, jwtv5.ErrSignatureInvalid // ditangani sebagai "Invalid token" di bawah
-			}
-			return []byte(secretKey), nil
-		})
-		if err != nil || !token.Valid {
+		claims, err := jwt.ParseAccessToken(tok, secretKey)
+		if err != nil {
 			httperror.UnauthorizedError(c, "Invalid token")
 			return
 		}
-		claims, ok := token.Claims.(*jwt.JwtCustomClaims)
-		if !ok {
-			httperror.UnauthorizedError(c, "Invalid token claims")
+		if !checkNotRevoked(c, claims.ID) {
 			return
 		}
-
-		if claims.ID == "" {
-			httperror.UnauthorizedError(c, "Token ID (jti) is empty")
-			return
-		}
-
-		if claims.TokenType != "access" {
-			httperror.UnauthorizedError(c, "Invalid token type")
-			return
-		}
-		blacklisted, err := utils.IsJtiBlacklisted(claims.ID)
-		if err != nil {
-			httperror.InternalServerError(c, "Error checking token blacklist status")
-			return
-		}
-		if blacklisted {
-			httperror.UnauthorizedError(c, "Token is blacklisted")
-			return
-		}
-		c.Set("userID", claims.UserID)
-		c.Set("email", claims.Email)
-		c.Set("role", claims.Role)
+		c.Set(CtxUserID, claims.UserID)
+		c.Set(CtxEmail, claims.Email)
+		c.Set(CtxRole, claims.Role)
+		c.Set(CtxJTI, claims.ID)
+		c.Set(CtxExpiresAt, claims.ExpiresAt.Time)
 		c.Next()
 	}
 }
 
+// RefreshTokenMiddleware memverifikasi refresh token (tipe "refresh") dan
+// menaruh claims-nya di context untuk handler /auth/refresh.
 func RefreshTokenMiddleware(secretKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authorizationHeader := c.GetHeader("Authorization")
-		if authorizationHeader == "" {
-			httperror.UnauthorizedError(c, "Authorization header is missing")
+		tok, ok := bearerToken(c)
+		if !ok {
+			httperror.UnauthorizedError(c, "Authorization header tidak ada atau formatnya salah")
 			return
 		}
-
-		parts := strings.Split(authorizationHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			httperror.UnauthorizedError(c, "Invalid authorization header format")
-			return
-		}
-		tokenStr := parts[1]
-
-		token, err := jwtv5.ParseWithClaims(tokenStr, &jwt.JwtCustomClaims{}, func(token *jwtv5.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwtv5.SigningMethodHMAC); !ok {
-				return nil, jwtv5.ErrSignatureInvalid
-			}
-			return []byte(secretKey), nil
-		})
-		if err != nil || !token.Valid {
+		claims, err := jwt.ParseRefreshToken(tok, secretKey)
+		if err != nil {
 			httperror.UnauthorizedError(c, "Invalid token")
 			return
 		}
-		claims, ok := token.Claims.(*jwt.JwtCustomClaims)
-		if !ok {
-			httperror.UnauthorizedError(c, "Invalid token claims")
+		if !checkNotRevoked(c, claims.ID) {
 			return
 		}
-
-		if claims.TokenType != "refresh" {
-			httperror.UnauthorizedError(c, "Invalid token type for refresh")
-			return
-		}
-		if claims.ID == "" {
-			httperror.UnauthorizedError(c, "Token ID (jti) is empty")
-			return
-		}
-		blacklisted, _ := utils.IsJtiBlacklisted(claims.ID)
-		if blacklisted {
-			httperror.UnauthorizedError(c, "Token is blacklisted")
-			return
-		}
-		c.Set("userID", claims.UserID)
-		c.Set("email", claims.Email)
-		c.Set("role", claims.Role)
+		c.Set(CtxUserID, claims.UserID)
+		c.Set(CtxRefreshClaims, claims)
 		c.Next()
 	}
 }
 
 // RoleBasedAccess harus dipasang SETELAH AuthMiddleware dan SEBELUM handler.
-// Semua helper httperror memanggil Abort, jadi request yang ditolak tidak
-// pernah sampai ke handler.
+// Peran dibaca ULANG dari database (bukan dari token), jadi staf yang dihapus
+// atau diturunkan perannya langsung kehilangan akses tanpa menunggu token
+// kedaluwarsa. Context "role" diperbarui ke peran terbaru.
 func RoleBasedAccess(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userRole, ok := c.Get("role")
-		if !ok {
-			httperror.UnauthorizedError(c, "Role not found in token")
+		userID := c.GetUint(CtxUserID)
+		if userID == 0 {
+			httperror.UnauthorizedError(c, "Unauthorized")
 			return
 		}
-		for _, allowedRole := range allowedRoles {
-			if userRole == allowedRole {
-				c.Next()
-				return
-			}
+		var u repository.User
+		err := config.DB.Select("id", "role").First(&u, userID).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			httperror.UnauthorizedError(c, "Akun tidak aktif")
+			return
 		}
-		httperror.ForbiddenError(c, "You don't have permission to access this resource")
+		if err != nil {
+			log.Printf("auth: baca peran user %d gagal: %v", userID, err)
+			httperror.InternalServerError(c, "Internal server error")
+			return
+		}
+		if !slices.Contains(allowedRoles, u.Role) {
+			httperror.ForbiddenError(c, "You don't have permission to access this resource")
+			return
+		}
+		c.Set(CtxRole, u.Role)
+		c.Next()
 	}
 }

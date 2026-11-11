@@ -1,0 +1,6 @@
+# Pengecualian per varian parfum (opsional). Biasanya KOSONG: harga parfum dihitung otomatis
+# (tarif wangian.csv × ml + botol sizes.csv) dan stok parfum tidak dihitung (diracik sendiri, selalu tersedia).
+# Isi baris hanya untuk varian yang berbeda: harga_khusus (mengalahkan rumus), harga_coret, atau aktif "tidak"
+# (sembunyikan, mis. bibit habis). Kunci: scent_code + ml + tipe (murni/bibit, campur/parfum). Kolom kosong = tidak diubah.
+# Contoh:  Annasui,Dolly Girl,annasui-dolly-girl,30,murni,85000,95000,
+product,varian,scent_code,ml,tipe,harga_khusus,harga_coret,aktif

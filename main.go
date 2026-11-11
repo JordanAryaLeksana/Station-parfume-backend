@@ -1,27 +1,102 @@
 package main
 
 import (
+	"backend/migrations"
 	"backend/src/config"
+	paymentservices "backend/src/modules/payment/services"
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
 
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
 	"backend/src/routes"
 	"backend/src/utils/AuthHandler"
 )
 
 func main() {
-	config.InitRedis()
-	config.ConnectDatabase()
-	config.InitMidtrans()
+	// .env (khusus dev) dimuat PALING AWAL, sebelum config apa pun membaca env.
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found (memakai environment variable sistem)")
+	}
+	// Fail-fast: tanpa secret JWT yang kuat, siapa pun bisa memalsukan token.
+	if err := config.LoadAuthConfig(); err != nil {
+		log.Fatalf("config auth tidak valid: %v", err)
+	}
+	// Redis wajib: blacklist token (logout) dan rate limit bergantung padanya.
+	if err := config.InitRedis(); err != nil {
+		log.Fatalf("redis: %v", err)
+	}
+	// Database dari env (DATABASE_URL atau DB_*), lalu pastikan schema sudah di
+	// versi migrasi terbaru. Migrasi sendiri dijalankan terpisah:
+	// go run ./cmd/migrate up (lihat migrations/README.md).
+	if err := config.ConnectDatabase(); err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	if err := checkSchema(); err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	// Pembayaran: Xendit Payment Sessions. Kalau env belum lengkap, server tetap
+	// jalan tapi endpoint bayar & webhook menjawab 503.
+	if err := paymentservices.ConfigureFromEnv(); err != nil {
+		log.Printf("PERINGATAN pembayaran: %v", err)
+	}
 	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
+	go reconcileLoop(5 * time.Minute)
 	router := gin.Default()
-	routes.InitRoutes(router)
+	// Hanya proxy di TRUSTED_PROXIES yang boleh menentukan IP klien
+	// (X-Forwarded-For); default tidak ada → IP dari koneksi langsung.
+	if err := router.SetTrustedProxies(config.TrustedProxies()); err != nil {
+		log.Fatalf("TRUSTED_PROXIES tidak valid: %v", err)
+	}
 	authhandler.InitGoogleOauthConfig()
+	routes.InitRoutes(router)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	router.Run(":" + port)
+}
+
+// checkSchema: server tidak jalan di atas schema yang belum dimigrasi (query
+// akan gagal di tengah jalan). Database yang lebih baru dari kode (mis. setelah
+// rollback deploy) hanya diberi peringatan, karena migrasi dibuat kompatibel ke
+// belakang (expand → contract).
+func checkSchema() error {
+	sqlDB, err := config.DB.DB()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = migrations.CheckUpToDate(ctx, sqlDB)
+	switch {
+	case errors.Is(err, migrations.ErrDBNewer):
+		log.Printf("PERINGATAN schema: %v", err)
+		return nil
+	case errors.Is(err, migrations.ErrNotMigrated), errors.Is(err, migrations.ErrPending):
+		return fmt.Errorf("%w — jalankan dulu: go run ./cmd/migrate up", err)
+	}
+	return err
+}
+
+// reconcileLoop berkala: cek pembayaran yang webhook-nya terlewat, lalu order yang
+// lewat batas bayar dibatalkan sesi Xendit-nya dan ditandai EXPIRED (reservasi
+// stok dilepas).
+func reconcileLoop(every time.Duration) {
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if n, err := paymentservices.ReconcileAndExpire(ctx, time.Now()); err != nil {
+			log.Printf("rekonsiliasi pembayaran: %v", err)
+		} else if n > 0 {
+			log.Printf("rekonsiliasi pembayaran: %d order kedaluwarsa", n)
+		}
+		cancel()
+		time.Sleep(every)
+	}
 }

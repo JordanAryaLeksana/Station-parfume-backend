@@ -1,6 +1,7 @@
 package services
 
 import (
+	"backend/src/catalog"
 	"backend/src/config"
 	"backend/src/modules/cart/models"
 	"backend/src/repository"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var validate = validator.New()
@@ -20,16 +22,7 @@ var (
 
 // PreloadCartItem memuat semua yang dibutuhkan untuk menampilkan / checkout item keranjang.
 func PreloadCartItem(db *gorm.DB) *gorm.DB {
-	return db.Preload("ProductModel").
-		Preload("ProductModel.Product").
-		Preload("ProductModel.Product.Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
-		Preload("ProductModel.Option1").
-		Preload("ProductModel.Option2")
-}
-
-// IsPurchasable: model aktif, belum dihapus, dan produknya sedang dijual.
-func IsPurchasable(m *repository.ProductModel) bool {
-	return m != nil && m.IsActive && m.Product != nil && m.Product.Status == repository.ProductStatusActive
+	return catalog.PreloadVariant(db, "Variant")
 }
 
 func GetCart(userID uint) (*models.CartResponseDTO, error) {
@@ -47,19 +40,22 @@ func GetCart(userID uint) (*models.CartResponseDTO, error) {
 	}
 	resp := &models.CartResponseDTO{ID: cart.ID, Items: make([]models.CartItemResponseDTO, 0, len(items))}
 	for _, it := range items {
-		dto := models.CartItemResponseDTO{ID: it.ID, ProductModelID: it.ProductModelID, Quantity: it.Quantity}
-		if m := it.ProductModel; m != nil {
-			dto.ProductID = m.ProductID
-			dto.VariationName = m.VariationName()
-			dto.SKU = m.SKU
-			dto.UnitPrice = m.Price
-			dto.OriginalPrice = m.OriginalPrice
-			dto.Stock = m.Stock
-			dto.Subtotal = m.Price * int64(it.Quantity)
-			if m.Product != nil {
-				dto.ProductName = m.Product.Name
+		dto := models.CartItemResponseDTO{ID: it.ID, VariantID: it.VariantID, Quantity: it.Quantity}
+		if v := it.Variant; v != nil {
+			dto.ProductID = v.ProductID
+			dto.VariantName = v.DisplayName()
+			dto.VariantCode = v.Code
+			dto.UnitPrice = catalog.UnitPrice(v)
+			dto.CompareAtPrice = v.CompareAtPrice
+			dto.Subtotal = dto.UnitPrice * int64(it.Quantity)
+			dto.Stock = catalog.StockOf(v)
+			if p := v.Product; p != nil {
+				dto.ProductName, dto.ProductSlug, dto.Grade = p.Name, p.Slug, p.Grade
+				if len(p.Images) > 0 {
+					dto.ImageURL = &p.Images[0].URL
+				}
 			}
-			dto.Available = IsPurchasable(m) && m.Stock >= it.Quantity
+			dto.Available = catalog.Purchasable(v) && catalog.HasStock(v, it.Quantity)
 		}
 		if dto.Available {
 			resp.TotalQuantity += it.Quantity
@@ -70,49 +66,57 @@ func GetCart(userID uint) (*models.CartResponseDTO, error) {
 	return resp, nil
 }
 
-// AddItem menambah model ke keranjang user (keranjang dibuat otomatis).
-// Kalau model sudah ada di keranjang, jumlahnya ditambahkan.
+// AddItem menambah varian ke keranjang user (keranjang dibuat otomatis).
+// Kalau varian sudah ada di keranjang, jumlahnya ditambahkan.
 func AddItem(userID uint, input *models.AddCartItemDTO) (*models.CartResponseDTO, error) {
 	if err := validate.Struct(input); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 	}
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		var m repository.ProductModel
-		if err := tx.Preload("Product").First(&m, input.ProductModelID).Error; err != nil {
+		var v repository.Variant
+		if err := catalog.PreloadVariant(tx, "").First(&v, input.VariantID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("product model %d: %w", input.ProductModelID, ErrNotFound)
+				return fmt.Errorf("variant %d: %w", input.VariantID, ErrNotFound)
 			}
 			return err
 		}
-		if !IsPurchasable(&m) {
+		if !catalog.Purchasable(&v) {
 			return fmt.Errorf("%w: produk tidak tersedia", ErrValidation)
 		}
 		cart, err := getOrCreateCart(tx, userID)
 		if err != nil {
 			return err
 		}
+		qty := input.Quantity
 		var item repository.CartItem
-		err = tx.Where("cart_id = ? AND product_model_id = ?", cart.ID, m.ID).First(&item).Error
-		switch {
-		case err == nil:
-			qty := item.Quantity + input.Quantity
-			if qty > m.Stock {
-				return fmt.Errorf("%w: stok tersisa %d", ErrValidation, m.Stock)
-			}
-			return tx.Model(&item).Update("quantity", qty).Error
-		case errors.Is(err, gorm.ErrRecordNotFound):
-			if input.Quantity > m.Stock {
-				return fmt.Errorf("%w: stok tersisa %d", ErrValidation, m.Stock)
-			}
-			return tx.Create(&repository.CartItem{CartID: cart.ID, ProductModelID: m.ID, Quantity: input.Quantity}).Error
-		default:
+		err = tx.Where("cart_id = ? AND variant_id = ?", cart.ID, v.ID).First(&item).Error
+		if err == nil {
+			qty += item.Quantity
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
+		if err := checkStock(&v, qty); err != nil {
+			return err
+		}
+		// Upsert: aman walau 2 request bersamaan menambah varian yang sama.
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "cart_id"}, {Name: "variant_id"}},
+			DoUpdates: clause.Assignments(map[string]any{"quantity": qty, "updated_at": gorm.Expr("now()")}),
+		}).Create(&repository.CartItem{CartID: cart.ID, VariantID: v.ID, Quantity: qty}).Error
 	})
 	if err != nil {
 		return nil, err
 	}
 	return GetCart(userID)
+}
+
+// checkStock: v.Product harus di-Preload (untuk track_stock). Stok final
+// dicek lagi (dengan lock) saat checkout.
+func checkStock(v *repository.Variant, qty int) error {
+	if s := catalog.StockOf(v); s != nil && qty > *s {
+		return fmt.Errorf("%w: stok tersisa %d", ErrValidation, *s)
+	}
+	return nil
 }
 
 func UpdateItem(userID, itemID uint, input *models.UpdateCartItemDTO) (*models.CartResponseDTO, error) {
@@ -123,9 +127,12 @@ func UpdateItem(userID, itemID uint, input *models.UpdateCartItemDTO) (*models.C
 	if err != nil {
 		return nil, err
 	}
-	var m repository.ProductModel
-	if err := config.DB.First(&m, item.ProductModelID).Error; err == nil && input.Quantity > m.Stock {
-		return nil, fmt.Errorf("%w: stok tersisa %d", ErrValidation, m.Stock)
+	var v repository.Variant
+	if err := config.DB.Preload("Product").First(&v, item.VariantID).Error; err != nil {
+		return nil, err
+	}
+	if err := checkStock(&v, input.Quantity); err != nil {
+		return nil, err
 	}
 	if err := config.DB.Model(item).Update("quantity", input.Quantity).Error; err != nil {
 		return nil, fmt.Errorf("failed to update cart item: %w", err)
@@ -168,18 +175,15 @@ func findOwnItem(userID, itemID uint) (*repository.CartItem, error) {
 	return &item, nil
 }
 
+// getOrCreateCart aman untuk request bersamaan: INSERT ... ON CONFLICT DO NOTHING
+// pada unique index carts_user_uq, lalu baca ulang.
 func getOrCreateCart(tx *gorm.DB, userID uint) (*repository.Cart, error) {
-	var cart repository.Cart
-	err := tx.Where("user_id = ?", userID).First(&cart).Error
-	if err == nil {
-		return &cart, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	cart = repository.Cart{UserID: userID}
-	if err := tx.Create(&cart).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO carts (user_id) VALUES (?) ON CONFLICT (user_id) WHERE deleted_at IS NULL DO NOTHING`, userID).Error; err != nil {
 		return nil, fmt.Errorf("failed to create cart: %w", err)
+	}
+	var cart repository.Cart
+	if err := tx.Where("user_id = ?", userID).First(&cart).Error; err != nil {
+		return nil, err
 	}
 	return &cart, nil
 }

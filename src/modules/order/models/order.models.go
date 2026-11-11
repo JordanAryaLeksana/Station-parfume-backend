@@ -19,8 +19,6 @@ type CancelOrderDTO struct {
 
 // UpdateOrderStatusDTO (admin). Status: PAID, PROCESSING, SHIPPED, COMPLETED, CANCELLED, EXPIRED, REFUNDED.
 type UpdateOrderStatusDTO struct {
-	Status         string  `json:"status" validate:"required"`
-	Courier        *string `json:"courier"`
-	TrackingNumber *string `json:"tracking_number"`
-	Reason         *string `json:"reason"`
+	Status string  `json:"status" validate:"required"`
+	Reason *string `json:"reason"`
 }

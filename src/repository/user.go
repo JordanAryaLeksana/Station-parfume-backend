@@ -1,7 +1,7 @@
-// Package repository berisi semua model GORM (schema v2, Shopee-aligned)
-// untuk Station Parfume: user.go, catalog.go, order.go.
+// Package repository berisi semua model GORM untuk Station Parfume:
+// user.go, catalog.go, stock.go (riwayat stok), order.go.
 //
-// Sumber kebenaran schema adalah docs/schema/schema.sql (migrasi SQL),
+// Sumber kebenaran schema adalah migrasi SQL di migrations/ (goose),
 // BUKAN AutoMigrate: partial unique index, CHECK constraint, dan FK komposit
 // tidak bisa diekspresikan lewat tag GORM. Tag di sini hanya untuk mapping.
 //
@@ -16,8 +16,13 @@ import (
 )
 
 const (
-	RoleUser  = "user"
-	RoleAdmin = "admin"
+	// Pembeli.
+	RoleUser = "user"
+	// Staf toko (peran tetap).
+	RoleOwner     = "owner"     // semua akses, termasuk kelola akun staf
+	RoleAdmin     = "admin"     // produk, harga, stok, pesanan
+	RoleWarehouse = "warehouse" // stok & pengiriman
+	RoleCS        = "cs"        // lihat pesanan & pelanggan
 
 	ProviderLocal  = "local"
 	ProviderGoogle = "google"
@@ -43,23 +48,7 @@ type User struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
-
-	Addresses []UserAddress `gorm:"foreignKey:UserID" json:"addresses,omitempty"`
 }
 
-type UserAddress struct {
-	ID            uint           `gorm:"primaryKey" json:"id"`
-	UserID        uint           `gorm:"not null;index" json:"user_id"`
-	Label         *string        `gorm:"size:30" json:"label,omitempty"`
-	RecipientName string         `gorm:"size:255;not null" json:"recipient_name"`
-	Phone         string         `gorm:"size:20;not null" json:"phone"`
-	Province      string         `gorm:"size:100;not null" json:"province"`
-	City          string         `gorm:"size:100;not null" json:"city"`
-	District      string         `gorm:"size:100;not null" json:"district"`
-	PostalCode    string         `gorm:"size:10;not null" json:"postal_code"`
-	AddressLine   string         `gorm:"not null" json:"address_line"`
-	IsDefault     bool           `gorm:"not null" json:"is_default"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `json:"-"`
-}
+// StaffRoles: semua peran staf toko.
+var StaffRoles = []string{RoleOwner, RoleAdmin, RoleWarehouse, RoleCS}
