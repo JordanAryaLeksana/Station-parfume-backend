@@ -1,0 +1,15 @@
+# Jangan pernah memasukkan secret atau file lokal ke image Docker.
+.env
+.env.*
+!.env.example
+.git
+.github
+.vscode
+.idea
+# Tidak dibutuhkan untuk build (migrasi *.sql dan api/openapi.yaml tetap ikut).
+tests
+docs
+scripts
+deploy
+docker-compose.yml
+*.md

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // zona waktu (DB_TIMEZONE) tetap ada di image tanpa tzdata
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

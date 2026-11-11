@@ -16,7 +16,8 @@
 | **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
 | **M5** HTTP Server Hardening | ✅ Selesai (kode) | Timeout, graceful shutdown, CORS, security header, health check, format response seragam, Swagger `/docs` (lihat [Hasil Eksekusi M5](#hasil-eksekusi-m5--hardening-server--swagger-2026-11-11)) |
 | **M10** Tests & CI | 🟡 Sebagian | Test integrasi di repo (`scripts/test-integration.sh`); CI belum |
-| M4, M11 | ⏳ Belum dimulai | |
+| **M4** Go & Dependency | ✅ Selesai | Go 1.26 (image build Go 1.27.4), library diperbarui, govulncheck 0 celah terpakai, image Docker distroless non-root tanpa `.env` (lihat [Hasil Eksekusi M4](#hasil-eksekusi-m4--go--docker-2026-11-11)) |
+| M11 | ⏳ Belum dimulai | |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
 | **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
 | **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
@@ -838,4 +839,31 @@ Branch `fix/order-payment-safety`. Perilaku endpoint yang sudah ada; tidak ada p
 | `go run ./seed admin` diam-diam menjalankan seed katalog | Argumen tak dikenal → error "maksud Anda -admin?" |
 
 Rancangan pelacakan pesanan yang ditunda + riset pengiriman: [`docs/rancangan-pelacakan-pesanan.md`](rancangan-pelacakan-pesanan.md).
+
+---
+
+## Hasil Eksekusi M4 — Go & Docker (2026-11-11)
+Branch `chore/m4-go-docker`.
+
+| Bagian | Sebelum | Sesudah |
+|---|---|---|
+| Versi Go | `go 1.24.4` (Go 1.24/1.25 tidak lagi dapat patch keamanan) | `go 1.26.0` (diminta library); image dibangun dengan Go **1.27.4** (patch terbaru, sama dengan toolchain lokal) |
+| Library | Gin 1.10.1, go-redis 9.11, goose 3.26, kin-openapi 0.135, pgx 5.7, x/crypto 0.40, … | Gin 1.12.0, go-redis 9.23, goose 3.29, kin-openapi 0.152, pgx 5.11, gorm 1.31.2, cors 1.7.9, validator 10.30, oauth2 0.37, x/crypto 0.58, x/net 0.62. Versi dipilih yang sudah rilis ≥ 2 minggu, kecuali perbaikan keamanan tim Go (`x/net`). `mimetype` 1.4.15 (ditarik pembuatnya) → 1.4.16 |
+| Celah keamanan | belum pernah dicek | `govulncheck` v1.9.0: **0 celah yang terpakai kode**. Tersisa 1 di `x/crypto` yang tidak dipanggil (perbaikannya belum rilis bertag) |
+| Docker image | `golang:1.24.4` penuh (~1 GB), root, **`COPY . .` memasukkan `.env` & `.git`** | Multi-stage → `distroless/static-debian12:nonroot` (116 MB): hanya `/app/bin/{server,migrate,seed}` + CSV seed; tanpa shell, source, `.env`, `.git` (`.dockerignore`); `GIN_MODE=release` |
+| Zona waktu | bergantung tzdata sistem | di-embed (`time/tzdata`) |
+
+Pemakaian image:
+```bash
+docker build -t station-parfume-api .
+docker run --rm --env-file .env.prod --entrypoint /app/bin/migrate station-parfume-api up   # migrasi
+docker run --rm --env-file .env.prod --entrypoint /app/bin/seed station-parfume-api        # seed katalog
+docker run -d --env-file .env.prod -p 8080:8080 station-parfume-api                         # server
+```
+
+Verifikasi:
+- Unit test + test integrasi (128 cek, validasi spec) lulus setelah upgrade.
+- `docker build` sukses. Isi image dicek (`docker export`): tidak ada `.env`, `.go`, maupun `.git`.
+- Image dijalankan di jaringan Docker sementara: `migrate up` → `seed` → server `/readyz` 200, 66 produk publik, `/docs` mati di release.
+- `docker stop` → graceful shutdown, exit 0.
 
