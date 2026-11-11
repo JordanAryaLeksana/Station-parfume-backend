@@ -107,3 +107,19 @@ func NotAcceptableError(c *gin.Context, message string) {
 		"status":  http.StatusNotAcceptable,
 	})
 }
+
+func PayloadTooLargeError(c *gin.Context, message string) {
+	c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
+		"error":   "Request Entity Too Large",
+		"message": message,
+		"status":  http.StatusRequestEntityTooLarge,
+	})
+}
+
+func BadGatewayError(c *gin.Context, message string) {
+	c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{
+		"error":   "Bad Gateway",
+		"message": message,
+		"status":  http.StatusBadGateway,
+	})
+}

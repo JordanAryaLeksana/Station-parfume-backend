@@ -3,6 +3,7 @@ package controller
 import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/products/services"
+	"backend/src/utils/response"
 	"errors"
 	"strconv"
 
@@ -18,7 +19,7 @@ func GetAllProducts(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Products Retrieved", "products": products})
+	response.OK(c, "Products Retrieved", products)
 }
 
 // GetProduct: GET /products/:id  (:id boleh angka atau slug)
@@ -28,7 +29,7 @@ func GetProduct(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Product Retrieved", "product": product})
+	response.OK(c, "Product Retrieved", product)
 }
 
 func GetSizes(c *gin.Context) {
@@ -37,7 +38,7 @@ func GetSizes(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Sizes Retrieved", "sizes": sizes})
+	response.OK(c, "Sizes Retrieved", sizes)
 }
 
 // parseID membaca :id sebagai angka; kalau tidak valid langsung menulis 400.

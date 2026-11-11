@@ -3,6 +3,7 @@ package controller
 import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/payment/services"
+	"backend/src/utils/response"
 	"errors"
 	"io"
 	"log"
@@ -30,7 +31,7 @@ func PayOrderHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Payment ready", "payment": payment})
+	response.OK(c, "Payment ready", payment)
 }
 
 // maxWebhookBody: batas body webhook Xendit.
@@ -69,7 +70,9 @@ func writeError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrRetryLater):
 		httperror.ServiceUnavailableError(c, "Belum bisa diproses, kirim ulang nanti")
 	case errors.Is(err, services.ErrGateway):
-		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		// Detail error gateway hanya ke log; klien mendapat pesan umum.
+		log.Printf("payment: %v", err)
+		httperror.BadGatewayError(c, "Gateway pembayaran sedang bermasalah, coba lagi")
 	default:
 		httperror.InternalServerError(c, "Internal server error")
 	}

@@ -6,6 +6,7 @@ import (
 	"backend/src/modules/auth/models"
 	"backend/src/modules/auth/services"
 	"backend/src/utils/jwt"
+	"backend/src/utils/response"
 	"errors"
 	"log"
 	"net/http"
@@ -45,7 +46,7 @@ func Register(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "User Registered", "user": user})
+	response.Created(c, "User Registered", user)
 }
 
 func LoginManual(c *gin.Context) {
@@ -60,7 +61,7 @@ func LoginManual(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "User Logged In", "user": user})
+	response.OK(c, "User Logged In", user)
 }
 
 func LoginAdmin(c *gin.Context) {
@@ -74,7 +75,7 @@ func LoginAdmin(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Admin Logged In", "user": user})
+	response.OK(c, "Admin Logged In", user)
 }
 
 func GoogleLogin(c *gin.Context)    { services.HandleGoogleLogin(c) }
@@ -107,5 +108,5 @@ func RefreshToken(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Token Refreshed", "tokens": tokens})
+	response.OK(c, "Token Refreshed", tokens)
 }

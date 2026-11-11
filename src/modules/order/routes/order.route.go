@@ -13,8 +13,8 @@ import (
 func RegisterOrderRoutes(rg *gin.RouterGroup) {
 	orderGroup := rg.Group("/orders", authMiddleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
 	{
-		orderGroup.POST("/", controller.CheckoutHandler) // checkout dari keranjang
-		orderGroup.GET("/", controller.GetMyOrdersHandler)
+		orderGroup.POST("", controller.CheckoutHandler) // checkout dari keranjang
+		orderGroup.GET("", controller.GetMyOrdersHandler)
 		orderGroup.GET("/:id", controller.GetOrderByIDHandler)
 		orderGroup.PUT("/:id/cancel", controller.CancelOrderHandler)
 		orderGroup.PUT("/:id/status", authMiddleware.RoleBasedAccess(repository.RoleOwner, repository.RoleAdmin, repository.RoleWarehouse), controller.UpdateOrderStatusHandler)

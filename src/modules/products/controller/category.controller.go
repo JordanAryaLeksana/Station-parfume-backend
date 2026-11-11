@@ -2,6 +2,7 @@ package controller
 
 import (
 	"backend/src/modules/products/services"
+	"backend/src/utils/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,5 +13,5 @@ func GetAllCategories(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Categories Retrieved", "categories": categories})
+	response.OK(c, "Categories Retrieved", categories)
 }

@@ -14,7 +14,9 @@
 | **M1** Build Stabilization | ✅ Selesai | `8bf0e59`, `eb8368c` |
 | **M2** Startup & Migration Safety | ✅ Selesai (kode) | AutoMigrate/DropColumn dihapus (`faa6654`); fail-fast JWT & Redis (`8a23337`); DSN dari env, migrasi goose, logger Warn tanpa nilai parameter (lihat [Hasil Eksekusi M2](#hasil-eksekusi-m2--database-dari-env--migrasi-goose-2026-11-11)). **Tugas Pilot:** rotasi password DB (C5) |
 | **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
-| M4, M5, M10, M11 | ⏳ Belum dimulai | Rate limit & trusted proxy (bagian dari M5) sudah dikerjakan di M3 |
+| **M5** HTTP Server Hardening | ✅ Selesai (kode) | Timeout, graceful shutdown, CORS, security header, health check, format response seragam, Swagger `/docs` (lihat [Hasil Eksekusi M5](#hasil-eksekusi-m5--hardening-server--swagger-2026-11-11)) |
+| **M10** Tests & CI | 🟡 Sebagian | Test integrasi di repo (`scripts/test-integration.sh`); CI belum |
+| M4, M11 | ⏳ Belum dimulai | |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
 | **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
 | **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
@@ -774,3 +776,49 @@ Kontrak API yang berubah: keranjang tanpa `list_price`/`reseller_level_name`; or
 1. **Rotasi password DB (C5).** Password lama ada di git history (`src/config/database.go`, `docker-compose.yml`). Ganti password di PostgreSQL, lalu ubah `DB_PASSWORD` di `.env` — kode tidak perlu diubah.
 2. **Database dev:** buat baru → `go run ./cmd/migrate up` → `go run ./seed` → `go run ./seed -admin`. Database dari schema v3 lama tidak cocok lagi.
 3. Production: `DB_SSLMODE=require` (atau `verify-full`).
+
+---
+
+## Hasil Eksekusi M5 — hardening server + Swagger (2026-11-11)
+Branch `chore/m5-server-hardening`. Tidak ada perubahan database maupun logika bisnis.
+
+### Perubahan
+| Bagian | Sebelum | Sekarang |
+|---|---|---|
+| Server | `router.Run` tanpa timeout, error diabaikan | `http.Server`: header 5 dtk, baca 15 dtk, tulis 30 dtk, idle 120 dtk, header maks 1 MiB |
+| Shutdown | proses langsung mati | SIGINT/SIGTERM → berhenti terima request, tunggu yang berjalan (maks 10 dtk), job latar belakang berhenti, Redis & DB ditutup, `/readyz` 503 |
+| CORS | tidak ada (browser memblokir frontend) | `gin-contrib/cors` v1.7.6, origin dari `CORS_ALLOWED_ORIGINS` (fallback `FRONTEND_URL`); origin lain 403 JSON; same-origin & klien non-browser jalan |
+| Garis miring akhir | `/api/v1/cart` → redirect 301 (memblokir CORS) | `/x` dan `/x/` sama-sama dilayani tanpa redirect (`routes.Handler`) |
+| Header keamanan | tidak ada | nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP ketat, `Cache-Control: no-store`, HSTS lewat HTTPS |
+| Log request | `gin.Default()` mencatat query (termasuk kode OAuth) | 1 baris per request tanpa query + `X-Request-ID`; `/healthz` & `/readyz` tidak dicatat |
+| Error | 404 teks; panic 500 tanpa body; beberapa error auth/pembayaran berformat sendiri | Semua error `{"error","message","status"}`: 404, 405, 413 (body > 1 MiB), panic 500, 502 gateway (detail hanya di log) |
+| Response sukses | kunci beragam (`products`, `product`, `user`, `tokens`, `payment`, `levels`, …) | **Seragam `{"message", "data"}`**. Pengecualian: `/healthz`, `/readyz`, webhook Xendit |
+| Health | tidak ada | `GET /healthz` (hidup), `GET /readyz` (DB + Redis + status shutdown) |
+| Dokumentasi API | tidak ada | **Swagger UI `GET /docs`**, spec OpenAPI 3 `api/openapi.yaml` (di-embed, 50 operasi, 75 skema). Aktif kecuali `GIN_MODE=release` (`API_DOCS_ENABLED`) |
+| Job latar belakang | jalan terus, panic mematikan server, jalan di semua replika | berhenti saat shutdown, panic ditangkap, advisory lock PostgreSQL (1 replika) |
+| `GIN_MODE`, `REDIS_DB` di `.env` | diabaikan | dibaca |
+
+### Spec tidak bisa basi
+- Unit test `src/routes`: setiap rute Gin harus ada di `api/openapi.yaml` dan sebaliknya; spec harus valid.
+- Test integrasi: **setiap response** divalidasi terhadap spec (status + skema, `kin-openapi` v0.135.0). Saat dibuat, ini langsung menemukan error login Google berformat tidak standar (4 tempat sejenis diperbaiki).
+
+### Test integrasi di repo
+- `scripts/test-integration.sh` menyalakan Postgres 17 + Redis 7 sementara (`sp-test-*`, port 55432/56379), menjalankan `go test -tags=integration ./tests/integration/...`, lalu menghapus container.
+- `go test ./...` biasa tetap tanpa database.
+- Isi: 116 cek. Auth 33, katalog + checkout + stok + hardening 57, pembayaran Xendit + peran 26. Ini pengganti harness sementara lama.
+
+### Verifikasi
+- `go build`/`go vet`/`gofmt` bersih.
+- Unit test: config CORS/docs/GIN_MODE; middleware (header, CORS, 413, garis miring, 404/405 JSON, request ID, panic, log tanpa query, readyz, docs).
+- Integrasi: 116/116 lulus dengan validasi spec.
+- Binary asli:
+  - `.env` dengan `GIN_MODE=release` → `/docs` mati; `REDIS_DB=3` dipakai.
+  - Preflight 204.
+  - SIGTERM saat body request masih dikirim → request tetap dijawab, koneksi baru ditolak, keluar dengan kode 0.
+- Chrome headless: Swagger UI ter-render (50 operasi, 10 tag) tanpa pelanggaran CSP.
+
+### Dampak untuk frontend
+- Data selalu di `data`; pesan di `message`.
+- Domain frontend wajib ada di `CORS_ALLOWED_ORIGINS`.
+- Kontrak lengkap & coba langsung: `http://localhost:8080/docs`.
+

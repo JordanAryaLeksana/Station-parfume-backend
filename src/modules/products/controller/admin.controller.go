@@ -3,6 +3,7 @@ package controller
 import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/products/services"
+	"backend/src/utils/response"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func AdminListProducts(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"products": out})
+	response.OK(c, "Products Retrieved", out)
 }
 
 func AdminGetProduct(c *gin.Context) {
@@ -39,7 +40,7 @@ func AdminGetProduct(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"product": out})
+	response.OK(c, "Product Retrieved", out)
 }
 
 func AdminCreateProduct(c *gin.Context) {
@@ -52,7 +53,7 @@ func AdminCreateProduct(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"message": "Product Created", "product": out})
+	response.Created(c, "Product Created", out)
 }
 
 func AdminUpdateProduct(c *gin.Context) {
@@ -69,7 +70,7 @@ func AdminUpdateProduct(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Product Updated", "product": out})
+	response.OK(c, "Product Updated", out)
 }
 
 func AdminAddScent(c *gin.Context) {
@@ -86,7 +87,7 @@ func AdminAddScent(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"message": "Scent Created", "product": out})
+	response.Created(c, "Scent Created", out)
 }
 
 func AdminUpdateScent(c *gin.Context) {
@@ -103,7 +104,7 @@ func AdminUpdateScent(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Scent Updated", "scent": out})
+	response.OK(c, "Scent Updated", out)
 }
 
 func AdminGenerateVariants(c *gin.Context) {
@@ -116,7 +117,7 @@ func AdminGenerateVariants(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Variants Generated", "created": n})
+	response.OK(c, "Variants Generated", gin.H{"created": n})
 }
 
 func AdminAddGeneralVariant(c *gin.Context) {
@@ -133,7 +134,7 @@ func AdminAddGeneralVariant(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"message": "Variant Created", "product": out})
+	response.Created(c, "Variant Created", out)
 }
 
 // AdminUpdateVariants: PATCH /admin/variants  body: {"variants":[{"id":1,"price":50000,"is_active":true}, ...]}
@@ -149,7 +150,7 @@ func AdminUpdateVariants(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Variants Updated", "updated": n})
+	response.OK(c, "Variants Updated", gin.H{"updated": n})
 }
 
 func AdminListSizes(c *gin.Context) {
@@ -158,7 +159,7 @@ func AdminListSizes(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"sizes": out})
+	response.OK(c, "Sizes Retrieved", out)
 }
 
 func AdminCreateSize(c *gin.Context) {
@@ -171,7 +172,7 @@ func AdminCreateSize(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"message": "Size Created", "size": out})
+	response.Created(c, "Size Created", out)
 }
 
 func AdminUpdateSize(c *gin.Context) {
@@ -188,7 +189,7 @@ func AdminUpdateSize(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Size Updated", "size": out})
+	response.OK(c, "Size Updated", out)
 }
 
 // AdminAdjustInventory: POST /admin/inventory/adjustments
@@ -205,7 +206,7 @@ func AdminAdjustInventory(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Inventory Adjusted", "levels": out})
+	response.OK(c, "Inventory Adjusted", out)
 }
 
 // AdminListMovements: GET /admin/inventory/movements?variant_id=&limit=
@@ -217,7 +218,7 @@ func AdminListMovements(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"movements": out})
+	response.OK(c, "Movements Retrieved", out)
 }
 
 // AdminSetProductRates: PATCH /admin/products/:id/rates  {"price_per_ml_murni":3000,"price_per_ml_campur":1500}
@@ -235,7 +236,7 @@ func AdminSetProductRates(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Rates Updated", "product": out})
+	response.OK(c, "Rates Updated", out)
 }
 
 // AdminSetProductSizes: PUT /admin/products/:id/sizes  {"size_ids":[1,2]}  ([] = ukuran default)
@@ -253,7 +254,7 @@ func AdminSetProductSizes(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Sizes Updated", "product": out})
+	response.OK(c, "Sizes Updated", out)
 }
 
 // AdminAddImage: POST /admin/products/:id/images  {"url":"https://cdn.../annasui.jpg","scent_id":null,"sort_order":0}
@@ -271,7 +272,7 @@ func AdminAddImage(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"message": "Image Added", "product": out})
+	response.Created(c, "Image Added", out)
 }
 
 func AdminUpdateImage(c *gin.Context) {
@@ -288,7 +289,7 @@ func AdminUpdateImage(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Image Updated", "product": out})
+	response.OK(c, "Image Updated", out)
 }
 
 func AdminDeleteImage(c *gin.Context) {
@@ -301,5 +302,5 @@ func AdminDeleteImage(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Image Deleted", "product": out})
+	response.OK(c, "Image Deleted", out)
 }
