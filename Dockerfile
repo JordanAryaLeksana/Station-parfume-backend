@@ -26,5 +26,7 @@ COPY --from=build /out/seed-data /app/seed
 ENV GIN_MODE=release PORT=8080
 EXPOSE 8080
 USER nonroot:nonroot
+# Tanpa shell di image: binary server sendiri yang memanggil /readyz.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["/app/bin/server", "-healthcheck"]
 # Migrasi dijalankan terpisah sebelum server: --entrypoint /app/bin/migrate <image> up
 ENTRYPOINT ["/app/bin/server"]

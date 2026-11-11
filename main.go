@@ -8,6 +8,7 @@ import (
 	authhandler "backend/src/utils/AuthHandler"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,6 +20,12 @@ import (
 )
 
 func main() {
+	healthcheck := flag.Bool("healthcheck", false, "cek GET /readyz server yang sedang jalan di port PORT lalu keluar (0 = sehat); dipakai HEALTHCHECK Docker")
+	flag.Parse()
+	if *healthcheck {
+		os.Exit(runHealthcheck())
+	}
+
 	// .env (khusus dev) dimuat PALING AWAL, sebelum config apa pun membaca env.
 	if found, err := config.LoadDotEnv(".env"); err != nil {
 		log.Fatal(err)
@@ -199,4 +206,27 @@ func runJobsOnce(ctx context.Context) {
 	} else if n > 0 {
 		log.Printf("rekonsiliasi pembayaran: %d order kedaluwarsa", n)
 	}
+}
+
+// runHealthcheck: image distroless tidak punya shell/curl, jadi HEALTHCHECK
+// Docker memanggil binary ini sendiri: GET http://127.0.0.1:PORT/readyz.
+// 0 = sehat (200); 1 = tidak sehat (DB/Redis mati, sedang shutdown, atau
+// server tidak menjawab).
+func runHealthcheck() int {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	res, err := client.Get("http://127.0.0.1:" + port + "/readyz")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "healthcheck:", err)
+		return 1
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "healthcheck: status", res.StatusCode)
+		return 1
+	}
+	return 0
 }
