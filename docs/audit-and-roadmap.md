@@ -15,7 +15,7 @@
 | **M2** Startup & Migration Safety | ✅ Selesai (kode) | AutoMigrate/DropColumn dihapus (`faa6654`); fail-fast JWT & Redis (`8a23337`); DSN dari env, migrasi goose, logger Warn tanpa nilai parameter (lihat [Hasil Eksekusi M2](#hasil-eksekusi-m2--database-dari-env--migrasi-goose-2026-11-11)). **Tugas Pilot:** rotasi password DB (C5) |
 | **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
 | **M5** HTTP Server Hardening | ✅ Selesai (kode) | Timeout, graceful shutdown, CORS, security header, health check, format response seragam, Swagger `/docs` (lihat [Hasil Eksekusi M5](#hasil-eksekusi-m5--hardening-server--swagger-2026-11-11)) |
-| **M10** Tests & CI | 🟡 Sebagian | Test integrasi di repo (`scripts/test-integration.sh`); CI belum |
+| **M10** Tests & CI | ✅ Selesai | Test integrasi di repo + GitHub Actions (`.github/workflows/ci.yml`) + Dependabot mingguan |
 | **M4** Go & Dependency | ✅ Selesai | Go 1.26 (image build Go 1.27.4), library diperbarui, govulncheck 0 celah terpakai, image Docker distroless non-root tanpa `.env` (lihat [Hasil Eksekusi M4](#hasil-eksekusi-m4--go--docker-2026-11-11)) |
 | M11 | ⏳ Belum dimulai | |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
@@ -866,4 +866,18 @@ Verifikasi:
 - `docker build` sukses. Isi image dicek (`docker export`): tidak ada `.env`, `.go`, maupun `.git`.
 - Image dijalankan di jaringan Docker sementara: `migrate up` → `seed` → server `/readyz` 200, 66 produk publik, `/docs` mati di release.
 - `docker stop` → graceful shutdown, exit 0.
+
+---
+
+## Hasil Eksekusi M10 — CI GitHub Actions (2026-11-11)
+Branch `ci/github-actions`.
+- **`.github/workflows/ci.yml`**: jalan setiap push ke `master` dan setiap pull request.
+  - **check:** `gofmt`, `go vet` (termasuk tag `integration`), build, unit test.
+  - **integration:** `scripts/test-integration.sh`. Postgres 17 + Redis 7 sementara di runner GitHub; setiap response divalidasi terhadap `api/openapi.yaml`.
+  - **vuln:** `govulncheck` v1.9.0; gagal kalau ada celah yang dipanggil kode.
+  - **docker:** build image production + cek tidak ada `.env`, `.git`, atau source di dalamnya.
+- Konfigurasi: Go 1.27 (patch terbaru, sama dengan image build), `actions/checkout@v7` dan `actions/setup-go@v7`, izin token hanya `contents: read`, run lama dibatalkan saat ada push baru.
+- **`.github/dependabot.yml`**: PR mingguan untuk modul Go (dikelompokkan), GitHub Actions, dan image Docker. `cooldown` 14 hari: versi baru ditunggu dulu sebelum diusulkan.
+- Verifikasi: semua langkah workflow dijalankan lokal dengan perintah yang sama (lulus). Run pertama di GitHub terlihat setelah branch di-push.
+- Catatan: repo privat memakai kuota menit GitHub Actions gratis per bulan. Satu run kira-kira beberapa menit.
 
