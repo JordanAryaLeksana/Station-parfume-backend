@@ -2,8 +2,11 @@
 // wangian, harga, produk umum dari CSV di folder seed/), atau membuat akun
 // owner dari env kalau pakai -admin.
 //
-//	DATABASE_URL="host=localhost user=postgres password=... dbname=station_parfume sslmode=disable" \
-//	  go run ./seed -dry-run      # cek dulu, semua di-rollback
+// Koneksi dari env yang sama dengan server (DATABASE_URL, atau DB_HOST/DB_PORT/
+// DB_USER/DB_PASSWORD/DB_NAME; .env dibaca kalau ada), atau flag -dsn. Database
+// harus sudah dimigrasi (go run ./cmd/migrate up).
+//
+//	go run ./seed -dry-run        # cek dulu, semua di-rollback
 //	go run ./seed                 # simpan
 //	go run ./seed -admin          # HANYA buat akun owner dari ADMIN_NAME/ADMIN_EMAIL/ADMIN_PASSWORD
 //
@@ -11,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,32 +25,41 @@ import (
 	"path/filepath"
 	"time"
 
+	"backend/migrations"
+	"backend/src/config"
 	"backend/src/config/seeders"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load() // khusus dev
 	dir := flag.String("dir", "seed", "folder berisi categories.csv, sizes.csv, wangian.csv, varian_parfum.csv, produk_umum.csv")
-	dsn := flag.String("dsn", os.Getenv("DATABASE_URL"), "DSN PostgreSQL (default: env DATABASE_URL)")
+	dsn := flag.String("dsn", "", "DSN PostgreSQL (default: dari env, sama seperti server)")
 	dryRun := flag.Bool("dry-run", false, "jalankan semua lalu rollback (tidak ada yang tersimpan)")
 	withAdmin := flag.Bool("admin", false, "hanya buat akun owner (staf dengan semua akses) dari env ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD (katalog dilewati)")
 	flag.Parse()
 
 	if *dsn == "" {
-		log.Fatal("DATABASE_URL kosong: set env DATABASE_URL atau pakai -dsn")
+		v, err := config.DatabaseDSN()
+		if err != nil {
+			log.Fatal(err)
+		}
+		*dsn = v
 	}
-
-	gormLog := logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{
-		SlowThreshold:             time.Second,
-		LogLevel:                  logger.Warn,
-		IgnoreRecordNotFoundError: true, // "belum ada" adalah alur normal upsert
-	})
-	db, err := gorm.Open(postgres.Open(*dsn), &gorm.Config{Logger: gormLog})
+	db, err := config.OpenDatabase(*dsn)
 	if err != nil {
-		log.Fatalf("koneksi DB: %v", err)
+		log.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err = migrations.CheckUpToDate(ctx, sqlDB)
+	cancel()
+	if err != nil && !errors.Is(err, migrations.ErrDBNewer) {
+		log.Fatalf("%v — jalankan dulu: go run ./cmd/migrate up", err)
 	}
 
 	// -admin: hanya buat admin, CSV katalog tidak dibaca (jadi tetap bisa

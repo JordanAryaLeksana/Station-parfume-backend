@@ -8,19 +8,6 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-func TestApplyDiscount(t *testing.T) {
-	cases := []struct {
-		price   int64
-		percent int
-		want    int64
-	}{{50000, 0, 50000}, {50000, 10, 45000}, {45999, 15, 39099}, {1, 50, 1}, {50000, 100, 1}}
-	for _, c := range cases {
-		if got := ApplyDiscount(c.price, c.percent); got != c.want {
-			t.Errorf("ApplyDiscount(%d, %d) = %d; want %d", c.price, c.percent, got, c.want)
-		}
-	}
-}
-
 func perfume(rateMurni, rateCampur int64, ml int, bottle int64, conc string) *repository.Variant {
 	return &repository.Variant{ID: 7, IsActive: true, Concentration: &conc,
 		Product: &repository.Product{Status: repository.ProductStatusActive},
@@ -56,20 +43,10 @@ func TestListPrice(t *testing.T) {
 }
 
 func TestUnitPrice(t *testing.T) {
-	v := perfume(3000, 1500, 30, 5000, "murni") // 95.000
-	if got := (&Pricing{}).UnitPrice(v); got != 95000 {
-		t.Fatalf("pembeli biasa: %d", got)
+	if got := UnitPrice(perfume(3000, 1500, 30, 5000, "murni")); got != 95000 {
+		t.Fatalf("parfum: %d", got)
 	}
-	level := &repository.ResellerLevel{ID: 1, Name: "Reseller", DiscountPercent: 10, IsActive: true}
-	p := &Pricing{Level: level, overrides: map[uint]int64{}}
-	if got := p.UnitPrice(v); got != 85500 {
-		t.Fatalf("reseller 10%%: %d", got)
-	}
-	p.overrides[7] = 80000
-	if got := p.UnitPrice(v); got != 80000 {
-		t.Fatalf("harga khusus reseller harus menang: %d", got)
-	}
-	if got := p.UnitPrice(&repository.Variant{ID: 8}); got != 0 {
+	if got := UnitPrice(&repository.Variant{ID: 8}); got != 0 {
 		t.Fatalf("varian tanpa harga harus 0: %d", got)
 	}
 }
@@ -136,27 +113,20 @@ func TestPurchasable(t *testing.T) {
 }
 
 func TestStock(t *testing.T) {
-	avail := map[uint]int{7: 2}
 	perf := perfume(3000, 1500, 30, 5000, "murni") // Product.TrackStock = false (parfum diracik)
-	if StockOf(perf, avail) != nil || !HasStock(perf, avail, 999) {
+	if StockOf(perf) != nil || !HasStock(perf, 999) {
 		t.Fatal("parfum tanpa track_stock harus selalu tersedia")
 	}
-	general := &repository.Variant{ID: 7, Product: &repository.Product{TrackStock: true}}
-	if s := StockOf(general, avail); s == nil || *s != 2 {
-		t.Fatalf("produk dengan track_stock: stok %v", s)
+	general := &repository.Variant{ID: 7, Stock: 5, Reserved: 3, Product: &repository.Product{TrackStock: true}}
+	if s := StockOf(general); s == nil || *s != 2 {
+		t.Fatalf("produk dengan track_stock: tersedia = stock − reserved, dapat %v", s)
 	}
-	if !HasStock(general, avail, 2) || HasStock(general, avail, 3) {
+	if !HasStock(general, 2) || HasStock(general, 3) {
 		t.Fatal("HasStock harus membandingkan dengan stok tersedia")
 	}
-	if HasStock(&repository.Variant{ID: 8, Product: &repository.Product{TrackStock: true}}, avail, 1) {
-		t.Fatal("tanpa baris stok = 0")
-	}
-}
-
-func TestResellerOverrideCappedAtListPrice(t *testing.T) {
-	v := perfume(3000, 1500, 30, 5000, "murni") // 95.000
-	p := &Pricing{Level: &repository.ResellerLevel{ID: 1, IsActive: true}, overrides: map[uint]int64{7: 120000}}
-	if got := p.UnitPrice(v); got != 95000 {
-		t.Fatalf("harga khusus reseller > harga normal harus dibatasi: %d", got)
+	// reserved > stock (mis. setelah pembayaran telat) → tersedia 0, bukan negatif.
+	general.Reserved = 9
+	if s := StockOf(general); *s != 0 || HasStock(general, 1) {
+		t.Fatalf("tersedia tidak boleh negatif: %d", *s)
 	}
 }

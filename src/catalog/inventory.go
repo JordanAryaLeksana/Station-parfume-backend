@@ -51,33 +51,25 @@ func EnsureScentVariants(tx *gorm.DB, s repository.Scent, sizes []repository.Siz
 	return created, nil
 }
 
-// SetStock menyetel on_hand varian di lokasi menjadi target dan mencatat selisihnya
-// di stock_movements. Baris yang baru dibuat dicatat dengan alasan "initial".
-func SetStock(tx *gorm.DB, variantID, locationID uint, target int, reason string, userID *uint, note *string) (bool, error) {
+// SetStock menyetel stok fisik varian menjadi target dan mencatat selisihnya
+// di stock_movements. Baris varian dikunci (FOR UPDATE) supaya tidak balapan
+// dengan checkout. changed=false kalau stok sudah sama.
+func SetStock(tx *gorm.DB, variantID uint, target int, reason string, userID *uint, note *string) (bool, error) {
 	if target < 0 {
 		return false, fmt.Errorf("stok tidak boleh negatif")
 	}
-	var lvl repository.InventoryLevel
-	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("variant_id = ? AND location_id = ?", variantID, locationID).First(&lvl).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		lvl = repository.InventoryLevel{VariantID: variantID, LocationID: locationID}
-		if err := tx.Create(&lvl).Error; err != nil {
-			return false, err
-		}
-		reason = repository.MovementInitial
-	} else if err != nil {
+	var v repository.Variant
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "stock").First(&v, variantID).Error; err != nil {
 		return false, err
 	}
-	delta := target - lvl.OnHand
+	delta := target - v.Stock
 	if delta == 0 {
 		return false, nil
 	}
-	if err := tx.Model(&repository.InventoryLevel{}).Where("variant_id = ? AND location_id = ?", variantID, locationID).
-		Updates(map[string]any{"on_hand": target, "updated_at": gorm.Expr("now()")}).Error; err != nil {
+	if err := tx.Model(&repository.Variant{}).Where("id = ?", variantID).
+		Updates(map[string]any{"stock": target, "updated_at": gorm.Expr("now()")}).Error; err != nil {
 		return false, err
 	}
-	m := repository.StockMovement{VariantID: variantID, LocationID: locationID, Delta: delta, OnHandAfter: target,
-		Reason: reason, UserID: userID, Note: note}
+	m := repository.StockMovement{VariantID: variantID, Delta: delta, StockAfter: target, Reason: reason, UserID: userID, Note: note}
 	return true, tx.Create(&m).Error
 }

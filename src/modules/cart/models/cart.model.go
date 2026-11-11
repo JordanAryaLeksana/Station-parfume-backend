@@ -9,7 +9,7 @@ type UpdateCartItemDTO struct {
 	Quantity int `json:"quantity" validate:"required,gte=1,lte=999"`
 }
 
-// CartItemResponseDTO: harga selalu dihitung live (termasuk harga reseller).
+// CartItemResponseDTO: harga selalu dihitung live dari katalog.
 type CartItemResponseDTO struct {
 	ID             uint    `json:"id"`
 	VariantID      uint    `json:"variant_id"`
@@ -20,8 +20,7 @@ type CartItemResponseDTO struct {
 	VariantName    string  `json:"variant_name"` // "Dolly Girl, 30 ml, Murni"
 	VariantCode    string  `json:"variant_code"`
 	ImageURL       *string `json:"image_url,omitempty"`
-	UnitPrice      int64   `json:"unit_price"`                 // yang dibayar (harga reseller kalau ada)
-	ListPrice      int64   `json:"list_price"`                 // harga normal
+	UnitPrice      int64   `json:"unit_price"`                 // harga per unit
 	CompareAtPrice *int64  `json:"compare_at_price,omitempty"` // harga coret
 	Quantity       int     `json:"quantity"`
 	Subtotal       int64   `json:"subtotal"`
@@ -30,9 +29,8 @@ type CartItemResponseDTO struct {
 }
 
 type CartResponseDTO struct {
-	ID                uint                  `json:"id"`
-	Items             []CartItemResponseDTO `json:"items"`
-	ResellerLevelName *string               `json:"reseller_level_name,omitempty"`
-	TotalQuantity     int                   `json:"total_quantity"` // hanya item yang available
-	TotalPrice        int64                 `json:"total_price"`    // hanya item yang available
+	ID            uint                  `json:"id"`
+	Items         []CartItemResponseDTO `json:"items"`
+	TotalQuantity int                   `json:"total_quantity"` // hanya item yang available
+	TotalPrice    int64                 `json:"total_price"`    // hanya item yang available
 }

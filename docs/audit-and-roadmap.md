@@ -12,7 +12,7 @@
 |---|---|---|
 | Audit (§1–§10) | ✅ Selesai | dokumen ini |
 | **M1** Build Stabilization | ✅ Selesai | `8bf0e59`, `eb8368c` |
-| **M2** Startup & Migration Safety | 🟡 Sebagian | AutoMigrate/DropColumn dihapus (`faa6654`); `.env` dimuat di awal `main`; secret JWT & Redis divalidasi saat start (fail-fast). **Belum:** DSN dari env (masih hardcode + password), logger GORM Warn, migrasi goose, rotasi password DB |
+| **M2** Startup & Migration Safety | ✅ Selesai (kode) | AutoMigrate/DropColumn dihapus (`faa6654`); fail-fast JWT & Redis (`8a23337`); DSN dari env, migrasi goose, logger Warn tanpa nilai parameter (lihat [Hasil Eksekusi M2](#hasil-eksekusi-m2--database-dari-env--migrasi-goose-2026-11-11)). **Tugas Pilot:** rotasi password DB (C5) |
 | **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
 | M4, M5, M10, M11 | ⏳ Belum dimulai | Rate limit & trusted proxy (bagian dari M5) sudah dikerjakan di M3 |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
@@ -735,3 +735,42 @@ Branch `chore/m2-startup-safety`, di atas `e79373f`.
 ### Belum dikerjakan (sengaja)
 - CORS, timeout server, security header, batas ukuran body, `/healthz` → M5.
 - DSN dari env + rotasi password DB → M2.
+
+---
+
+## Hasil Eksekusi M2 — database dari env & migrasi goose (2026-11-11)
+
+### Perubahan
+| Bagian | Sebelum | Sekarang |
+|---|---|---|
+| Koneksi DB | DSN + password ditulis di `src/config/database.go` (menunjuk `localhost:5432`, bukan DB docker-compose) | `DATABASE_URL`, atau `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` (+ `DB_SSLMODE` default `prefer`, `DB_TIMEZONE` default `Asia/Jakarta`). Password di-escape; pesan error tidak memuat password. Env kosong/salah → server tidak start |
+| Pool | default `database/sql` (tanpa batas) | max 20 koneksi, 10 idle, umur 30 menit |
+| Log SQL | level Info, mencetak semua query **beserta nilainya** (C20) | level Warn (`DB_LOG_LEVEL`), query lambat > 500 ms, nilai parameter tidak pernah dicetak |
+| Schema | `docs/schema/schema.sql` (schema v3, 26 tabel) dijalankan manual | **disederhanakan ke kebutuhan sekarang (15 tabel)** dan menjadi `migrations/00001_init.sql`; `go run ./cmd/migrate up/status/version/down -yes`; advisory lock untuk proses bersamaan |
+| Start server | tidak tahu versi schema | menolak start kalau DB belum dimigrasi / ketinggalan; DB lebih baru dari kode → peringatan saja. Seeder juga menolak DB yang belum dimigrasi |
+| docker-compose | password Postgres ditulis di file; healthcheck memakai user yang salah (`sp_user`) | `POSTGRES_USER/PASSWORD/DB` dan port diambil dari `.env` (`DB_*`); healthcheck memakai user/db container. Nilai hasil resolve sama dengan sebelumnya |
+| Docker image | hanya server | + binary `migrate` (`./migrate up` sebagai langkah deploy) |
+
+### Schema disederhanakan (keputusan Pilot 2026-11-11)
+| Dihapus | Gantinya sekarang |
+|---|---|
+| `reseller_levels`, `variant_reseller_prices`, kolom reseller di `users`/`orders`, `order_items.list_price` | semua pembeli harga sama (`catalog.UnitPrice`) |
+| `vouchers`, `voucher_redemptions`, `promotions`, `promotion_items`, `orders.discount/voucher_*` | `orders.total = subtotal + shipping_fee` (CHECK) |
+| `user_addresses` | alamat diketik saat checkout dan disalin ke order (seperti sebelumnya) |
+| `audit_logs` | riwayat stok tetap di `stock_movements`; pembayaran telat terlihat dari order `PAID` dengan `cancelled_at` terisi + log server |
+| `locations`, `inventory_levels`, `orders.location_id` | `variants.stock` + `variants.reserved` (1 toko); `stock_movements.stock_after` |
+| `shipments`, `*.area_id`, kurir & resi | dikirim manual dari toko: status `SHIPPED` + `shipped_at`; ongkir 0. Tracking (kurir & resi) menyusul di MVP berikutnya |
+| CHECK provider `midtrans` | `payments.provider` hanya `xendit` |
+
+Kontrak API yang berubah: keranjang tanpa `list_price`/`reseller_level_name`; order tanpa `location_id`, `discount`, `voucher_*`, `reseller_*`, `shipments`; `PUT /orders/:id/status` hanya `{status, reason?}`; admin `GET /admin/products/:id` per varian `stock`/`reserved`/`available` (dulu `on_hand`/`reserved`); `POST /admin/inventory/adjustments` → `[{variant_id, stock, reserved, available}]`.
+
+### Verifikasi
+- Unit test `src/config/database_test.go`: DSN dari potongan env (password dengan karakter `@ : / ? # & ' " \ %` dan spasi, di-parse ulang dengan pgx), `DATABASE_URL` diprioritaskan, env kosong/port/sslmode/timezone salah ditolak tanpa membocorkan password, dan `TimeZone` terbaca benar oleh driver GORM (driver itu membaca nilainya mentah dari DSN — bug `Asia%2FJakarta` ditemukan di uji integrasi; test ini terbukti gagal di kode lama).
+- Unit test katalog diperbarui (stok = `stock − reserved`, tidak pernah negatif).
+- Integrasi di Postgres 17 + Redis 7 sementara: server & seed menolak DB kosong tanpa membuat tabel; `up` → 15 tabel; **15 struct GORM cocok dua arah dengan 15 tabel & kolomnya**; server start; `down` ke 0 lalu `up` lagi bersih; koneksi lewat `DB_*`, `DB_SSLMODE=require` ke server tanpa TLS ditolak, dua `up` bersamaan aman (advisory lock), log tanpa DSN/password.
+- Regresi di DB hasil migrasi: harness auth **34/34**, M8 Xendit **26/26** (stok di varian, pembayaran telat), katalog **44/44** (+4 cek: tanpa field reseller/voucher, alur PROCESSING → SHIPPED dengan `shipped_at`, stok di layar admin).
+
+### Tugas Pilot
+1. **Rotasi password DB (C5).** Password lama ada di git history (`src/config/database.go`, `docker-compose.yml`). Ganti password di PostgreSQL, lalu ubah `DB_PASSWORD` di `.env` — kode tidak perlu diubah.
+2. **Database dev:** buat baru → `go run ./cmd/migrate up` → `go run ./seed` → `go run ./seed -admin`. Database dari schema v3 lama tidak cocok lagi.
+3. Production: `DB_SSLMODE=require` (atau `verify-full`).

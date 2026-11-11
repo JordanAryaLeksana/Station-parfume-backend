@@ -1,9 +1,12 @@
 package main
 
 import (
+	"backend/migrations"
 	"backend/src/config"
 	paymentservices "backend/src/modules/payment/services"
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -29,7 +32,15 @@ func main() {
 	if err := config.InitRedis(); err != nil {
 		log.Fatalf("redis: %v", err)
 	}
-	config.ConnectDatabase()
+	// Database dari env (DATABASE_URL atau DB_*), lalu pastikan schema sudah di
+	// versi migrasi terbaru. Migrasi sendiri dijalankan terpisah:
+	// go run ./cmd/migrate up (lihat migrations/README.md).
+	if err := config.ConnectDatabase(); err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	if err := checkSchema(); err != nil {
+		log.Fatalf("database: %v", err)
+	}
 	// Pembayaran: Xendit Payment Sessions. Kalau env belum lengkap, server tetap
 	// jalan tapi endpoint bayar & webhook menjawab 503.
 	if err := paymentservices.ConfigureFromEnv(); err != nil {
@@ -50,6 +61,28 @@ func main() {
 		port = "8080"
 	}
 	router.Run(":" + port)
+}
+
+// checkSchema: server tidak jalan di atas schema yang belum dimigrasi (query
+// akan gagal di tengah jalan). Database yang lebih baru dari kode (mis. setelah
+// rollback deploy) hanya diberi peringatan, karena migrasi dibuat kompatibel ke
+// belakang (expand → contract).
+func checkSchema() error {
+	sqlDB, err := config.DB.DB()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = migrations.CheckUpToDate(ctx, sqlDB)
+	switch {
+	case errors.Is(err, migrations.ErrDBNewer):
+		log.Printf("PERINGATAN schema: %v", err)
+		return nil
+	case errors.Is(err, migrations.ErrNotMigrated), errors.Is(err, migrations.ErrPending):
+		return fmt.Errorf("%w — jalankan dulu: go run ./cmd/migrate up", err)
+	}
+	return err
 }
 
 // reconcileLoop berkala: cek pembayaran yang webhook-nya terlewat, lalu order yang

@@ -3,21 +3,21 @@ package services
 // Endpoint admin katalog. Alur input admin:
 //   1. Buat produk parfum (grup foto) → 2. tambah wangian + tarif per ml (kombinasi
 //   ukuran × murni/campur dibuat otomatis; harga = tarif × ml + botol) →
-//   3. isi stok (POST /admin/inventory/adjustments). Harga khusus per varian opsional.
-// Setiap perubahan harga/stok dicatat di audit_logs.
+//   3. isi stok produk umum (POST /admin/inventory/adjustments; tercatat di
+//   stock_movements). Harga khusus per varian opsional.
 
 import (
 	"backend/src/catalog"
 	"backend/src/config"
 	"backend/src/repository"
 	"backend/src/utils/slug"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var validate = validator.New()
@@ -129,12 +129,19 @@ type InventoryAdjustment struct {
 type AdminVariant struct {
 	repository.Variant
 	Name        string `json:"name"`
-	ListPrice   *int64 `json:"list_price"`             // harga jual normal (rumus atau harga khusus); nil = belum bisa dihitung
+	ListPrice   *int64 `json:"list_price"`             // harga jual (rumus atau harga khusus); nil = belum bisa dihitung
 	PricePerML  *int64 `json:"price_per_ml,omitempty"` // tarif yang dipakai rumus
 	BottlePrice *int64 `json:"bottle_price,omitempty"`
-	Sellable    bool   `json:"sellable"` // tampil & bisa dibeli di website
-	OnHand      int    `json:"on_hand"`
-	Reserved    int    `json:"reserved"`
+	Sellable    bool   `json:"sellable"`  // tampil & bisa dibeli di website
+	Available   int    `json:"available"` // stock − reserved (hanya berarti untuk produk track_stock)
+}
+
+// StockLevel: stok 1 varian setelah penyesuaian.
+type StockLevel struct {
+	VariantID uint `json:"variant_id"`
+	Stock     int  `json:"stock"`
+	Reserved  int  `json:"reserved"`
+	Available int  `json:"available"`
 }
 
 type AdminProduct struct {
@@ -149,19 +156,6 @@ func notFound(what string, id uint, err error) error {
 		return fmt.Errorf("%s %d: %w", what, id, ErrNotFound)
 	}
 	return err
-}
-
-// audit mencatat perubahan admin.
-func audit(tx *gorm.DB, userID uint, action, entity string, entityID uint, changes any) error {
-	var raw []byte
-	if changes != nil {
-		var err error
-		if raw, err = json.Marshal(changes); err != nil {
-			return err
-		}
-	}
-	uid, eid := userID, entityID
-	return tx.Create(&repository.AuditLog{UserID: &uid, Action: action, Entity: entity, EntityID: &eid, Changes: raw}).Error
 }
 
 func checkNotes(primary, secondary *string) error {
@@ -199,26 +193,9 @@ func AdminGetProduct(id uint) (*AdminProduct, error) {
 	if err != nil {
 		return nil, notFound("product", id, err)
 	}
-	loc, err := catalog.DefaultLocationID(config.DB)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]uint, 0, len(p.Variants))
-	for _, v := range p.Variants {
-		ids = append(ids, v.ID)
-	}
-	var levels []repository.InventoryLevel
-	if err := config.DB.Where("location_id = ? AND variant_id IN ?", loc, ids).Find(&levels).Error; err != nil {
-		return nil, err
-	}
-	byID := map[uint]repository.InventoryLevel{}
-	for _, l := range levels {
-		byID[l.VariantID] = l
-	}
 	out := &AdminProduct{Product: p, Variants: make([]AdminVariant, 0, len(p.Variants))}
 	for _, v := range p.Variants {
-		l := byID[v.ID]
-		av := AdminVariant{Variant: v, Name: v.DisplayName(), OnHand: l.OnHand, Reserved: l.Reserved}
+		av := AdminVariant{Variant: v, Name: v.DisplayName(), Available: v.Available()}
 		if price, ok := catalog.ListPrice(&v); ok {
 			total := price.Total
 			av.ListPrice, av.PricePerML, av.BottlePrice = &total, price.PerML, price.BottlePrice
@@ -273,7 +250,7 @@ func AdminCreateProduct(userID uint, in *ProductInput) (*AdminProduct, error) {
 		if err := tx.Create(&p).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "product.create", "product", p.ID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -316,7 +293,7 @@ func AdminUpdateProduct(userID, id uint, in *ProductPatch) (*AdminProduct, error
 		if err := tx.Model(&p).Updates(upd).Error; err != nil {
 			return fmt.Errorf("%w: %v", ErrValidation, err) // mis. CHECK constraint (label aroma sama)
 		}
-		return audit(tx, userID, "product.update", "product", id, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -361,7 +338,7 @@ func AdminAddScent(userID, productID uint, in *ScentInput) (*AdminProduct, error
 		if _, err := ensureAllVariants(tx, p.ID); err != nil {
 			return err
 		}
-		return audit(tx, userID, "scent.create", "scent", s.ID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -400,7 +377,7 @@ func AdminUpdateScent(userID, id uint, in *ScentPatch) (*repository.Scent, error
 		if err := tx.Model(&s).Updates(upd).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "scent.update", "scent", id, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -441,7 +418,7 @@ func AdminSetProductRates(userID, productID uint, in *RatesInput) (*AdminProduct
 		if err := tx.Model(&repository.Scent{}).Where("product_id = ?", p.ID).Updates(upd).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "product.rates", "product", p.ID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -480,7 +457,7 @@ func AdminSetProductSizes(userID, productID uint, in *ProductSizesInput) (*Admin
 		if _, err := ensureAllVariants(tx, p.ID); err != nil {
 			return err
 		}
-		return audit(tx, userID, "product.sizes", "product", p.ID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -540,7 +517,7 @@ func AdminAddImage(userID, productID uint, in *ImageInput) (*AdminProduct, error
 		if err := tx.Create(&img).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "image.create", "product", p.ID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -580,7 +557,7 @@ func AdminUpdateImage(userID, id uint, in *ImagePatch) (*AdminProduct, error) {
 		if err := tx.Model(&img).Updates(upd).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "image.update", "product", img.ProductID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -598,7 +575,7 @@ func AdminDeleteImage(userID, id uint) (*AdminProduct, error) {
 		if err := tx.Delete(&img).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "image.delete", "product", img.ProductID, map[string]string{"url": img.URL})
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -623,7 +600,7 @@ func AdminGenerateVariants(userID, productID uint) (int, error) {
 		if created, err = ensureAllVariants(tx, p.ID); err != nil {
 			return err
 		}
-		return audit(tx, userID, "variant.generate", "product", p.ID, map[string]int{"created": created})
+		return nil
 	})
 	return created, err
 }
@@ -673,7 +650,7 @@ func AdminAddGeneralVariant(userID, productID uint, in *GeneralVariantInput) (*A
 		if err := tx.Create(&v).Error; err != nil {
 			return fmt.Errorf("%w: %v", ErrConflict, err)
 		}
-		return audit(tx, userID, "variant.create", "variant", v.ID, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -699,13 +676,12 @@ func AdminUpdateVariants(userID uint, rows []VariantPatch) (int, error) {
 				return notFound("variant", r.ID, err)
 			}
 			upd := map[string]any{}
-			changes := map[string][2]any{}
 			if r.Price != nil {
 				var np *int64
 				if *r.Price > 0 {
 					np = r.Price
 				}
-				upd["price"], changes["price"] = np, [2]any{v.Price, np}
+				upd["price"] = np
 				v.Price = np
 			}
 			if r.CompareAtPrice != nil {
@@ -713,10 +689,10 @@ func AdminUpdateVariants(userID uint, rows []VariantPatch) (int, error) {
 				if *r.CompareAtPrice > 0 {
 					nc = r.CompareAtPrice
 				}
-				upd["compare_at_price"], changes["compare_at_price"] = nc, [2]any{v.CompareAtPrice, nc}
+				upd["compare_at_price"] = nc
 			}
 			if r.IsActive != nil {
-				upd["is_active"], changes["is_active"] = *r.IsActive, [2]any{v.IsActive, *r.IsActive}
+				upd["is_active"] = *r.IsActive
 				v.IsActive = *r.IsActive
 			}
 			if r.WeightGram != nil {
@@ -730,9 +706,6 @@ func AdminUpdateVariants(userID uint, rows []VariantPatch) (int, error) {
 			}
 			if err := tx.Model(&repository.Variant{}).Where("id = ?", r.ID).Updates(upd).Error; err != nil {
 				return fmt.Errorf("%w: varian %d: %v", ErrValidation, r.ID, err)
-			}
-			if err := audit(tx, userID, "variant.update", "variant", r.ID, changes); err != nil {
-				return err
 			}
 		}
 		return nil
@@ -772,7 +745,7 @@ func AdminCreateSize(userID uint, in *SizeInput) (*repository.Size, error) {
 		if err := tx.Create(&s).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "size.create", "size", s.ID, in)
+		return nil
 	})
 	return &s, err
 }
@@ -811,7 +784,7 @@ func AdminUpdateSize(userID, id uint, in *SizePatch) (*repository.Size, error) {
 		if err := tx.Model(&s).Updates(upd).Error; err != nil {
 			return err
 		}
-		return audit(tx, userID, "size.update", "size", id, in)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -821,9 +794,9 @@ func AdminUpdateSize(userID, id uint, in *SizePatch) (*repository.Size, error) {
 
 // ---------------------------------------------------------------- stok
 
-// AdminAdjustInventory menerapkan banyak penyesuaian stok sekaligus di lokasi default.
-// Semua atau tidak sama sekali. Setiap perubahan masuk stock_movements + audit_logs.
-func AdminAdjustInventory(userID uint, rows []InventoryAdjustment) ([]repository.InventoryLevel, error) {
+// AdminAdjustInventory menerapkan banyak penyesuaian stok sekaligus.
+// Semua atau tidak sama sekali. Setiap perubahan dicatat di stock_movements.
+func AdminAdjustInventory(userID uint, rows []InventoryAdjustment) ([]StockLevel, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("%w: tidak ada penyesuaian", ErrValidation)
 	}
@@ -835,26 +808,19 @@ func AdminAdjustInventory(userID uint, rows []InventoryAdjustment) ([]repository
 			return nil, fmt.Errorf("%w: quantity tidak boleh 0 untuk mode add", ErrValidation)
 		}
 	}
-	var out []repository.InventoryLevel
+	var out []StockLevel
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		loc, err := catalog.DefaultLocationID(tx)
-		if err != nil {
-			return err
-		}
 		uid := userID
 		for _, r := range rows {
+			// Kunci baris varian dulu supaya "add" dihitung dari stok terbaru.
 			var v repository.Variant
-			if err := tx.First(&v, r.VariantID).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&v, r.VariantID).Error; err != nil {
 				return notFound("variant", r.VariantID, err)
 			}
 			reason := r.Reason
 			target := r.Quantity
 			if r.Mode == "add" {
-				var lvl repository.InventoryLevel
-				if err := tx.Where("variant_id = ? AND location_id = ?", v.ID, loc).First(&lvl).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-					return err
-				}
-				target = lvl.OnHand + r.Quantity
+				target = v.Stock + r.Quantity
 				if reason == "" {
 					reason = repository.MovementRestock
 					if r.Quantity < 0 {
@@ -867,17 +833,11 @@ func AdminAdjustInventory(userID uint, rows []InventoryAdjustment) ([]repository
 			if target < 0 {
 				return fmt.Errorf("%w: stok varian %d jadi negatif", ErrValidation, v.ID)
 			}
-			if _, err := catalog.SetStock(tx, v.ID, loc, target, reason, &uid, r.Note); err != nil {
+			if _, err := catalog.SetStock(tx, v.ID, target, reason, &uid, r.Note); err != nil {
 				return err
 			}
-			if err := audit(tx, userID, "inventory.adjust", "variant", v.ID, r); err != nil {
-				return err
-			}
-			var lvl repository.InventoryLevel
-			if err := tx.Where("variant_id = ? AND location_id = ?", v.ID, loc).First(&lvl).Error; err != nil {
-				return err
-			}
-			out = append(out, lvl)
+			v.Stock = target
+			out = append(out, StockLevel{VariantID: v.ID, Stock: v.Stock, Reserved: v.Reserved, Available: v.Available()})
 		}
 		return nil
 	})

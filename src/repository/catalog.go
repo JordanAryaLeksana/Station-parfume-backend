@@ -9,14 +9,14 @@ import (
 )
 
 // ---------------------------------------------------------------------
-// Katalog (schema v3, lepas dari Shopee)
+// Katalog (milik sendiri, lepas dari Shopee)
 //   Product  = 1 halaman. Perfume = 1 grup foto (mis. "Annasui"); General = produk biasa.
 //   Scent    = varian wangian di produk parfum ("Dolly Girl").
 //   Size     = ukuran botol (20/30/50 ml), bisa ditambah admin.
 //   Variant  = yang dibeli: wangian × ukuran × murni/campur (parfum) atau label (general).
 // Harga parfum = tarif per ml (Scent) × volume (Size) + harga botol (Size);
 // Variant.Price opsional sebagai harga khusus. Lihat catalog.ListPrice.
-// Stok di InventoryLevel (per lokasi).
+// Stok di Variant.Stock / Variant.Reserved (hanya produk track_stock = true).
 // ---------------------------------------------------------------------
 
 const (
@@ -146,12 +146,17 @@ type Variant struct {
 	Price          *int64         `json:"price"`                      // parfum: harga khusus (NULL = rumus); general: harga jual
 	CompareAtPrice *int64         `json:"compare_at_price,omitempty"` // harga coret
 	WeightGram     *int           `json:"weight_gram,omitempty"`
+	Stock          int            `gorm:"not null" json:"stock"`    // stok fisik (produk track_stock); publik memakai catalog.StockOf
+	Reserved       int            `gorm:"not null" json:"reserved"` // tertahan order belum bayar
 	IsActive       bool           `gorm:"not null" json:"is_active"`
 	SortOrder      int            `gorm:"not null" json:"sort_order"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `json:"-"`
 }
+
+// Available: stok yang masih bisa dibeli (Stock − Reserved, minimal 0).
+func (v Variant) Available() int { return max(v.Stock-v.Reserved, 0) }
 
 // DisplayName: teks varian untuk keranjang/order, mis. "Dolly Girl, 30 ml, Murni".
 // Scent dan Size harus sudah di-Preload.

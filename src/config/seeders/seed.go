@@ -53,10 +53,6 @@ func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error
 		for _, sz := range sizes {
 			sizeIDs[sz.VolumeML] = sz.ID
 		}
-		locationID, err := EnsureDefaultLocation(tx)
-		if err != nil {
-			return err
-		}
 		scentIDs, err := upsertPerfumes(tx, d.Scents, catIDs, sizeIDs, rep)
 		if err != nil {
 			return err
@@ -65,10 +61,10 @@ func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error
 		if err != nil {
 			return err
 		}
-		if err := applyPerfumeVariants(tx, d.Variants, variants, locationID, rep); err != nil {
+		if err := applyPerfumeVariants(tx, d.Variants, variants, rep); err != nil {
 			return err
 		}
-		if err := upsertGeneral(tx, d.General, catIDs, locationID, rep); err != nil {
+		if err := upsertGeneral(tx, d.General, catIDs, rep); err != nil {
 			return err
 		}
 		var noRate, noPrice int64
@@ -87,23 +83,6 @@ func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error
 		return nil
 	})
 	return rep, err
-}
-
-// EnsureDefaultLocation memastikan ada 1 lokasi stok default ("Toko Utama").
-func EnsureDefaultLocation(tx *gorm.DB) (uint, error) {
-	var loc repository.Location
-	err := tx.Where("is_default").First(&loc).Error
-	if err == nil {
-		return loc.ID, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return 0, err
-	}
-	loc = repository.Location{Code: "utama", Name: "Toko Utama", IsDefault: true, IsActive: true}
-	if err := tx.Create(&loc).Error; err != nil {
-		return 0, fmt.Errorf("lokasi default: %w", err)
-	}
-	return loc.ID, nil
 }
 
 func findOne[T any](tx *gorm.DB, out *T, query string, args ...any) (bool, error) {
@@ -350,14 +329,14 @@ func generatePerfumeVariants(tx *gorm.DB, rows []ScentRow, scentIDs map[string]u
 	return out, nil
 }
 
-func applyPerfumeVariants(tx *gorm.DB, rows []PerfumeVariantRow, variants map[string]uint, locationID uint, rep *CatalogReport) error {
+func applyPerfumeVariants(tx *gorm.DB, rows []PerfumeVariantRow, variants map[string]uint, rep *CatalogReport) error {
 	for _, r := range rows {
 		id, ok := variants[variantKey(r.ScentCode, r.VolumeML, r.Concentration)]
 		if !ok {
 			return fmt.Errorf("varian_parfum.csv baris %d: %s %d ml %s tidak dikenal (scent_code harus ada di wangian.csv dan ukurannya dijual untuk produk itu)",
 				r.Line, r.ScentCode, r.VolumeML, r.Concentration)
 		}
-		if err := applyVariant(tx, id, r.SpecialPrice, r.CompareAtPrice, r.Active, r.Stock, false, locationID, rep); err != nil {
+		if err := applyVariant(tx, id, r.SpecialPrice, r.CompareAtPrice, r.Active, r.Stock, false, rep); err != nil {
 			return fmt.Errorf("varian_parfum.csv baris %d: %w", r.Line, err)
 		}
 	}
@@ -367,7 +346,7 @@ func applyPerfumeVariants(tx *gorm.DB, rows []PerfumeVariantRow, variants map[st
 // applyVariant menerapkan 1 baris CSV ke varian. Kolom kosong = TIDAK diubah,
 // jadi harga/stok yang sudah diisi admin lewat API tidak terhapus saat seeder
 // dijalankan ulang. Produk umum: harga diisi → varian aktif (activateOnPrice).
-func applyVariant(tx *gorm.DB, id uint, price, compare *int64, active *bool, stock *int, activateOnPrice bool, locationID uint, rep *CatalogReport) error {
+func applyVariant(tx *gorm.DB, id uint, price, compare *int64, active *bool, stock *int, activateOnPrice bool, rep *CatalogReport) error {
 	upd := map[string]any{}
 	if price != nil {
 		upd["price"] = *price
@@ -388,7 +367,7 @@ func applyVariant(tx *gorm.DB, id uint, price, compare *int64, active *bool, sto
 		rep.PricesApplied++
 	}
 	if stock != nil {
-		changed, err := catalog.SetStock(tx, id, locationID, *stock, repository.MovementOpname, nil, nil)
+		changed, err := catalog.SetStock(tx, id, *stock, repository.MovementOpname, nil, nil)
 		if err != nil {
 			return err
 		}
@@ -399,7 +378,7 @@ func applyVariant(tx *gorm.DB, id uint, price, compare *int64, active *bool, sto
 	return nil
 }
 
-func upsertGeneral(tx *gorm.DB, rows []GeneralRow, catIDs map[string]uint, locationID uint, rep *CatalogReport) error {
+func upsertGeneral(tx *gorm.DB, rows []GeneralRow, catIDs map[string]uint, rep *CatalogReport) error {
 	productIDs := map[string]uint{}
 	for i, r := range rows {
 		pid, ok := productIDs[r.ProductCode]
@@ -458,7 +437,7 @@ func upsertGeneral(tx *gorm.DB, rows []GeneralRow, catIDs map[string]uint, locat
 		default:
 			return err
 		}
-		if err := applyVariant(tx, v.ID, r.Price, nil, r.Active, r.Stock, true, locationID, rep); err != nil {
+		if err := applyVariant(tx, v.ID, r.Price, nil, r.Active, r.Stock, true, rep); err != nil {
 			return fmt.Errorf("produk_umum.csv baris %d: %w", r.Line, err)
 		}
 	}

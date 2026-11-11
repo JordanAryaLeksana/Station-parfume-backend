@@ -38,46 +38,24 @@ func GetCart(userID uint) (*models.CartResponseDTO, error) {
 	if err := PreloadCartItem(config.DB).Where("cart_id = ?", cart.ID).Order("id").Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("failed to get cart items: %w", err)
 	}
-	ids := make([]uint, 0, len(items))
-	for _, it := range items {
-		ids = append(ids, it.VariantID)
-	}
-	pricing, err := catalog.PricingForUser(config.DB, userID, ids)
-	if err != nil {
-		return nil, err
-	}
-	loc, err := catalog.DefaultLocationID(config.DB)
-	if err != nil {
-		return nil, err
-	}
-	avail, err := catalog.Available(config.DB, loc, ids)
-	if err != nil {
-		return nil, err
-	}
 	resp := &models.CartResponseDTO{ID: cart.ID, Items: make([]models.CartItemResponseDTO, 0, len(items))}
-	if pricing.Level != nil {
-		resp.ResellerLevelName = &pricing.Level.Name
-	}
 	for _, it := range items {
 		dto := models.CartItemResponseDTO{ID: it.ID, VariantID: it.VariantID, Quantity: it.Quantity}
 		if v := it.Variant; v != nil {
 			dto.ProductID = v.ProductID
 			dto.VariantName = v.DisplayName()
 			dto.VariantCode = v.Code
-			dto.UnitPrice = pricing.UnitPrice(v)
-			if price, ok := catalog.ListPrice(v); ok {
-				dto.ListPrice = price.Total
-			}
+			dto.UnitPrice = catalog.UnitPrice(v)
 			dto.CompareAtPrice = v.CompareAtPrice
 			dto.Subtotal = dto.UnitPrice * int64(it.Quantity)
-			dto.Stock = catalog.StockOf(v, avail)
+			dto.Stock = catalog.StockOf(v)
 			if p := v.Product; p != nil {
 				dto.ProductName, dto.ProductSlug, dto.Grade = p.Name, p.Slug, p.Grade
 				if len(p.Images) > 0 {
 					dto.ImageURL = &p.Images[0].URL
 				}
 			}
-			dto.Available = catalog.Purchasable(v) && catalog.HasStock(v, avail, it.Quantity)
+			dto.Available = catalog.Purchasable(v) && catalog.HasStock(v, it.Quantity)
 		}
 		if dto.Available {
 			resp.TotalQuantity += it.Quantity
@@ -117,7 +95,7 @@ func AddItem(userID uint, input *models.AddCartItemDTO) (*models.CartResponseDTO
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if err := checkStock(tx, &v, qty); err != nil {
+		if err := checkStock(&v, qty); err != nil {
 			return err
 		}
 		// Upsert: aman walau 2 request bersamaan menambah varian yang sama.
@@ -132,21 +110,11 @@ func AddItem(userID uint, input *models.AddCartItemDTO) (*models.CartResponseDTO
 	return GetCart(userID)
 }
 
-// checkStock: v.Product harus di-Preload (untuk track_stock).
-func checkStock(tx *gorm.DB, v *repository.Variant, qty int) error {
-	if v.Product != nil && !v.Product.TrackStock {
-		return nil // selalu tersedia
-	}
-	loc, err := catalog.DefaultLocationID(tx)
-	if err != nil {
-		return err
-	}
-	avail, err := catalog.Available(tx, loc, []uint{v.ID})
-	if err != nil {
-		return err
-	}
-	if qty > avail[v.ID] {
-		return fmt.Errorf("%w: stok tersisa %d", ErrValidation, max(avail[v.ID], 0))
+// checkStock: v.Product harus di-Preload (untuk track_stock). Stok final
+// dicek lagi (dengan lock) saat checkout.
+func checkStock(v *repository.Variant, qty int) error {
+	if s := catalog.StockOf(v); s != nil && qty > *s {
+		return fmt.Errorf("%w: stok tersisa %d", ErrValidation, *s)
 	}
 	return nil
 }
@@ -163,7 +131,7 @@ func UpdateItem(userID, itemID uint, input *models.UpdateCartItemDTO) (*models.C
 	if err := config.DB.Preload("Product").First(&v, item.VariantID).Error; err != nil {
 		return nil, err
 	}
-	if err := checkStock(config.DB, &v, input.Quantity); err != nil {
+	if err := checkStock(&v, input.Quantity); err != nil {
 		return nil, err
 	}
 	if err := config.DB.Model(item).Update("quantity", input.Quantity).Error; err != nil {

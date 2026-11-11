@@ -65,21 +65,15 @@ func CanOrderTransition(from, to string) bool {
 }
 
 type Order struct {
-	ID                uint    `gorm:"primaryKey" json:"id"`
-	OrderNo           string  `gorm:"size:32;not null" json:"order_no"`
-	UserID            uint    `gorm:"not null" json:"user_id"`
-	User              *User   `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	LocationID        uint    `gorm:"not null" json:"location_id"`
-	Status            string  `gorm:"size:20;not null;default:'PENDING_PAYMENT'" json:"status"`
-	Subtotal          int64   `gorm:"not null" json:"subtotal"`
-	ShippingFee       int64   `gorm:"not null" json:"shipping_fee"`
-	Discount          int64   `gorm:"not null" json:"discount"`
-	Total             int64   `gorm:"not null" json:"total"`
-	TotalQuantity     int     `gorm:"not null" json:"total_quantity"`
-	VoucherID         *uint   `json:"voucher_id,omitempty"`
-	VoucherCode       *string `gorm:"size:40" json:"voucher_code,omitempty"`
-	ResellerLevelID   *uint   `json:"reseller_level_id,omitempty"`
-	ResellerLevelName *string `gorm:"size:50" json:"reseller_level_name,omitempty"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	OrderNo       string `gorm:"size:32;not null" json:"order_no"`
+	UserID        uint   `gorm:"not null" json:"user_id"`
+	User          *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Status        string `gorm:"size:20;not null;default:'PENDING_PAYMENT'" json:"status"`
+	Subtotal      int64  `gorm:"not null" json:"subtotal"`
+	ShippingFee   int64  `gorm:"not null" json:"shipping_fee"` // ongkir ditanggung toko → 0
+	Total         int64  `gorm:"not null" json:"total"`
+	TotalQuantity int    `gorm:"not null" json:"total_quantity"`
 
 	// snapshot alamat
 	RecipientName    string  `gorm:"size:255;not null" json:"recipient_name"`
@@ -89,7 +83,6 @@ type Order struct {
 	ShippingDistrict string  `gorm:"size:100;not null" json:"shipping_district"`
 	ShippingPostal   string  `gorm:"size:10;not null" json:"shipping_postal"`
 	ShippingAddress  string  `gorm:"not null" json:"shipping_address"`
-	ShippingAreaID   *string `gorm:"size:64" json:"shipping_area_id,omitempty"`
 	BuyerNote        *string `json:"buyer_note,omitempty"`
 
 	PaidAt       *time.Time `json:"paid_at,omitempty"`
@@ -103,9 +96,8 @@ type Order struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-"`
 
-	Items     []OrderItem `gorm:"foreignKey:OrderID" json:"items,omitempty"`
-	Payments  []Payment   `gorm:"foreignKey:OrderID" json:"payments,omitempty"`
-	Shipments []Shipment  `gorm:"foreignKey:OrderID" json:"shipments,omitempty"`
+	Items    []OrderItem `gorm:"foreignKey:OrderID" json:"items,omitempty"`
+	Payments []Payment   `gorm:"foreignKey:OrderID" json:"payments,omitempty"`
 }
 
 // OrderItem menyimpan SNAPSHOT saat checkout. Jangan pernah membaca harga
@@ -125,8 +117,7 @@ type OrderItem struct {
 	VariantName   *string   `gorm:"size:255" json:"variant_name,omitempty"`
 	VariantCode   string    `gorm:"size:120;not null" json:"variant_code"`
 	ImageURL      *string   `json:"image_url,omitempty"`
-	UnitPrice     int64     `gorm:"not null" json:"unit_price"`                        // yang dibayar per unit
-	ListPrice     int64     `gorm:"not null" json:"list_price"`                        // harga normal saat checkout
+	UnitPrice     int64     `gorm:"not null" json:"unit_price"`                        // harga per unit saat checkout
 	PricePerML    *int64    `gorm:"column:price_per_ml" json:"price_per_ml,omitempty"` // snapshot tarif (parfum)
 	BottlePrice   *int64    `json:"bottle_price,omitempty"`                            // snapshot harga botol
 	Quantity      int       `gorm:"not null" json:"quantity"`
@@ -141,8 +132,7 @@ type OrderItem struct {
 // ---------------------------------------------------------------------
 
 const (
-	PaymentProviderXendit   = "xendit"
-	PaymentProviderMidtrans = "midtrans"
+	PaymentProviderXendit = "xendit"
 
 	PaymentPending   = "PENDING"
 	PaymentPaid      = "PAID"

@@ -1,11 +1,13 @@
-# Schema v3 — Station Parfume
+# Schema — Station Parfume
 
 | File | Isi |
 |---|---|
-| [`schema.sql`](schema.sql) | DDL lengkap PostgreSQL: 25 tabel, FK, CHECK, index, soft delete |
-| [`../../src/repository/`](../../src/repository/) | Struct GORM: `user.go`, `catalog.go`, `commerce.go` (stok, reseller, promo, pengiriman, audit), `order.go` |
-| [`../../src/catalog/`](../../src/catalog/) | Aturan bersama: varian bisa dibeli atau tidak, harga reseller, stok tersedia, `SetStock`, "buat kombinasi" |
+| [`../../migrations/`](../../migrations/README.md) | Migrasi goose: `00001_init.sql` = DDL lengkap PostgreSQL (15 tabel, FK, CHECK, index, soft delete). Dijalankan dengan `go run ./cmd/migrate up` |
+| [`../../src/repository/`](../../src/repository/) | Struct GORM: `user.go`, `catalog.go`, `stock.go` (riwayat stok), `order.go` |
+| [`../../src/catalog/`](../../src/catalog/) | Aturan bersama: varian bisa dibeli atau tidak, harga, stok tersedia, `SetStock`, "buat kombinasi" |
 | [`../../src/config/seeders/`](../../src/config/seeders/) + [`../../seed/`](../../seed/) | Seeder dari CSV (`go run ./seed`), lihat [`seed/README.md`](../../seed/README.md) |
+
+**Update (2026-11-11) — schema disederhanakan ke kebutuhan sekarang (26 → 15 tabel):** reseller, voucher & promo, alamat tersimpan, audit log, stok multi lokasi, tabel `shipments`, serta kurir & nomor resi (tracking, menyusul di MVP berikutnya) dihapus. Stok produk umum sekarang langsung di `variants.stock` / `variants.reserved`; riwayatnya tetap di `stock_movements`. Pesanan dikirim manual dari toko: admin cukup mengubah status ke `SHIPPED`. Schema menjadi migrasi goose pertama `migrations/00001_init.sql`; server menolak start kalau database belum di versi migrasi terbaru. Fitur yang dihapus bisa ditambahkan lagi nanti sebagai migrasi baru (lihat §6).
 
 **Update pembayaran (2026-11-10) — M8 Xendit:** Midtrans dihapus; pembayaran lewat **Xendit Payment Sessions** (hosted checkout). Alur & kontrak API di §5b. Tabel tidak berubah (`payments`, `payment_events` sudah ada); transisi baru di Go: order `EXPIRED/CANCELLED → PAID` khusus untuk pembayaran yang terverifikasi datang terlambat. Diuji: 26 skenario dengan server Xendit palsu + regresi 40 cek.
 
@@ -17,7 +19,7 @@
 
 ---
 
-## 1. Prinsip desain (untuk 5 tahun ke depan)
+## 1. Prinsip desain
 
 1. **Katalog milik sendiri.** Tidak ada kolom `shopee_*`. Struktur parfum diambil dari foto produk (bukan dari listing Shopee yang tidak konsisten).
 2. **1 halaman = 1 grup foto.** Produk "Annasui" berisi wangian Sweet Dream & Dolly Girl. Pembeli memilih **Varian → Ukuran → Tipe (Murni/Campur)**.
@@ -30,26 +32,23 @@
    `variants.price` = harga khusus opsional yang mengalahkan rumus (promo, ukuran spesial).
 4. **Mudah untuk admin.** Tambah wangian + tarifnya → semua kombinasi ukuran × tipe dibuat otomatis dan langsung berharga. Tarif satu grup diubah sekaligus. Kode varian (SKU) dibuat otomatis, admin tidak pernah mengetiknya.
 5. **Uang = `BIGINT` rupiah**, `int64` di Go. Total order divalidasi CHECK di database.
-6. **Stok tidak pernah diubah diam-diam.** Setiap perubahan `on_hand` tercatat di `stock_movements` (siapa, kenapa, order mana). Perubahan harga/stok oleh staf juga masuk `audit_logs`.
-7. **Siap tumbuh tanpa ubah struktur:** banyak lokasi/cabang (`locations`), level reseller, voucher, flash sale, ongkir otomatis (Biteship/RajaOngkir), banyak staf dengan peran tetap.
+6. **Stok tidak pernah diubah diam-diam.** Setiap perubahan `variants.stock` tercatat di `stock_movements` (siapa, kenapa, order mana).
+7. **Sesuai kebutuhan sekarang dulu.** 1 toko, harga sama untuk semua pembeli, ongkir ditanggung toko, alamat diketik saat checkout. Fitur berikutnya ditambahkan sebagai migrasi baru saat benar-benar dibutuhkan (§6).
 
 ## 2. Tabel
 
 ```
-1. reseller_levels · users (role: user|owner|admin|warehouse|cs, reseller_level_id) · user_addresses (+ area_id ongkir)
-2. categories (parent_id) · products (kind perfume|general) · scents (+ tarif per ml) · product_images
-   · sizes (+ harga botol, is_default) · product_sizes (ukuran khusus) · variants (price = harga khusus)
-3. locations · inventory_levels (on_hand, reserved) · stock_movements
-4. variant_reseller_prices
-5. vouchers · promotions · promotion_items            (disiapkan, fitur nanti)
-6. carts · cart_items (variant_id)
-7. orders (location_id, voucher, reseller snapshot, expires_at) · order_items (snapshot) · voucher_redemptions
-8. shipments (kurir, resi, provider)
-9. payments · payment_events (Xendit)
-10. audit_logs
+1. users (role: user|owner|admin|warehouse|cs)
+2. categories (parent_id) · products (kind perfume|general, track_stock) · scents (+ tarif per ml) · product_images
+   · sizes (+ harga botol, is_default) · product_sizes (ukuran khusus)
+   · variants (price = harga khusus; stock, reserved untuk produk umum)
+3. carts · cart_items
+4. orders (alamat snapshot, expires_at, shipped_at) · order_items (snapshot)
+5. stock_movements (riwayat stok)
+6. payments · payment_events (Xendit)
 ```
 
-### ERD katalog, stok, order
+### ERD
 
 ```mermaid
 erDiagram
@@ -62,23 +61,14 @@ erDiagram
     sizes |o--o{ variants : "ukuran"
     products ||--o{ product_sizes : "ukuran khusus"
     sizes ||--o{ product_sizes : ""
-    variants ||--o{ inventory_levels : "stok per lokasi"
-    locations ||--o{ inventory_levels : ""
-    variants ||--o{ stock_movements : "riwayat"
-    reseller_levels |o--o{ users : ""
-    reseller_levels ||--o{ variant_reseller_prices : ""
-    variants ||--o{ variant_reseller_prices : "harga khusus"
-    promotions ||--o{ promotion_items : ""
-    variants ||--o{ promotion_items : ""
+    variants ||--o{ stock_movements : "riwayat stok"
     users ||--o| carts : owns
     carts ||--o{ cart_items : contains
     variants ||--o{ cart_items : ""
     users ||--o{ orders : places
-    locations ||--o{ orders : "stok dari"
-    vouchers |o--o{ orders : ""
     orders ||--|{ order_items : "snapshot"
     variants |o--o{ order_items : "referensi"
-    orders ||--o{ shipments : ""
+    orders |o--o{ stock_movements : "penjualan"
     orders ||--o{ payments : "Xendit"
     payments |o--o{ payment_events : webhooks
 
@@ -108,7 +98,7 @@ erDiagram
         int volume_ml "unik"
         bigint bottle_price "Rp5.000"
         bool is_default "20/30/50"
-        int weight_gram "ongkir"
+        int weight_gram
     }
     variants {
         bigint id PK
@@ -120,13 +110,17 @@ erDiagram
         varchar code "otomatis"
         bigint price "harga khusus (opsional)"
         bigint compare_at_price
+        int stock "produk umum"
+        int reserved "tertahan order belum bayar"
         bool is_active
     }
-    inventory_levels {
-        bigint variant_id PK
-        bigint location_id PK
-        int on_hand
-        int reserved
+    orders {
+        varchar order_no
+        varchar status
+        bigint subtotal
+        bigint shipping_fee "0 (ditanggung toko)"
+        bigint total
+        timestamptz shipped_at "status SHIPPED"
     }
     order_items {
         bigint variant_id FK "nullable"
@@ -134,8 +128,7 @@ erDiagram
         varchar scent_name "snapshot"
         varchar size_label "snapshot"
         varchar concentration "snapshot"
-        bigint unit_price "dibayar"
-        bigint list_price "harga normal"
+        bigint unit_price "harga saat checkout"
         bigint price_per_ml "snapshot tarif"
         bigint bottle_price "snapshot botol"
     }
@@ -147,16 +140,16 @@ erDiagram
 2. **Regular dan Exclusive bernama sama = 2 parfum berbeda** (mis. Moonlight Escada vs Moonlight Exclusive). Karena itu kunci wangian adalah `code`, bukan nama.
 3. **Harga parfum dihitung** (`catalog.ListPrice`): `variants.price` kalau diisi (harga khusus), kalau tidak `tarif wangian × volume + harga botol`. Tarif disimpan **per wangian** karena 1 foto bisa berisi tarif berbeda (Moonlight 4.000/2.000 vs Opus Black 5.000/3.000); admin bisa mengubah tarif 1 produk sekaligus. Wangian tanpa tarif tidak dijual. Produk umum memakai `variants.price` (wajib kalau aktif, CHECK).
 4. **Ukuran = tabel.** `is_default` = dijual untuk semua parfum (20/30/50 ml). Parfum tertentu bisa punya daftar sendiri di `product_sizes` (mis. hanya 10/15/30 ml); daftar ini menggantikan ukuran default untuk produk itu. 1 ukuran = 1 jenis botol, jadi harga botol ada di `sizes`. **Tipe = Murni ("bibit") / Campur ("parfum")** tetap (CHECK).
-5. **Stok hanya untuk produk `track_stock = true`** (produk umum). Parfum diracik sendiri → selalu tersedia (`available: null` di API). Untuk produk yang dihitung: **reserve → potong.** Checkout menambah `reserved` (stok tersedia = `on_hand − reserved`). Saat order `PAID`, `on_hand` dan `reserved` dikurangi dan dicatat `sale` di `stock_movements`. `CANCELLED`/`EXPIRED` sebelum bayar hanya melepas `reserved`. Order tidak dibayar dalam 24 jam otomatis `EXPIRED` (`ExpireOverdueOrders`, dijalankan tiap 5 menit dari `main.go`). Baris stok dikunci urut `variant_id` → checkout bersamaan tidak deadlock.
-6. **Harga reseller:** `variant_reseller_prices` (harga khusus) → kalau tidak ada, `price × (100 − discount_percent) / 100`. Order menyimpan `unit_price` (yang dibayar) dan `list_price` (harga normal), plus nama level reseller.
+5. **Stok hanya untuk produk `track_stock = true`** (produk umum), langsung di `variants.stock` (1 toko). Parfum diracik sendiri → selalu tersedia (`available: null` di API). Untuk produk yang dihitung: **reserve → potong.** Checkout menambah `reserved` (stok tersedia = `stock − reserved`). Saat order `PAID`, `stock` dan `reserved` dikurangi dan dicatat `sale` di `stock_movements`. `CANCELLED`/`EXPIRED` sebelum bayar hanya melepas `reserved`. Order tidak dibayar dalam 24 jam otomatis `EXPIRED` (`ExpireOverdueOrders`, dijalankan tiap 5 menit dari `main.go`). Baris varian dikunci urut `variant_id` → checkout bersamaan tidak deadlock.
+6. **Pengiriman manual dari toko:** ongkir ditanggung toko (`shipping_fee = 0`). Admin mengubah status order (`PUT /orders/:id/status`) `PAID → PROCESSING → SHIPPED → COMPLETED`; `shipped_at` terisi saat `SHIPPED`. Kurir & nomor resi belum disimpan (MVP berikutnya).
 7. **Snapshot di `order_items`.** Nama produk, wangian, ukuran, tipe, kode, harga, tarif per ml, dan harga botol disalin saat checkout, jadi perubahan tarif tidak mengubah order lama. FK ke varian/produk hanya referensi (`ON DELETE SET NULL`).
 8. **Peran tetap.** `owner` (semua + kelola akun staf), `admin` (produk, harga, stok, pesanan), `warehouse` (stok, proses & kirim pesanan), `cs` (disiapkan untuk lihat pesanan). Login staf lewat `/auth/login/admin`.
-9. **Soft delete + partial unique index** di tabel utama; tabel log (`stock_movements`, `audit_logs`, `payment_events`) append-only.
+9. **Soft delete + partial unique index** di tabel utama; tabel log (`stock_movements`, `payment_events`) append-only.
 10. **Skala.** ±60 produk × 2 wangian × 3 ukuran × 2 tipe ≈ 750 varian, puluhan ribu order/tahun — kecil untuk PostgreSQL. Index sudah ada untuk listing publik, filter grade/label, riwayat stok, order per user/status, dan order yang akan kedaluwarsa.
 
 ### Catatan GORM
 
-- **Jangan `AutoMigrate`.** Partial index, CHECK, dan FK komposit hanya ada di `schema.sql`.
+- **Jangan `AutoMigrate`.** Partial index, CHECK, dan FK komposit hanya ada di migrasi SQL (`migrations/`).
 - Field `bool` (`IsActive`) sengaja **tanpa** tag `default`, supaya `false` bisa disimpan.
 - Kolom nullable memakai pointer (`*int64` untuk `price`, `*string`, `*time.Time`).
 
@@ -167,7 +160,7 @@ erDiagram
 | `PENDING_PAYMENT` | Belum bayar (batas `expires_at`) | di-reserve |
 | `PAID` | Pembayaran Xendit terverifikasi | dipotong (`sale`) |
 | `PROCESSING` | Dikemas | — |
-| `SHIPPED` | Dikirim (resi di `shipments`) | — |
+| `SHIPPED` | Dikirim (manual dari toko) | — |
 | `COMPLETED` | Selesai | — |
 | `CANCELLED` | Dibatalkan | reservasi dilepas (kalau belum bayar) |
 | `EXPIRED` | Tidak dibayar sampai batas waktu | reservasi dilepas |
@@ -181,7 +174,9 @@ Admin (owner, admin): `GET|POST /admin/products`, `GET|PATCH /admin/products/:id
 
 Foto (owner, admin): `POST /admin/products/:id/images` (`url` = link CDN, `scent_id` opsional, `sort_order` 0 = sampul), `PATCH /admin/images/:id`, `DELETE /admin/images/:id`. Upload file langsung ke storage/CDN (mis. Cloudflare R2 / Cloudinary); backend hanya menyimpan link.
 
-Stok (owner, admin, warehouse): `POST /admin/inventory/adjustments` (`mode: set|add`), `GET /admin/inventory/movements?variant_id=`.
+Stok (owner, admin, warehouse): `POST /admin/inventory/adjustments` (`mode: set|add` → `[{variant_id, stock, reserved, available}]`), `GET /admin/inventory/movements?variant_id=`. Layar produk admin (`GET /admin/products/:id`) menampilkan `stock`, `reserved`, `available` per varian.
+
+Pesanan (owner, admin, warehouse): `PUT /orders/:id/status` `{status, reason?}`.
 
 ## 5b. Pembayaran (Xendit Payment Sessions)
 
@@ -198,16 +193,28 @@ FE: kembali ke CHECKOUT_SUCCESS_URL?order=SP… → polling GET /orders/:id samp
 
 - **Isi webhook tidak dipercaya.** Status dan nominal selalu dari `GET /sessions/{id}`. Nominal ≠ `orders.total` → payment `FAILED`. Event yang statusnya belum sesuai dijawab 503 supaya Xendit mengirim ulang.
 - **Kedaluwarsa:** loop tiap 5 menit (`ReconcileAndExpire`) mengecek payment PENDING > 10 menit (webhook terlewat), lalu untuk order yang lewat batas bayar: sesi Xendit dicek & **dibatalkan dulu** (link bayar mati), baru order `EXPIRED` dan reservasi dilepas. Pembeli yang membatalkan order juga membatalkan sesinya.
-- **Pembayaran telat** (uang masuk tepat saat order kedaluwarsa): order tetap diterima sebagai `PAID`, stok dipotong tanpa menyentuh reservasi order lain, dicatat di `audit_logs` (`order.late_payment`). Pembayaran ganda untuk order yang sudah lunas → `FAILED` + catatan refund manual.
+- **Pembayaran telat** (uang masuk tepat saat order kedaluwarsa): order tetap diterima sebagai `PAID`, stok dipotong tanpa menyentuh reservasi order lain; jejaknya terlihat di order (status `PAID` dengan `cancelled_at` terisi) dan di log server. Pembayaran ganda untuk order yang sudah lunas → `FAILED` + catatan refund manual.
 - **Env:** `XENDIT_SECRET_KEY`, `XENDIT_WEBHOOK_TOKEN`, `CHECKOUT_SUCCESS_URL`, `CHECKOUT_CANCEL_URL` (HTTPS), opsional `XENDIT_API_URL`, `XENDIT_SESSION_MAX_TTL`. Lihat `.env.example`.
-- **Ongkir:** ditanggung pemilik → `shipping_fee = 0`. `shipments` tetap dipakai untuk kurir/resi.
+- **Ongkir:** ditanggung pemilik → `shipping_fee = 0`. Dikirim manual dari toko.
 
-## 6. Belum dibangun (tabel sudah siap)
+## 6. Belum ada (tambahkan sebagai migrasi baru saat dibutuhkan)
 
-- Voucher & flash sale (`vouchers`, `promotions`), ongkir otomatis (`shipments.provider`, `area_id`), endpoint kelola level reseller, akses CS.
-- ~~Integrasi Xendit~~ ✅ M8 (lihat §5b). Refund masih manual lewat Dashboard Xendit.
+| Fitur | Yang perlu ditambah |
+|---|---|
+| Harga reseller | tabel level reseller + kolom di `users`; harga di `catalog` |
+| Voucher / flash sale | tabel voucher/promo + kolom diskon di `orders` (CHECK total ikut berubah) |
+| Alamat tersimpan | tabel alamat per user; checkout tetap menyalin alamat ke order |
+| Audit log | tabel log perubahan oleh staf |
+| Stok banyak toko/gudang | tabel lokasi + stok per lokasi (pindahkan `variants.stock`) |
+| Kurir & nomor resi (tracking) | kolom `courier` + `tracking_number` di `orders` (atau tabel pengiriman kalau 1 order bisa beberapa paket) |
+| Ongkir otomatis (Biteship/RajaOngkir) | ongkir & area di order, atau tabel pengiriman terpisah |
+
+Refund masih manual lewat Dashboard Xendit. Akses CS (peran `cs`) belum punya endpoint.
 
 ## 7. Menerapkan ke database
 
-- **DB baru / data dev boleh dibuang:** jadikan `schema.sql` migrasi goose pertama (`migrations/00001_init.sql`).
-- **DB sudah ada isinya:** buat migrasi expand → backfill → contract setelah M2 (goose) selesai.
+Lihat [`migrations/README.md`](../../migrations/README.md).
+
+- **DB baru:** `go run ./cmd/migrate up`, lalu `go run ./seed` dan `go run ./seed -admin`.
+- **DB dev lama (dibuat dari `docs/schema/schema.sql` / schema v3 26 tabel):** tidak cocok dengan schema ini — buat database baru, lalu `up` + seed.
+- **Perubahan schema berikutnya:** migrasi baru `0000N_*.sql` (expand → backfill → contract untuk perubahan destruktif). Migrasi yang sudah diterapkan tidak boleh diubah.

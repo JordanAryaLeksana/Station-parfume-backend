@@ -86,17 +86,13 @@ func GetAllProducts(f ProductFilter) ([]models.ProductCard, error) {
 	if err := q.Order("products.sort_order, products.id").Find(&products).Error; err != nil {
 		return nil, fmt.Errorf("failed to retrieve products: %w", err)
 	}
-	avail, err := availability(products)
-	if err != nil {
-		return nil, err
-	}
 	out := make([]models.ProductCard, 0, len(products))
 	for _, p := range products {
 		// Produk yang belum punya varian berharga (admin belum isi harga) tidak tampil.
 		if len(sellable(p)) == 0 {
 			continue
 		}
-		out = append(out, toCard(p, avail))
+		out = append(out, toCard(p))
 	}
 	return out, nil
 }
@@ -117,18 +113,14 @@ func GetProduct(idOrSlug string) (*models.ProductDetail, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve product: %w", err)
 	}
-	avail, err := availability([]repository.Product{p})
-	if err != nil {
-		return nil, err
-	}
-	d := &models.ProductDetail{ProductCard: toCard(p, avail), Description: p.Description, Images: p.Images,
+	d := &models.ProductDetail{ProductCard: toCard(p), Description: p.Description, Images: p.Images,
 		ScentOptions: []repository.Scent{}, SizeOptions: []repository.Size{}, Concentrations: []string{}, Variants: []models.VariantView{}}
 	usedScent, usedSize, usedConc := map[uint]bool{}, map[uint]bool{}, map[string]bool{}
 	for _, v := range sellable(p) {
 		price, _ := catalog.ListPrice(&v)
 		d.Variants = append(d.Variants, models.VariantView{ID: v.ID, ScentID: v.ScentID, SizeID: v.SizeID, Concentration: v.Concentration,
 			Label: v.Label, Name: v.DisplayName(), Code: v.Code, Price: price.Total, CompareAtPrice: v.CompareAtPrice,
-			InStock: catalog.HasStock(&v, avail, 1), Available: catalog.StockOf(&v, avail)})
+			InStock: catalog.HasStock(&v, 1), Available: catalog.StockOf(&v)})
 		if v.ScentID != nil {
 			usedScent[*v.ScentID] = true
 		}
@@ -175,24 +167,7 @@ func sellable(p repository.Product) []repository.Variant {
 	return out
 }
 
-func availability(products []repository.Product) (map[uint]int, error) {
-	var ids []uint
-	for _, p := range products {
-		for _, v := range p.Variants {
-			ids = append(ids, v.ID)
-		}
-	}
-	if len(ids) == 0 {
-		return map[uint]int{}, nil
-	}
-	loc, err := catalog.DefaultLocationID(config.DB)
-	if err != nil {
-		return nil, err
-	}
-	return catalog.Available(config.DB, loc, ids)
-}
-
-func toCard(p repository.Product, avail map[uint]int) models.ProductCard {
+func toCard(p repository.Product) models.ProductCard {
 	c := models.ProductCard{ID: p.ID, Kind: p.Kind, Name: p.Name, Slug: p.Slug, Grade: p.Grade, InspiredBy: p.InspiredBy,
 		NotePrimary: p.NotePrimary, NoteSecondary: p.NoteSecondary, Category: p.Category}
 	if len(p.Images) > 0 {
@@ -209,7 +184,7 @@ func toCard(p repository.Product, avail map[uint]int) models.ProductCard {
 		if price.Total > c.PriceMax {
 			c.PriceMax = price.Total
 		}
-		if catalog.HasStock(&v, avail, 1) {
+		if catalog.HasStock(&v, 1) {
 			c.InStock = true
 		}
 	}

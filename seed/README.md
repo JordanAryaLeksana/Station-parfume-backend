@@ -33,11 +33,9 @@ Dunhil (Desire Blue/London/Red), Greentea, Guci Flora, dan Hugo Boss belum ada d
 
 ## Menjalankan
 
-Database harus sudah memakai [`docs/schema/schema.sql`](../docs/schema/schema.sql).
+Database harus sudah dimigrasi ([`migrations/`](../migrations/README.md)): `go run ./cmd/migrate up`. Seeder menolak database yang belum dimigrasi.
 
-```bash
-export DATABASE_URL="host=localhost port=5432 user=postgres password=... dbname=station_parfume sslmode=disable"
-```
+Koneksi dari env yang sama dengan server (`.env` dibaca otomatis): `DATABASE_URL`, atau `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME`. Bisa juga `-dsn "postgres://..."`.
 
 Cek dulu tanpa menyimpan apa pun:
 

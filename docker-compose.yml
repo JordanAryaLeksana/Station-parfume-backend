@@ -3,15 +3,15 @@ services:
         image: postgres:17-alpine
         container_name: station-parfume-db
         environment:
-            POSTGRES_USER: stationparfume
-            POSTGRES_PASSWORD: stationparfumedev2026
-            POSTGRES_DB: station-parfume-db
+            POSTGRES_USER: ${DB_USER:?isi DB_USER di .env}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:?isi DB_PASSWORD di .env}
+            POSTGRES_DB: ${DB_NAME:?isi DB_NAME di .env}
         ports:
-            - "5433:5432"
+            - "${DB_PORT:-5433}:5432"
         volumes: 
             - sp_postgres_data:/var/lib/postgresql/data
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U sp_user -d station-parfume-db"]
+            test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
             interval: 5s
             timeout: 5s
             retries: 5

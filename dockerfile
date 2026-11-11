@@ -12,8 +12,9 @@ RUN go mod download
 # Copy semua source code
 COPY . .
 
-# Build binary
-RUN go build -o main .
+# Build binary server + alat migrasi (migrasi SQL di-embed ke binary).
+# Deploy: jalankan "./migrate up" dulu (job/release step), baru "./main".
+RUN go build -o main . && go build -o migrate ./cmd/migrate
 
 # Jalankan binary
 CMD ["./main"]

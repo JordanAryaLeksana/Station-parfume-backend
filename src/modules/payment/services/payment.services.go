@@ -403,10 +403,9 @@ func applyCompleted(tx *gorm.DB, p *repository.Payment, sess *xendit.Session) er
 		if err := orderservices.ApplyLatePayment(tx, order); err != nil {
 			return err
 		}
-		log.Printf("pembayaran telat: order %s %s → PAID", order.OrderNo, prev)
-		changes, _ := json.Marshal(map[string]any{"status": []string{prev, repository.OrderPaid}, "payment_id": p.ID})
-		eid := order.ID
-		return tx.Create(&repository.AuditLog{Action: "order.late_payment", Entity: "order", EntityID: &eid, Changes: changes}).Error
+		// Jejaknya tetap terlihat di order: status PAID tapi cancelled_at/cancel_reason terisi.
+		log.Printf("pembayaran telat: order %s %s → PAID (payment %d)", order.OrderNo, prev, p.ID)
+		return nil
 	}
 	return nil // order sudah PAID/diproses (mis. ditandai manual oleh admin)
 }

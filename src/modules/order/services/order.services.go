@@ -52,24 +52,10 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 		if len(items) == 0 {
 			return fmt.Errorf("%w: keranjang kosong", ErrValidation)
 		}
-		loc, err := catalog.DefaultLocationID(tx)
-		if err != nil {
-			return err
-		}
-		ids := make([]uint, 0, len(items))
-		for _, it := range items {
-			ids = append(ids, it.VariantID)
-		}
-		pricing, err := catalog.PricingForUser(tx, userID, ids)
-		if err != nil {
-			return err
-		}
-
 		expires := time.Now().Add(PaymentWindow)
 		order := repository.Order{
 			OrderNo:          newOrderNo(),
 			UserID:           userID,
-			LocationID:       loc,
 			Status:           repository.OrderPendingPayment,
 			RecipientName:    input.RecipientName,
 			RecipientPhone:   input.RecipientPhone,
@@ -81,9 +67,6 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 			BuyerNote:        input.BuyerNote,
 			ExpiresAt:        &expires,
 		}
-		if pricing.Level != nil {
-			order.ResellerLevelID, order.ResellerLevelName = &pricing.Level.ID, &pricing.Level.Name
-		}
 		for _, it := range items {
 			v := it.Variant
 			if !catalog.Purchasable(v) {
@@ -91,16 +74,16 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 			}
 			// Stok hanya di-reserve untuk produk yang stoknya dihitung (parfum diracik → selalu tersedia).
 			if v.Product.TrackStock {
-				if err := reserve(tx, v.ID, loc, it.Quantity); err != nil {
+				if err := reserve(tx, v.ID, it.Quantity); err != nil {
 					return fmt.Errorf("%w: %s %s", err, v.Product.Name, v.DisplayName())
 				}
 			}
-			item := snapshotItem(v, pricing.UnitPrice(v), it.Quantity)
+			item := snapshotItem(v, it.Quantity)
 			order.Items = append(order.Items, item)
 			order.Subtotal += item.Subtotal
 			order.TotalQuantity += it.Quantity
 		}
-		order.Total = order.Subtotal + order.ShippingFee - order.Discount
+		order.Total = order.Subtotal + order.ShippingFee // ongkir ditanggung toko → 0
 
 		if err := tx.Create(&order).Error; err != nil {
 			return fmt.Errorf("failed to create order: %w", err)
@@ -117,32 +100,32 @@ func Checkout(userID uint, input *models.CheckoutRequestDTO) (*repository.Order,
 	return GetOrderForUser(orderID, userID)
 }
 
-// lockLevel mengunci baris stok varian di lokasi (SELECT ... FOR UPDATE).
-func lockLevel(tx *gorm.DB, variantID, locationID uint) (*repository.InventoryLevel, error) {
-	var lvl repository.InventoryLevel
-	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("variant_id = ? AND location_id = ?", variantID, locationID).First(&lvl).Error
+// lockStock mengunci baris varian (SELECT ... FOR UPDATE) dan membaca stoknya.
+func lockStock(tx *gorm.DB, variantID uint) (*repository.Variant, error) {
+	var v repository.Variant
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "stock", "reserved").First(&v, variantID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-	return &lvl, err
+	return &v, err
 }
 
-func reserve(tx *gorm.DB, variantID, locationID uint, qty int) error {
-	lvl, err := lockLevel(tx, variantID, locationID)
+func reserve(tx *gorm.DB, variantID uint, qty int) error {
+	v, err := lockStock(tx, variantID)
 	if err != nil {
 		return err
 	}
-	if lvl == nil || lvl.Available() < qty {
+	if v == nil || v.Available() < qty {
 		return fmt.Errorf("%w: stok tidak cukup", ErrValidation)
 	}
-	return tx.Model(&repository.InventoryLevel{}).Where("variant_id = ? AND location_id = ?", variantID, locationID).
+	return tx.Model(&repository.Variant{}).Where("id = ?", variantID).
 		Updates(map[string]any{"reserved": gorm.Expr("reserved + ?", qty), "updated_at": gorm.Expr("now()")}).Error
 }
 
-func snapshotItem(v *repository.Variant, unitPrice int64, qty int) repository.OrderItem {
+func snapshotItem(v *repository.Variant, qty int) repository.OrderItem {
 	variantID, productID := v.ID, v.ProductID
 	price, _ := catalog.ListPrice(v) // Purchasable sudah memastikan harga bisa dihitung
+	unitPrice := price.Total
 	item := repository.OrderItem{
 		VariantID:     &variantID,
 		ProductID:     &productID,
@@ -153,7 +136,6 @@ func snapshotItem(v *repository.Variant, unitPrice int64, qty int) repository.Or
 		VariantName:   optionalString(v.DisplayName()),
 		VariantCode:   v.Code,
 		UnitPrice:     unitPrice,
-		ListPrice:     price.Total,
 		PricePerML:    price.PerML,
 		BottlePrice:   price.BottlePrice,
 		Quantity:      qty,
@@ -207,7 +189,7 @@ func CancelOrder(orderID, userID uint, reason *string) error {
 	})
 }
 
-// UpdateOrderStatus (admin): pindah status sesuai CanOrderTransition, plus kurir/resi.
+// UpdateOrderStatus (admin): pindah status sesuai CanOrderTransition.
 func UpdateOrderStatus(orderID uint, input *models.UpdateOrderStatusDTO) error {
 	if err := validate.Struct(input); err != nil {
 		return fmt.Errorf("%w: %v", ErrValidation, err)
@@ -216,11 +198,6 @@ func UpdateOrderStatus(orderID uint, input *models.UpdateOrderStatusDTO) error {
 		order, err := lockOrder(tx, orderID, nil)
 		if err != nil {
 			return err
-		}
-		if input.Courier != nil || input.TrackingNumber != nil {
-			if err := upsertShipment(tx, order, input.Courier, input.TrackingNumber); err != nil {
-				return err
-			}
 		}
 		return ApplyStatus(tx, order, strings.ToUpper(input.Status), input.Reason)
 	})
@@ -292,7 +269,7 @@ func ApplyLatePayment(tx *gorm.DB, order *repository.Order) error {
 	return nil
 }
 
-// commitStock: order dibayar → on_hand dikurangi (dicatat sebagai "sale"). reserved
+// commitStock: order dibayar → stok dikurangi (dicatat sebagai "sale"). reserved
 // ikut dikurangi kalau stok order ini masih di-reserve (fromReservation).
 func commitStock(tx *gorm.DB, order *repository.Order, fromReservation bool) error {
 	items, err := orderItemsWithVariant(tx, order.ID)
@@ -300,28 +277,27 @@ func commitStock(tx *gorm.DB, order *repository.Order, fromReservation bool) err
 		return err
 	}
 	for _, it := range items {
-		lvl, err := lockLevel(tx, *it.VariantID, order.LocationID)
+		v, err := lockStock(tx, *it.VariantID)
 		if err != nil {
 			return err
 		}
-		if lvl == nil {
+		if v == nil {
 			continue
 		}
 		// Pesanan yang sudah dibayar tetap dipenuhi; kalau admin sudah menurunkan
-		// stok di bawah jumlah ini, on_hand berhenti di 0 (perlu dicek manual).
-		onHand := max(lvl.OnHand-it.Quantity, 0)
-		reserved := lvl.Reserved
+		// stok di bawah jumlah ini, stok berhenti di 0 (perlu dicek manual).
+		stock := max(v.Stock-it.Quantity, 0)
+		reserved := v.Reserved
 		if fromReservation {
-			reserved = max(lvl.Reserved-it.Quantity, 0)
+			reserved = max(v.Reserved-it.Quantity, 0)
 		}
-		if err := tx.Model(&repository.InventoryLevel{}).Where("variant_id = ? AND location_id = ?", lvl.VariantID, lvl.LocationID).
-			Updates(map[string]any{"on_hand": onHand, "reserved": reserved, "updated_at": gorm.Expr("now()")}).Error; err != nil {
+		if err := tx.Model(&repository.Variant{}).Where("id = ?", v.ID).
+			Updates(map[string]any{"stock": stock, "reserved": reserved, "updated_at": gorm.Expr("now()")}).Error; err != nil {
 			return err
 		}
-		if delta := onHand - lvl.OnHand; delta != 0 {
+		if delta := stock - v.Stock; delta != 0 {
 			oid := order.ID
-			m := repository.StockMovement{VariantID: lvl.VariantID, LocationID: lvl.LocationID, Delta: delta, OnHandAfter: onHand,
-				Reason: repository.MovementSale, OrderID: &oid}
+			m := repository.StockMovement{VariantID: v.ID, Delta: delta, StockAfter: stock, Reason: repository.MovementSale, OrderID: &oid}
 			if err := tx.Create(&m).Error; err != nil {
 				return err
 			}
@@ -337,8 +313,7 @@ func releaseStock(tx *gorm.DB, order *repository.Order) error {
 		return err
 	}
 	for _, it := range items {
-		if err := tx.Model(&repository.InventoryLevel{}).
-			Where("variant_id = ? AND location_id = ?", *it.VariantID, order.LocationID).
+		if err := tx.Model(&repository.Variant{}).Where("id = ?", *it.VariantID).
 			Updates(map[string]any{"reserved": gorm.Expr("GREATEST(reserved - ?, 0)", it.Quantity), "updated_at": gorm.Expr("now()")}).Error; err != nil {
 			return fmt.Errorf("failed to release stock: %w", err)
 		}
@@ -394,28 +369,6 @@ func ExpireOverdueOrders(now time.Time) (int, error) {
 	return n, nil
 }
 
-// upsertShipment: admin mengisi kurir/resi → disimpan di shipments (provider manual).
-func upsertShipment(tx *gorm.DB, order *repository.Order, courier, tracking *string) error {
-	var sh repository.Shipment
-	err := tx.Where("order_id = ?", order.ID).Order("id DESC").First(&sh).Error
-	switch {
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		sh = repository.Shipment{OrderID: order.ID, Provider: repository.ShipmentProviderManual, CourierCode: courier,
-			TrackingNumber: tracking, Cost: order.ShippingFee, Status: repository.ShipmentPending}
-		return tx.Create(&sh).Error
-	case err != nil:
-		return err
-	}
-	upd := map[string]any{}
-	if courier != nil {
-		upd["courier_code"] = *courier
-	}
-	if tracking != nil {
-		upd["tracking_number"] = *tracking
-	}
-	return tx.Model(&sh).Updates(upd).Error
-}
-
 // LockOrder mengunci baris order (SELECT ... FOR UPDATE). userID nil = tanpa cek pemilik.
 func LockOrder(tx *gorm.DB, orderID uint, userID *uint) (*repository.Order, error) {
 	return lockOrder(tx, orderID, userID)
@@ -438,8 +391,7 @@ func lockOrder(tx *gorm.DB, orderID uint, userID *uint) (*repository.Order, erro
 
 func orderQuery(db *gorm.DB) *gorm.DB {
 	return db.Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("id") }).
-		Preload("Payments", func(db *gorm.DB) *gorm.DB { return db.Order("id") }).
-		Preload("Shipments", func(db *gorm.DB) *gorm.DB { return db.Order("id") })
+		Preload("Payments", func(db *gorm.DB) *gorm.DB { return db.Order("id") })
 }
 
 // newOrderNo: "SP" + yymmdd + 8 karakter acak, mis. SP261106A1B2C3D4.

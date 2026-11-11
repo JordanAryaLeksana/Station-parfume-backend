@@ -1,12 +1,8 @@
 // Package catalog berisi aturan bersama katalog yang dipakai modul produk,
-// keranjang, dan order: varian mana yang bisa dibeli, harga untuk pembeli
-// (termasuk reseller), dan stok tersedia di lokasi default.
+// keranjang, dan order: varian mana yang bisa dibeli, harganya, dan stoknya.
 package catalog
 
 import (
-	"errors"
-	"fmt"
-
 	"backend/src/repository"
 
 	"gorm.io/gorm"
@@ -26,7 +22,7 @@ func PreloadVariant(db *gorm.DB, prefix string) *gorm.DB {
 
 // Price = rincian harga normal 1 unit varian.
 type Price struct {
-	Total       int64  // harga normal (sebelum reseller)
+	Total       int64  // harga jual 1 unit
 	PerML       *int64 // tarif per ml yang dipakai (nil = harga khusus / produk general)
 	BottlePrice *int64 // harga botol yang dipakai
 }
@@ -88,98 +84,30 @@ func SizeAllowed(p *repository.Product, size *repository.Size) bool {
 	return false
 }
 
-// DefaultLocationID: lokasi stok yang dipakai checkout (sekarang 1 toko).
-func DefaultLocationID(db *gorm.DB) (uint, error) {
-	var loc repository.Location
-	err := db.Where("is_default AND is_active").First(&loc).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return 0, fmt.Errorf("lokasi stok default belum ada (jalankan seeder)")
-	}
-	return loc.ID, err
-}
-
-// Available mengembalikan stok tersedia (on_hand − reserved) per varian di lokasi.
-// Varian tanpa baris inventory = 0.
-func Available(db *gorm.DB, locationID uint, variantIDs []uint) (map[uint]int, error) {
-	out := make(map[uint]int, len(variantIDs))
-	if len(variantIDs) == 0 {
-		return out, nil
-	}
-	var levels []repository.InventoryLevel
-	if err := db.Where("location_id = ? AND variant_id IN ?", locationID, variantIDs).Find(&levels).Error; err != nil {
-		return nil, err
-	}
-	for _, l := range levels {
-		out[l.VariantID] = l.Available()
-	}
-	return out, nil
-}
-
 // StockOf: stok tersedia varian. nil = stok tidak dihitung (products.track_stock
 // = false, mis. parfum diracik sendiri) → selalu tersedia. Product harus di-Preload.
-func StockOf(v *repository.Variant, avail map[uint]int) *int {
+func StockOf(v *repository.Variant) *int {
 	if v.Product != nil && !v.Product.TrackStock {
 		return nil
 	}
-	n := max(avail[v.ID], 0)
+	n := v.Available()
 	return &n
 }
 
 // HasStock: varian bisa dibeli sebanyak qty (selalu true kalau stok tidak dihitung).
-func HasStock(v *repository.Variant, avail map[uint]int, qty int) bool {
-	s := StockOf(v, avail)
+func HasStock(v *repository.Variant, qty int) bool {
+	s := StockOf(v)
 	return s == nil || *s >= qty
 }
 
-// Pricing = konteks harga untuk 1 pembeli (reseller atau bukan).
-type Pricing struct {
-	Level     *repository.ResellerLevel
-	overrides map[uint]int64 // variant_id → harga khusus level ini
-}
-
-// PricingForUser memuat level reseller user (kalau ada & aktif) beserta harga
-// khusus untuk varian yang diminta.
-func PricingForUser(db *gorm.DB, userID uint, variantIDs []uint) (*Pricing, error) {
-	p := &Pricing{overrides: map[uint]int64{}}
-	if userID == 0 {
-		return p, nil
-	}
-	var u repository.User
-	if err := db.Preload("ResellerLevel").First(&u, userID).Error; err != nil {
-		return nil, err
-	}
-	if u.ResellerLevel == nil || !u.ResellerLevel.IsActive {
-		return p, nil
-	}
-	p.Level = u.ResellerLevel
-	if len(variantIDs) > 0 {
-		var rows []repository.VariantResellerPrice
-		if err := db.Where("reseller_level_id = ? AND variant_id IN ?", p.Level.ID, variantIDs).Find(&rows).Error; err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			p.overrides[r.VariantID] = r.Price
-		}
-	}
-	return p, nil
-}
-
-// UnitPrice: harga yang dibayar pembeli untuk 1 unit varian.
-// Urutan: harga khusus reseller → harga normal − diskon % level → harga normal.
-// Varian yang harganya belum bisa dihitung mengembalikan 0 (tidak bisa dibeli).
-func (p *Pricing) UnitPrice(v *repository.Variant) int64 {
+// UnitPrice: harga 1 unit varian; 0 kalau harganya belum bisa dihitung
+// (varian seperti itu tidak bisa dibeli, lihat Purchasable).
+func UnitPrice(v *repository.Variant) int64 {
 	price, ok := ListPrice(v)
 	if !ok {
 		return 0
 	}
-	if p == nil || p.Level == nil {
-		return price.Total
-	}
-	if o, ok := p.overrides[v.ID]; ok {
-		// Harga reseller tidak boleh lebih mahal dari harga normal (CHECK order_items).
-		return min(o, price.Total)
-	}
-	return ApplyDiscount(price.Total, int(p.Level.DiscountPercent))
+	return price.Total
 }
 
 // SizesForProduct: ukuran aktif yang dijual untuk 1 produk parfum — daftar
@@ -193,16 +121,4 @@ func SizesForProduct(db *gorm.DB, productID uint) ([]repository.Size, error) {
 	}
 	err = db.Where("is_active AND is_default").Order("volume_ml").Find(&sizes).Error
 	return sizes, err
-}
-
-// ApplyDiscount: harga − percent% dibulatkan ke bawah ke rupiah, minimal Rp1.
-func ApplyDiscount(price int64, percent int) int64 {
-	if percent <= 0 {
-		return price
-	}
-	out := price * int64(100-percent) / 100
-	if out < 1 {
-		return 1
-	}
-	return out
 }
