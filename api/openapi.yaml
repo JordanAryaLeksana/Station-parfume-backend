@@ -1,0 +1,3763 @@
+# Spesifikasi OpenAPI Station Parfume API — disajikan di /docs (Swagger UI).
+# Diedit langsung. Test memastikan setiap rute Gin ada di sini (src/routes) dan
+# setiap response di test integrasi cocok dengan skema di sini.
+openapi: 3.0.3
+info:
+  title: Station Parfume API
+  version: 1.0.0
+  description: |-
+    API backend toko parfum Station Parfume.
+
+    **Format response.** Sukses: `{"message": "...", "data": ...}`. Error: `{"error": "Bad Request", "message": "...", "status": 400}`.
+
+    **Auth.** Login → `access_token` (15 menit) dikirim di header `Authorization: Bearer <token>`. Saat 401, panggil `POST /api/v1/auth/refresh` dengan **refresh token** di header yang sama; refresh token hanya bisa dipakai sekali.
+
+    **Uang** dalam rupiah utuh (integer). **Waktu** RFC 3339.
+
+    **CORS.** Domain frontend harus terdaftar di env `CORS_ALLOWED_ORIGINS`. Path boleh dengan atau tanpa garis miring di akhir.
+servers:
+- url: /
+  description: Server ini
+tags:
+- name: Auth
+- name: Katalog
+- name: Keranjang
+- name: Pesanan
+- name: Pembayaran
+- name: Users
+- name: Admin Katalog
+- name: Admin Stok
+- name: Umum
+- name: Health
+paths:
+  /api/v1:
+    get:
+      tags:
+      - Umum
+      summary: Sapaan API
+      operationId: get_api_v1
+      security: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyEnvelope'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/images/{id}:
+    patch:
+      tags:
+      - Admin Katalog
+      summary: Ubah foto
+      operationId: patch_api_v1_admin_images_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImagePatch'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+      - Admin Katalog
+      summary: Hapus foto
+      operationId: delete_api_v1_admin_images_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/inventory/adjustments:
+    post:
+      tags:
+      - Admin Stok
+      summary: Sesuaikan stok (banyak sekaligus)
+      operationId: post_api_v1_admin_inventory_adjustments
+      description: |-
+        Semua atau tidak sama sekali. Setiap perubahan dicatat di riwayat stok.
+
+        **Peran:** owner, admin, warehouse.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryAdjustmentList'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLevelListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/inventory/movements:
+    get:
+      tags:
+      - Admin Stok
+      summary: Riwayat stok
+      operationId: get_api_v1_admin_inventory_movements
+      description: '**Peran:** owner, admin, warehouse.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: variant_id
+        in: query
+        required: false
+        description: Filter satu varian
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        description: Maks baris (default 100, maks 500)
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMovementListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products:
+    get:
+      tags:
+      - Admin Katalog
+      summary: Daftar produk (termasuk draft)
+      operationId: get_api_v1_admin_products
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: Filter status
+        schema:
+          type: string
+          enum:
+          - draft
+          - active
+          - archived
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+      - Admin Katalog
+      summary: Buat produk
+      operationId: post_api_v1_admin_products
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}:
+    get:
+      tags:
+      - Admin Katalog
+      summary: Detail produk + semua varian, harga, stok
+      operationId: get_api_v1_admin_products_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    patch:
+      tags:
+      - Admin Katalog
+      summary: Ubah produk
+      operationId: patch_api_v1_admin_products_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductPatch'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}/images:
+    post:
+      tags:
+      - Admin Katalog
+      summary: Tambah foto (link CDN)
+      operationId: post_api_v1_admin_products_id_images
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageInput'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}/rates:
+    patch:
+      tags:
+      - Admin Katalog
+      summary: Ubah tarif per ml semua wangian produk
+      operationId: patch_api_v1_admin_products_id_rates
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatesInput'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}/scents:
+    post:
+      tags:
+      - Admin Katalog
+      summary: Tambah wangian (+ kombinasi varian otomatis)
+      operationId: post_api_v1_admin_products_id_scents
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScentInput'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}/sizes:
+    put:
+      tags:
+      - Admin Katalog
+      summary: Atur ukuran khusus produk
+      operationId: put_api_v1_admin_products_id_sizes
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductSizesInput'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}/variants:
+    post:
+      tags:
+      - Admin Katalog
+      summary: Tambah varian produk umum
+      operationId: post_api_v1_admin_products_id_variants
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneralVariantInput'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/products/{id}/variants/generate:
+    post:
+      tags:
+      - Admin Katalog
+      summary: Buat kombinasi varian yang belum ada
+      operationId: post_api_v1_admin_products_id_variants_generate
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedCountEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/scents/{id}:
+    patch:
+      tags:
+      - Admin Katalog
+      summary: Ubah wangian (nama, tarif, aktif)
+      operationId: patch_api_v1_admin_scents_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScentPatch'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/sizes:
+    get:
+      tags:
+      - Admin Katalog
+      summary: Daftar semua ukuran
+      operationId: get_api_v1_admin_sizes
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SizeListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+      - Admin Katalog
+      summary: Tambah ukuran
+      operationId: post_api_v1_admin_sizes
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SizeInput'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SizeEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/sizes/{id}:
+    patch:
+      tags:
+      - Admin Katalog
+      summary: Ubah ukuran
+      operationId: patch_api_v1_admin_sizes_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SizePatch'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SizeEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/admin/variants:
+    patch:
+      tags:
+      - Admin Katalog
+      summary: Ubah harga khusus / aktif banyak varian sekaligus
+      operationId: patch_api_v1_admin_variants
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VariantPatchList'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatedCountEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/auth/google:
+    get:
+      tags:
+      - Auth
+      summary: Mulai login Google (redirect ke Google)
+      operationId: get_api_v1_auth_google
+      description: Buka di browser (bukan fetch). Setelah login, Google kembali ke /auth/google/callback.
+      security: []
+      responses:
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+        '307':
+          description: Redirect ke halaman login Google; cookie `oauth_state` dipasang
+          headers:
+            Location:
+              schema:
+                type: string
+  /api/v1/auth/google/callback:
+    get:
+      tags:
+      - Auth
+      summary: Callback Google (redirect ke frontend)
+      operationId: get_api_v1_auth_google_callback
+      security: []
+      parameters:
+      - name: code
+        in: query
+        required: false
+        description: Dari Google
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: false
+        description: Harus sama dengan cookie oauth_state
+        schema:
+          type: string
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+        '303':
+          description: Redirect ke `FRONTEND_URL/oauth-success#access_token=…&refresh_token=…` atau `#error=<kode>` (access_denied,
+            google_failed, email_unverified, email_registered, server_error)
+          headers:
+            Location:
+              schema:
+                type: string
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Login pembeli (email & password)
+      operationId: post_api_v1_auth_login
+      description: Semua kegagalan login dijawab 401 "Email atau password salah". Rate limit 10/menit per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/auth/login/admin:
+    post:
+      tags:
+      - Auth
+      summary: Login staf (owner/admin/warehouse/cs)
+      operationId: post_api_v1_auth_login_admin
+      description: Akun pembeli ditolak dengan 401 yang sama. Rate limit 10/menit per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: 'Logout: cabut access token (+ refresh token di body)'
+      operationId: post_api_v1_auth_logout
+      description: 'Header Authorization = access token. Body opsional `{"refresh_token": "..."}` supaya refresh token ikut
+        dicabut.'
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Berhasil, tanpa body
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - Auth
+      summary: Tukar refresh token dengan pasangan token baru
+      operationId: post_api_v1_auth_refresh
+      description: Header Authorization = **refresh token** (bukan access token). Refresh token hanya bisa dipakai sekali;
+        simpan yang baru. Rate limit 30/menit per IP.
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Auth
+      summary: Daftar akun pembeli
+      operationId: post_api_v1_auth_register
+      description: Rate limit 5/menit per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/cart:
+    get:
+      tags:
+      - Keranjang
+      summary: Isi keranjang (harga dihitung live)
+      operationId: get_api_v1_cart
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+      - Keranjang
+      summary: Kosongkan keranjang
+      operationId: delete_api_v1_cart
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/cart/items:
+    post:
+      tags:
+      - Keranjang
+      summary: Tambah varian ke keranjang
+      operationId: post_api_v1_cart_items
+      description: Kalau varian sudah ada, jumlahnya ditambahkan. Stok dicek untuk produk umum.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCartItemRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/cart/items/{id}:
+    put:
+      tags:
+      - Keranjang
+      summary: Ubah jumlah item
+      operationId: put_api_v1_cart_items_id
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCartItemRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+      - Keranjang
+      summary: Hapus item
+      operationId: delete_api_v1_cart_items_id
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/categories:
+    get:
+      tags:
+      - Katalog
+      summary: Daftar kategori aktif
+      operationId: get_api_v1_categories
+      security: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListEnvelope'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/orders:
+    post:
+      tags:
+      - Pesanan
+      summary: Checkout seluruh isi keranjang
+      operationId: post_api_v1_orders
+      description: Harga & nama disalin ke order; stok produk umum di-reserve; keranjang dikosongkan. Batas bayar 24 jam.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    get:
+      tags:
+      - Pesanan
+      summary: Daftar pesanan milik user
+      operationId: get_api_v1_orders
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/orders/{id}:
+    get:
+      tags:
+      - Pesanan
+      summary: Detail pesanan milik user
+      operationId: get_api_v1_orders_id
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/orders/{id}/cancel:
+    put:
+      tags:
+      - Pesanan
+      summary: Batalkan pesanan yang belum dibayar
+      operationId: put_api_v1_orders_id_cancel
+      description: Sesi bayar Xendit ikut dibatalkan.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+  /api/v1/orders/{id}/pay:
+    post:
+      tags:
+      - Pembayaran
+      summary: Buat/ambil sesi bayar Xendit
+      operationId: post_api_v1_orders_id_pay
+      description: 'Idempoten: selama sesi masih aktif, checkout_url yang sama dikembalikan. Redirect pembeli ke `checkout_url`.
+        503 kalau pembayaran belum dikonfigurasi.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSessionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/orders/{id}/status:
+    put:
+      tags:
+      - Pesanan
+      summary: Ubah status pesanan (staf)
+      operationId: put_api_v1_orders_id_status
+      description: |-
+        Transisi yang diizinkan: PENDING_PAYMENT→PAID/CANCELLED/EXPIRED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. (Akan diganti aksi admin pesanan.)
+
+        **Peran:** owner, admin, warehouse.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/products:
+    get:
+      tags:
+      - Katalog
+      summary: Daftar produk (kartu)
+      operationId: get_api_v1_products
+      security: []
+      parameters:
+      - name: category
+        in: query
+        required: false
+        description: Slug kategori (termasuk sub-kategori)
+        schema:
+          type: string
+      - name: kind
+        in: query
+        required: false
+        description: Jenis produk
+        schema:
+          type: string
+          enum:
+          - perfume
+          - general
+      - name: grade
+        in: query
+        required: false
+        description: Grade parfum
+        schema:
+          type: string
+          enum:
+          - regular
+          - exclusive
+      - name: note
+        in: query
+        required: false
+        description: Label aroma
+        schema:
+          type: string
+          enum:
+          - amber
+          - aromatic
+          - balsamic
+          - citrus
+          - creamy
+          - floral
+          - fresh
+          - fruity
+          - musk
+          - oud
+          - powdery
+          - sweet
+          - woody
+      - name: q
+        in: query
+        required: false
+        description: Cari di nama produk, wangian, inspired by
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCardListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/products/{id}:
+    get:
+      tags:
+      - Katalog
+      summary: Detail produk (id atau slug)
+      operationId: get_api_v1_products_id
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID angka atau slug (mis. `annasui`)
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetailEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/sizes:
+    get:
+      tags:
+      - Katalog
+      summary: Daftar ukuran botol aktif
+      operationId: get_api_v1_sizes
+      security: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SizeListEnvelope'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/users:
+    get:
+      tags:
+      - Users
+      summary: Daftar semua user
+      operationId: get_api_v1_users
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+      - Users
+      summary: Buat user
+      operationId: post_api_v1_users
+      description: |-
+        Admin hanya bisa membuat pembeli; owner bisa membuat staf.
+
+        **Peran:** owner, admin.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '201':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/users/{id}:
+    get:
+      tags:
+      - Users
+      summary: Detail user
+      operationId: get_api_v1_users_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+      - Users
+      summary: Ubah user
+      operationId: put_api_v1_users_id
+      description: |-
+        Akun owner tidak bisa diubah admin; admin tidak bisa menaikkan peran.
+
+        **Peran:** owner, admin.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+      - Users
+      summary: Hapus user
+      operationId: delete_api_v1_users_id
+      description: '**Peran:** owner, admin.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/v1/webhooks/xendit:
+    post:
+      tags:
+      - Pembayaran
+      summary: Webhook Xendit (khusus server Xendit)
+      operationId: post_api_v1_webhooks_xendit
+      description: 'Header `x-callback-token` wajib. Isi webhook tidak dipercaya: status selalu dicek ulang ke Xendit.'
+      security: []
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+        '200':
+          description: Diterima
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAck'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/XenditWebhook'
+      parameters:
+      - name: x-callback-token
+        in: header
+        required: true
+        schema:
+          type: string
+  /healthz:
+    get:
+      tags:
+      - Health
+      summary: 'Liveness: proses hidup'
+      operationId: healthz
+      security: []
+      responses:
+        '200':
+          description: Hidup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /readyz:
+    get:
+      tags:
+      - Health
+      summary: 'Readiness: database & Redis siap, server tidak sedang shutdown'
+      operationId: readyz
+      security: []
+      responses:
+        '200':
+          description: Siap
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Belum siap / sedang shutdown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Input tidak valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token tidak ada / tidak valid / sudah dicabut
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Peran tidak diizinkan, atau origin tidak diizinkan (CORS)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Bentrok dengan data yang ada (mis. email/kode sudah dipakai)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Terlalu banyak percobaan; lihat header Retry-After
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Detik
+    BadGateway:
+      description: Gateway pembayaran bermasalah
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: Layanan (Redis/pembayaran) sedang tidak tersedia
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    DefaultError:
+      description: Error lain (413 body terlalu besar, 405, 500, …)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    AddCartItemRequest:
+      type: object
+      properties:
+        variant_id:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 999
+      required:
+      - variant_id
+      - quantity
+    AdminProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        category_id:
+          type: integer
+          format: int64
+        category:
+          $ref: '#/components/schemas/Category'
+        kind:
+          type: string
+          enum:
+          - perfume
+          - general
+        code:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        grade:
+          type: string
+          enum:
+          - regular
+          - exclusive
+        inspired_by:
+          type: string
+        note_primary:
+          type: string
+        note_secondary:
+          type: string
+        weight_gram:
+          type: integer
+        track_stock:
+          type: boolean
+          description: false = selalu tersedia (parfum diracik)
+        status:
+          type: string
+          enum:
+          - draft
+          - active
+          - archived
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
+        sizes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Size'
+        scents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scent'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminVariant'
+      required:
+      - id
+      - category_id
+      - kind
+      - code
+      - name
+      - slug
+      - description
+      - weight_gram
+      - track_stock
+      - status
+      - sort_order
+      - created_at
+      - updated_at
+      - variants
+      additionalProperties: false
+    AdminProductEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/AdminProduct'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    AdminVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        product:
+          $ref: '#/components/schemas/Product'
+        scent_id:
+          type: integer
+          format: int64
+        scent:
+          $ref: '#/components/schemas/Scent'
+        size_id:
+          type: integer
+          format: int64
+        size:
+          $ref: '#/components/schemas/Size'
+        concentration:
+          type: string
+          enum:
+          - murni
+          - campur
+        label:
+          type: string
+        code:
+          type: string
+        price:
+          type: integer
+          format: int64
+          description: 'Parfum: harga khusus (null = rumus). Produk umum: harga jual'
+          nullable: true
+        compare_at_price:
+          type: integer
+          format: int64
+        weight_gram:
+          type: integer
+        stock:
+          type: integer
+          description: Stok fisik (produk track_stock)
+        reserved:
+          type: integer
+          description: Tertahan order belum bayar
+        is_active:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        name:
+          type: string
+        list_price:
+          type: integer
+          format: int64
+          description: Harga jual (rumus atau harga khusus); null = belum bisa dihitung
+          nullable: true
+        price_per_ml:
+          type: integer
+          format: int64
+          description: Tarif yang dipakai rumus
+        bottle_price:
+          type: integer
+          format: int64
+        sellable:
+          type: boolean
+          description: Tampil & bisa dibeli di website
+        available:
+          type: integer
+          description: stock − reserved
+      required:
+      - id
+      - product_id
+      - code
+      - price
+      - stock
+      - reserved
+      - is_active
+      - sort_order
+      - created_at
+      - updated_at
+      - name
+      - list_price
+      - sellable
+      - available
+      additionalProperties: false
+    CancelOrderRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    Cart:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 0 kalau user belum punya keranjang
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        total_quantity:
+          type: integer
+          description: Hanya item yang available
+        total_price:
+          type: integer
+          format: int64
+          description: Hanya item yang available
+      required:
+      - id
+      - items
+      - total_quantity
+      - total_price
+      additionalProperties: false
+    CartEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/Cart'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        variant_id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        product_name:
+          type: string
+        product_slug:
+          type: string
+        grade:
+          type: string
+        variant_name:
+          type: string
+          example: Dolly Girl, 30 ml, Murni
+        variant_code:
+          type: string
+        image_url:
+          type: string
+        unit_price:
+          type: integer
+          format: int64
+        compare_at_price:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+        subtotal:
+          type: integer
+          format: int64
+        stock:
+          type: integer
+          nullable: true
+          description: null = tidak dihitung (selalu tersedia)
+        available:
+          type: boolean
+          description: false = varian nonaktif / produk tidak dijual / stok kurang
+      required:
+      - id
+      - variant_id
+      - product_id
+      - product_name
+      - product_slug
+      - variant_name
+      - variant_code
+      - unit_price
+      - quantity
+      - subtotal
+      - stock
+      - available
+      additionalProperties: false
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        parent_id:
+          type: integer
+          format: int64
+          description: Induk (sub-kategori)
+        name:
+          type: string
+        slug:
+          type: string
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - slug
+      - sort_order
+      - is_active
+      - created_at
+      - updated_at
+      additionalProperties: false
+    CategoryListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryWithCount'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    CategoryWithCount:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        parent_id:
+          type: integer
+          format: int64
+          description: Induk (sub-kategori)
+        name:
+          type: string
+        slug:
+          type: string
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        product_count:
+          type: integer
+          description: Jumlah produk yang bisa dibeli
+      required:
+      - id
+      - name
+      - slug
+      - sort_order
+      - is_active
+      - created_at
+      - updated_at
+      - product_count
+      additionalProperties: false
+    CheckoutRequest:
+      type: object
+      properties:
+        recipient_name:
+          type: string
+        recipient_phone:
+          type: string
+        province:
+          type: string
+        city:
+          type: string
+        district:
+          type: string
+          description: Kecamatan
+        postal_code:
+          type: string
+        address:
+          type: string
+          description: Jalan, nomor rumah, patokan
+        buyer_note:
+          type: string
+          description: Pesan untuk penjual
+      required:
+      - recipient_name
+      - recipient_phone
+      - province
+      - city
+      - district
+      - postal_code
+      - address
+    CreatedCount:
+      type: object
+      properties:
+        created:
+          type: integer
+      required:
+      - created
+      additionalProperties: false
+    CreatedCountEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/CreatedCount'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    EmptyEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/NullData'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Teks status HTTP
+          example: Bad Request
+        message:
+          type: string
+          description: Pesan untuk ditampilkan
+          example: Invalid input data
+        status:
+          type: integer
+          example: 400
+      required:
+      - error
+      - message
+      - status
+      description: Bentuk semua response error.
+      additionalProperties: false
+    GeneralVariantInput:
+      type: object
+      properties:
+        label:
+          type: string
+          example: Pakai foto
+        price:
+          type: integer
+          format: int64
+        compare_at_price:
+          type: integer
+          format: int64
+        is_active:
+          type: boolean
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - unavailable
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+          description: Status per dependensi (database, redis, server).
+      required:
+      - status
+      additionalProperties: false
+    ImageInput:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Link CDN (https)
+        scent_id:
+          type: integer
+          format: int64
+          description: 'Opsional: foto khusus 1 wangian'
+        sort_order:
+          type: integer
+          description: Kosong = paling belakang; 0 = sampul
+      required:
+      - url
+    ImagePatch:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        scent_id:
+          type: integer
+          format: int64
+          description: 0 = lepas dari wangian
+        sort_order:
+          type: integer
+    InventoryAdjustmentList:
+      type: object
+      properties:
+        adjustments:
+          type: array
+          items:
+            type: object
+            properties:
+              variant_id:
+                type: integer
+                format: int64
+              mode:
+                type: string
+                description: set = jadikan angka ini, add = tambah/kurangi
+                enum:
+                - set
+                - add
+              quantity:
+                type: integer
+              reason:
+                type: string
+                description: 'Kosong: add = restock/adjustment, set = opname'
+                enum:
+                - restock
+                - return
+                - adjustment
+                - opname
+              note:
+                type: string
+            required:
+            - variant_id
+            - mode
+            - quantity
+      required:
+      - adjustments
+    LoginEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/LoginResponse'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: budi@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+      required:
+      - email
+      - password
+      additionalProperties: false
+    LoginResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum:
+          - user
+          - owner
+          - admin
+          - warehouse
+          - cs
+        picture:
+          type: string
+        provider:
+          type: string
+          enum:
+          - local
+          - google
+        sub:
+          type: string
+          nullable: true
+        access_token:
+          type: string
+          description: 'JWT akses (15 menit). Kirim di header Authorization: Bearer <token>'
+        refresh_token:
+          type: string
+          description: JWT refresh (24 jam, sekali pakai) untuk POST /auth/refresh
+      required:
+      - id
+      - name
+      - email
+      - role
+      - picture
+      - provider
+      - sub
+      - access_token
+      - refresh_token
+      additionalProperties: false
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: 'Opsional: refresh token yang ikut dicabut'
+      additionalProperties: false
+    NullData:
+      nullable: true
+      description: Selalu null untuk endpoint ini.
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        order_no:
+          type: string
+          example: SP261111A1B2C3D4
+        user_id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - PENDING_PAYMENT
+          - PAID
+          - PROCESSING
+          - SHIPPED
+          - COMPLETED
+          - CANCELLED
+          - EXPIRED
+          - REFUNDED
+        subtotal:
+          type: integer
+          format: int64
+        shipping_fee:
+          type: integer
+          format: int64
+          description: Ongkir ditanggung toko → 0
+        total:
+          type: integer
+          format: int64
+        total_quantity:
+          type: integer
+        recipient_name:
+          type: string
+        recipient_phone:
+          type: string
+        shipping_province:
+          type: string
+        shipping_city:
+          type: string
+        shipping_district:
+          type: string
+        shipping_postal:
+          type: string
+        shipping_address:
+          type: string
+        buyer_note:
+          type: string
+        paid_at:
+          type: string
+          format: date-time
+        shipped_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        cancelled_at:
+          type: string
+          format: date-time
+        cancel_reason:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          description: Batas bayar
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+      required:
+      - id
+      - order_no
+      - user_id
+      - status
+      - subtotal
+      - shipping_fee
+      - total
+      - total_quantity
+      - recipient_name
+      - recipient_phone
+      - shipping_province
+      - shipping_city
+      - shipping_district
+      - shipping_postal
+      - shipping_address
+      - created_at
+      - updated_at
+      additionalProperties: false
+    OrderEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/Order'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        order_id:
+          type: integer
+          format: int64
+        variant_id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        product_name:
+          type: string
+        grade:
+          type: string
+        scent_name:
+          type: string
+        size_label:
+          type: string
+        volume_ml:
+          type: integer
+        concentration:
+          type: string
+        variant_label:
+          type: string
+        variant_name:
+          type: string
+        variant_code:
+          type: string
+        image_url:
+          type: string
+        unit_price:
+          type: integer
+          format: int64
+          description: Harga per unit saat checkout
+        price_per_ml:
+          type: integer
+          format: int64
+        bottle_price:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+        subtotal:
+          type: integer
+          format: int64
+        weight_gram:
+          type: integer
+        track_stock:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - order_id
+      - product_name
+      - variant_code
+      - unit_price
+      - quantity
+      - subtotal
+      - weight_gram
+      - track_stock
+      - created_at
+      additionalProperties: false
+    OrderListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        order_id:
+          type: integer
+          format: int64
+        provider:
+          type: string
+          enum:
+          - xendit
+        reference_id:
+          type: string
+          format: uuid
+        provider_session_id:
+          type: string
+        provider_payment_request_id:
+          type: string
+        provider_payment_id:
+          type: string
+        checkout_url:
+          type: string
+        payment_method:
+          type: string
+        payment_channel:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          enum:
+          - IDR
+        status:
+          type: string
+          enum:
+          - PENDING
+          - PAID
+          - EXPIRED
+          - CANCELLED
+          - FAILED
+          - REFUNDED
+        failure_reason:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - order_id
+      - provider
+      - reference_id
+      - amount
+      - currency
+      - status
+      - created_at
+      - updated_at
+      additionalProperties: false
+    PaymentSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        order_id:
+          type: integer
+          format: int64
+        provider:
+          type: string
+          enum:
+          - xendit
+        reference_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING
+          - PAID
+          - EXPIRED
+          - CANCELLED
+          - FAILED
+        checkout_url:
+          type: string
+          description: Redirect pembeli ke halaman bayar Xendit
+          nullable: true
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          enum:
+          - IDR
+        expires_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - order_id
+      - provider
+      - reference_id
+      - status
+      - checkout_url
+      - amount
+      - currency
+      - created_at
+      additionalProperties: false
+    PaymentSessionEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/PaymentSession'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        category_id:
+          type: integer
+          format: int64
+        category:
+          $ref: '#/components/schemas/Category'
+        kind:
+          type: string
+          enum:
+          - perfume
+          - general
+        code:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        grade:
+          type: string
+          enum:
+          - regular
+          - exclusive
+        inspired_by:
+          type: string
+        note_primary:
+          type: string
+        note_secondary:
+          type: string
+        weight_gram:
+          type: integer
+        track_stock:
+          type: boolean
+          description: false = selalu tersedia (parfum diracik)
+        status:
+          type: string
+          enum:
+          - draft
+          - active
+          - archived
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
+        sizes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Size'
+        scents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scent'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+      required:
+      - id
+      - category_id
+      - kind
+      - code
+      - name
+      - slug
+      - description
+      - weight_gram
+      - track_stock
+      - status
+      - sort_order
+      - created_at
+      - updated_at
+      additionalProperties: false
+    ProductCard:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum:
+          - perfume
+          - general
+        name:
+          type: string
+          example: Annasui
+        slug:
+          type: string
+          example: annasui
+        grade:
+          type: string
+          enum:
+          - regular
+          - exclusive
+        inspired_by:
+          type: string
+        note_primary:
+          type: string
+        note_secondary:
+          type: string
+        category:
+          $ref: '#/components/schemas/Category'
+        image_url:
+          type: string
+          description: Foto sampul
+        scents:
+          type: array
+          items:
+            type: string
+          description: Nama wangian di produk ini
+        price_min:
+          type: integer
+          format: int64
+          example: 50000
+        price_max:
+          type: integer
+          format: int64
+          example: 205000
+        in_stock:
+          type: boolean
+          description: Ada varian yang bisa dibeli sekarang
+      required:
+      - id
+      - kind
+      - name
+      - slug
+      - price_min
+      - price_max
+      - in_stock
+      additionalProperties: false
+    ProductCardListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductCard'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    ProductDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum:
+          - perfume
+          - general
+        name:
+          type: string
+          example: Annasui
+        slug:
+          type: string
+          example: annasui
+        grade:
+          type: string
+          enum:
+          - regular
+          - exclusive
+        inspired_by:
+          type: string
+        note_primary:
+          type: string
+        note_secondary:
+          type: string
+        category:
+          $ref: '#/components/schemas/Category'
+        image_url:
+          type: string
+          description: Foto sampul
+        scents:
+          type: array
+          items:
+            type: string
+          description: Nama wangian di produk ini
+        price_min:
+          type: integer
+          format: int64
+          example: 50000
+        price_max:
+          type: integer
+          format: int64
+          example: 205000
+        in_stock:
+          type: boolean
+          description: Ada varian yang bisa dibeli sekarang
+        description:
+          type: string
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
+        scent_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scent'
+        size_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/Size'
+        concentrations:
+          type: array
+          items:
+            type: string
+            enum:
+            - murni
+            - campur
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariantView'
+      required:
+      - id
+      - kind
+      - name
+      - slug
+      - price_min
+      - price_max
+      - in_stock
+      - description
+      - images
+      - scent_options
+      - size_options
+      - concentrations
+      - variants
+      additionalProperties: false
+    ProductDetailEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/ProductDetail'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    ProductImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        scent_id:
+          type: integer
+          format: int64
+          description: Foto khusus 1 wangian
+        url:
+          type: string
+          description: Link CDN
+        sort_order:
+          type: integer
+          description: 0 = foto sampul
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - product_id
+      - url
+      - sort_order
+      - created_at
+      additionalProperties: false
+    ProductInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+          - perfume
+          - general
+        category_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        code:
+          type: string
+          description: Kosong = dari nama
+        description:
+          type: string
+        grade:
+          type: string
+          description: Wajib untuk parfum
+          enum:
+          - regular
+          - exclusive
+        inspired_by:
+          type: string
+        note_primary:
+          type: string
+          enum:
+          - amber
+          - aromatic
+          - balsamic
+          - citrus
+          - creamy
+          - floral
+          - fresh
+          - fruity
+          - musk
+          - oud
+          - powdery
+          - sweet
+          - woody
+        note_secondary:
+          type: string
+          enum:
+          - amber
+          - aromatic
+          - balsamic
+          - citrus
+          - creamy
+          - floral
+          - fresh
+          - fruity
+          - musk
+          - oud
+          - powdery
+          - sweet
+          - woody
+        weight_gram:
+          type: integer
+          minimum: 0
+        track_stock:
+          type: boolean
+          description: 'Kosong: parfum = false, produk umum = true'
+        status:
+          type: string
+          enum:
+          - draft
+          - active
+          - archived
+      required:
+      - kind
+      - category_id
+      - name
+    ProductListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    ProductPatch:
+      type: object
+      properties:
+        category_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        description:
+          type: string
+        grade:
+          type: string
+          enum:
+          - regular
+          - exclusive
+        inspired_by:
+          type: string
+        note_primary:
+          type: string
+          enum:
+          - amber
+          - aromatic
+          - balsamic
+          - citrus
+          - creamy
+          - floral
+          - fresh
+          - fruity
+          - musk
+          - oud
+          - powdery
+          - sweet
+          - woody
+        note_secondary:
+          type: string
+          enum:
+          - amber
+          - aromatic
+          - balsamic
+          - citrus
+          - creamy
+          - floral
+          - fresh
+          - fruity
+          - musk
+          - oud
+          - powdery
+          - sweet
+          - woody
+        weight_gram:
+          type: integer
+          minimum: 0
+        track_stock:
+          type: boolean
+        status:
+          type: string
+          enum:
+          - draft
+          - active
+          - archived
+        sort_order:
+          type: integer
+    ProductSizesInput:
+      type: object
+      properties:
+        size_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Kosong = kembali ke ukuran default
+    RatesInput:
+      type: object
+      properties:
+        price_per_ml_murni:
+          type: integer
+          format: int64
+        price_per_ml_campur:
+          type: integer
+          format: int64
+    RegisterEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/RegisterResponse'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Maks 255 karakter
+          example: Budi
+        email:
+          type: string
+          format: email
+          example: budi@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+      required:
+      - name
+      - email
+      - password
+      additionalProperties: false
+    RegisterResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          example: user
+        sub:
+          type: string
+          description: ID Google (null untuk akun email)
+          nullable: true
+        provider:
+          type: string
+          enum:
+          - local
+          - google
+      required:
+      - name
+      - email
+      - role
+      - sub
+      - provider
+      additionalProperties: false
+    Scent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        code:
+          type: string
+          example: annasui-dolly-girl
+        name:
+          type: string
+          example: Dolly Girl
+        price_per_ml_murni:
+          type: integer
+          format: int64
+          description: Tarif bibit (Rp/ml); null = belum ada tarif
+          nullable: true
+          example: 3000
+        price_per_ml_campur:
+          type: integer
+          format: int64
+          description: Tarif parfum (Rp/ml)
+          nullable: true
+          example: 1500
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - product_id
+      - code
+      - name
+      - price_per_ml_murni
+      - price_per_ml_campur
+      - sort_order
+      - is_active
+      - created_at
+      - updated_at
+      additionalProperties: false
+    ScentEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/Scent'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    ScentInput:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+          description: Kosong = <kode produk>-<nama>
+        price_per_ml_murni:
+          type: integer
+          format: int64
+        price_per_ml_campur:
+          type: integer
+          format: int64
+      required:
+      - name
+    ScentPatch:
+      type: object
+      properties:
+        name:
+          type: string
+        is_active:
+          type: boolean
+        sort_order:
+          type: integer
+        price_per_ml_murni:
+          type: integer
+          format: int64
+          description: 0 = hapus tarif
+        price_per_ml_campur:
+          type: integer
+          format: int64
+          description: 0 = hapus tarif
+    Size:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        label:
+          type: string
+          example: 30 ml
+        volume_ml:
+          type: integer
+          example: 30
+        bottle_price:
+          type: integer
+          format: int64
+          description: Harga botol (Rp)
+          example: 5000
+        weight_gram:
+          type: integer
+        is_default:
+          type: boolean
+          description: Dijual untuk semua parfum (20/30/50 ml)
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - label
+      - volume_ml
+      - bottle_price
+      - weight_gram
+      - is_default
+      - sort_order
+      - is_active
+      - created_at
+      - updated_at
+      additionalProperties: false
+    SizeEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/Size'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    SizeInput:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Kosong = "<volume> ml"
+        volume_ml:
+          type: integer
+          minimum: 1
+        bottle_price:
+          type: integer
+          format: int64
+        weight_gram:
+          type: integer
+        is_default:
+          type: boolean
+        is_active:
+          type: boolean
+      required:
+      - volume_ml
+    SizeListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Size'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    SizePatch:
+      type: object
+      properties:
+        label:
+          type: string
+        bottle_price:
+          type: integer
+          format: int64
+        weight_gram:
+          type: integer
+        is_default:
+          type: boolean
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+    StockLevel:
+      type: object
+      properties:
+        variant_id:
+          type: integer
+          format: int64
+        stock:
+          type: integer
+        reserved:
+          type: integer
+        available:
+          type: integer
+      required:
+      - variant_id
+      - stock
+      - reserved
+      - available
+      additionalProperties: false
+    StockLevelListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockLevel'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    StockMovement:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        variant_id:
+          type: integer
+          format: int64
+        delta:
+          type: integer
+          description: + masuk, − keluar
+        stock_after:
+          type: integer
+        reason:
+          type: string
+          enum:
+          - initial
+          - restock
+          - sale
+          - return
+          - adjustment
+          - opname
+        order_id:
+          type: integer
+          format: int64
+        user_id:
+          type: integer
+          format: int64
+          description: Staf yang mengubah
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - variant_id
+      - delta
+      - stock_after
+      - reason
+      - created_at
+      additionalProperties: false
+    StockMovementListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+          description: Refresh token BARU — yang lama langsung tidak berlaku
+      required:
+      - access_token
+      - refresh_token
+      additionalProperties: false
+    TokenPairEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/TokenPair'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    UpdateCartItemRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 999
+      required:
+      - quantity
+    UpdateOrderStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - PAID
+          - PROCESSING
+          - SHIPPED
+          - COMPLETED
+          - CANCELLED
+          - EXPIRED
+          - REFUNDED
+        reason:
+          type: string
+          description: Disimpan untuk CANCELLED/EXPIRED
+      required:
+      - status
+    UpdatedCount:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
+      additionalProperties: false
+    UpdatedCountEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/UpdatedCount'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum:
+          - user
+          - owner
+          - admin
+          - warehouse
+          - cs
+        picture:
+          type: string
+        provider:
+          type: string
+          enum:
+          - local
+          - google
+        sub:
+          type: string
+          nullable: true
+      required:
+      - id
+      - name
+      - email
+      - role
+      - picture
+      - provider
+      - sub
+      additionalProperties: false
+    UserEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          $ref: '#/components/schemas/User'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    UserListEnvelope:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OK
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+      required:
+      - message
+      - data
+      additionalProperties: false
+    UserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          format: password
+        role:
+          type: string
+          description: Kosong = user. Hanya owner yang bisa membuat staf.
+          enum:
+          - user
+          - owner
+          - admin
+          - warehouse
+          - cs
+        picture:
+          type: string
+      required:
+      - name
+      - email
+      - password
+      additionalProperties: false
+    Variant:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        product:
+          $ref: '#/components/schemas/Product'
+        scent_id:
+          type: integer
+          format: int64
+        scent:
+          $ref: '#/components/schemas/Scent'
+        size_id:
+          type: integer
+          format: int64
+        size:
+          $ref: '#/components/schemas/Size'
+        concentration:
+          type: string
+          enum:
+          - murni
+          - campur
+        label:
+          type: string
+        code:
+          type: string
+        price:
+          type: integer
+          format: int64
+          description: 'Parfum: harga khusus (null = rumus). Produk umum: harga jual'
+          nullable: true
+        compare_at_price:
+          type: integer
+          format: int64
+        weight_gram:
+          type: integer
+        stock:
+          type: integer
+          description: Stok fisik (produk track_stock)
+        reserved:
+          type: integer
+          description: Tertahan order belum bayar
+        is_active:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - product_id
+      - code
+      - price
+      - stock
+      - reserved
+      - is_active
+      - sort_order
+      - created_at
+      - updated_at
+      additionalProperties: false
+    VariantPatchList:
+      type: object
+      properties:
+        variants:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                format: int64
+              price:
+                type: integer
+                format: int64
+                description: 0 = hapus harga khusus
+              compare_at_price:
+                type: integer
+                format: int64
+                description: 0 = hapus
+              is_active:
+                type: boolean
+              weight_gram:
+                type: integer
+            required:
+            - id
+      required:
+      - variants
+    VariantView:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        scent_id:
+          type: integer
+          format: int64
+        size_id:
+          type: integer
+          format: int64
+        concentration:
+          type: string
+          enum:
+          - murni
+          - campur
+        label:
+          type: string
+          description: Produk umum
+        name:
+          type: string
+          example: Dolly Girl, 30 ml, Murni
+        code:
+          type: string
+        price:
+          type: integer
+          format: int64
+          description: Harga jual (Rp)
+          example: 95000
+        compare_at_price:
+          type: integer
+          format: int64
+          description: Harga coret
+        in_stock:
+          type: boolean
+        available:
+          type: integer
+          nullable: true
+          description: Stok tersedia; null = tidak dihitung (selalu tersedia)
+      required:
+      - id
+      - name
+      - code
+      - price
+      - in_stock
+      - available
+      additionalProperties: false
+    WebhookAck:
+      type: object
+      properties:
+        received:
+          type: boolean
+      required:
+      - received
+      additionalProperties: false
+    XenditWebhook:
+      type: object
+      properties:
+        event:
+          type: string
+          enum:
+          - payment_session.completed
+          - payment_session.expired
+        business_id:
+          type: string
+        created:
+          type: string
+        data:
+          type: object
+          properties:
+            payment_session_id:
+              type: string
+            status:
+              type: string
+          required:
+          - payment_session_id
+      required:
+      - event
+      - data

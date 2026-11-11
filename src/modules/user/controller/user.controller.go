@@ -4,7 +4,9 @@ import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/user/models"
 	"backend/src/modules/user/services"
+	"backend/src/utils/response"
 	"errors"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,21 +37,17 @@ func CreateUser(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{
-		"message": "User Created",
-		"user":    userResponse,
-	})
+	response.Created(c, "User Created", userResponse)
 }
 
 func GetAllUsers(c *gin.Context) {
 	users, err := services.GetAllUsers()
 	if err != nil {
-		httperror.InternalServerError(c, err.Error())
+		log.Printf("users: %v", err)
+		httperror.InternalServerError(c, "Internal server error")
 		return
 	}
-	c.JSON(200, gin.H{
-		"users": users,
-	})
+	response.OK(c, "Users Retrieved", users)
 }
 
 func GetUserById(c *gin.Context) {
@@ -59,9 +57,7 @@ func GetUserById(c *gin.Context) {
 		httperror.NotFoundError(c, "User not found")
 		return
 	}
-	c.JSON(200, gin.H{
-		"user": user,
-	})
+	response.OK(c, "User Retrieved", user)
 }
 
 func UpdateUser(c *gin.Context) {
@@ -78,10 +74,7 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"message": "User Updated",
-		"user":    userResponse,
-	})
+	response.OK(c, "User Updated", userResponse)
 }
 
 func DeleteUser(c *gin.Context) {
@@ -90,7 +83,5 @@ func DeleteUser(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "User Deleted",
-	})
+	response.OK(c, "User Deleted", nil)
 }

@@ -4,6 +4,7 @@ import (
 	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/cart/models"
 	"backend/src/modules/cart/services"
+	"backend/src/utils/response"
 	"errors"
 	"strconv"
 
@@ -22,7 +23,7 @@ func GetCartHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Cart retrieved successfully", "data": cart})
+	response.OK(c, "Cart retrieved successfully", cart)
 }
 
 func AddItemToCartHandler(c *gin.Context) {
@@ -40,7 +41,7 @@ func AddItemToCartHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Item added to cart successfully", "data": cart})
+	response.OK(c, "Item added to cart successfully", cart)
 }
 
 func UpdateCartItemHandler(c *gin.Context) {
@@ -62,7 +63,7 @@ func UpdateCartItemHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Cart item updated successfully", "data": cart})
+	response.OK(c, "Cart item updated successfully", cart)
 }
 
 func RemoveCartItemHandler(c *gin.Context) {
@@ -79,7 +80,7 @@ func RemoveCartItemHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Cart item removed successfully", "data": cart})
+	response.OK(c, "Cart item removed successfully", cart)
 }
 
 func ClearCartHandler(c *gin.Context) {
@@ -91,7 +92,7 @@ func ClearCartHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "Cart cleared successfully"})
+	response.OK(c, "Cart cleared successfully", nil)
 }
 
 func currentUser(c *gin.Context) (uint, bool) {

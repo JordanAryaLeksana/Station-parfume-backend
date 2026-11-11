@@ -4,25 +4,30 @@ import (
 	"backend/migrations"
 	"backend/src/config"
 	paymentservices "backend/src/modules/payment/services"
+	"backend/src/routes"
+	authhandler "backend/src/utils/AuthHandler"
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"runtime/debug"
+	"syscall"
 	"time"
 
-	"os"
-
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-
-	"backend/src/routes"
-	"backend/src/utils/AuthHandler"
 )
 
 func main() {
 	// .env (khusus dev) dimuat PALING AWAL, sebelum config apa pun membaca env.
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found (memakai environment variable sistem)")
+	}
+	// GIN_MODE dari .env baru berlaku setelah .env dimuat.
+	if err := config.ApplyGinMode(); err != nil {
+		log.Fatal(err)
 	}
 	// Fail-fast: tanpa secret JWT yang kuat, siapa pun bisa memalsukan token.
 	if err := config.LoadAuthConfig(); err != nil {
@@ -46,21 +51,85 @@ func main() {
 	if err := paymentservices.ConfigureFromEnv(); err != nil {
 		log.Printf("PERINGATAN pembayaran: %v", err)
 	}
-	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
-	go reconcileLoop(5 * time.Minute)
-	router := gin.Default()
-	// Hanya proxy di TRUSTED_PROXIES yang boleh menentukan IP klien
-	// (X-Forwarded-For); default tidak ada → IP dari koneksi langsung.
-	if err := router.SetTrustedProxies(config.TrustedProxies()); err != nil {
-		log.Fatalf("TRUSTED_PROXIES tidak valid: %v", err)
+	origins, err := config.CORSOrigins()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(origins) == 0 {
+		log.Println("PERINGATAN CORS: CORS_ALLOWED_ORIGINS/FRONTEND_URL kosong — frontend di domain lain akan ditolak")
+	}
+	docs, err := config.DocsEnabled()
+	if err != nil {
+		log.Fatal(err)
 	}
 	authhandler.InitGoogleOauthConfig()
-	routes.InitRoutes(router)
+	// Hanya proxy di TRUSTED_PROXIES yang boleh menentukan IP klien
+	// (X-Forwarded-For); default tidak ada → IP dari koneksi langsung.
+	engine, err := routes.NewEngine(routes.Options{CORSOrigins: origins, TrustedProxies: config.TrustedProxies(), Docs: docs})
+	if err != nil {
+		log.Fatalf("router: %v", err)
+	}
+
+	// SIGINT/SIGTERM → graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
+	jobsDone := make(chan struct{})
+	go func() {
+		defer close(jobsDone)
+		runJobs(ctx, 5*time.Minute)
+	}()
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	router.Run(":" + port)
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           routes.Handler(engine),
+		ReadHeaderTimeout: 5 * time.Second,  // klien lambat (slowloris) tidak bisa menahan koneksi
+		ReadTimeout:       15 * time.Second, // body maks 1 MiB
+		WriteTimeout:      30 * time.Second, // panggilan Xendit dibatasi 10 dtk
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	serveErr := make(chan error, 1)
+	go func() {
+		log.Printf("server mendengarkan di :%s (docs: %v)", port, docs)
+		serveErr <- srv.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serveErr:
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server: %v", err)
+		}
+	case <-ctx.Done():
+	}
+
+	log.Println("shutdown: berhenti menerima request baru, menunggu request yang berjalan…")
+	routes.SetShuttingDown()
+	stop()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
+	select {
+	case <-jobsDone:
+	case <-time.After(5 * time.Second):
+		log.Println("shutdown: job latar belakang belum selesai, ditinggal")
+	}
+	if err := config.RedisClient.Close(); err != nil {
+		log.Printf("shutdown redis: %v", err)
+	}
+	if sqlDB, err := config.DB.DB(); err == nil {
+		if err := sqlDB.Close(); err != nil {
+			log.Printf("shutdown database: %v", err)
+		}
+	}
+	log.Println("shutdown selesai")
 }
 
 // checkSchema: server tidak jalan di atas schema yang belum dimigrasi (query
@@ -85,18 +154,49 @@ func checkSchema() error {
 	return err
 }
 
-// reconcileLoop berkala: cek pembayaran yang webhook-nya terlewat, lalu order yang
-// lewat batas bayar dibatalkan sesi Xendit-nya dan ditandai EXPIRED (reservasi
-// stok dilepas).
-func reconcileLoop(every time.Duration) {
+// jobsLockKey: advisory lock PostgreSQL untuk job latar belakang, supaya
+// kalau server dijalankan lebih dari 1 replika hanya satu yang menjalankannya.
+const jobsLockKey int64 = 0x53504a4f4253 // "SPJOBS"
+
+// runJobs: langsung jalan sekali, lalu setiap `every` sampai ctx dibatalkan (shutdown).
+func runJobs(ctx context.Context, every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		if n, err := paymentservices.ReconcileAndExpire(ctx, time.Now()); err != nil {
-			log.Printf("rekonsiliasi pembayaran: %v", err)
-		} else if n > 0 {
-			log.Printf("rekonsiliasi pembayaran: %d order kedaluwarsa", n)
+		runJobsOnce(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 		}
-		cancel()
-		time.Sleep(every)
+	}
+}
+
+// runJobsOnce: cek pembayaran yang webhook-nya terlewat, lalu order yang lewat
+// batas bayar dibatalkan sesi Xendit-nya dan ditandai EXPIRED (reservasi stok
+// dilepas). Panic ditangkap supaya tidak mematikan server.
+func runJobsOnce(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("job latar belakang panic: %v\n%s", r, debug.Stack())
+		}
+	}()
+	release, ok, err := config.TryAdvisoryLock(ctx, jobsLockKey)
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Printf("job latar belakang: lock: %v", err)
+		}
+		return
+	}
+	if !ok {
+		return // replika lain sedang menjalankan
+	}
+	defer release()
+	runCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if n, err := paymentservices.ReconcileAndExpire(runCtx, time.Now()); err != nil {
+		log.Printf("rekonsiliasi pembayaran: %v", err)
+	} else if n > 0 {
+		log.Printf("rekonsiliasi pembayaran: %d order kedaluwarsa", n)
 	}
 }

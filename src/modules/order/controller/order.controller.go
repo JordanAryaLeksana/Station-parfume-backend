@@ -5,6 +5,7 @@ import (
 	"backend/src/modules/order/models"
 	"backend/src/modules/order/services"
 	paymentservices "backend/src/modules/payment/services"
+	"backend/src/utils/response"
 	"errors"
 	"strconv"
 
@@ -28,7 +29,7 @@ func CheckoutHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"message": "Order created successfully", "data": order})
+	response.Created(c, "Order created successfully", order)
 }
 
 func GetMyOrdersHandler(c *gin.Context) {
@@ -41,7 +42,7 @@ func GetMyOrdersHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "success", "data": orders})
+	response.OK(c, "Orders retrieved successfully", orders)
 }
 
 func GetOrderByIDHandler(c *gin.Context) {
@@ -58,7 +59,7 @@ func GetOrderByIDHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"data": order})
+	response.OK(c, "Order retrieved successfully", order)
 }
 
 func CancelOrderHandler(c *gin.Context) {
@@ -78,7 +79,7 @@ func CancelOrderHandler(c *gin.Context) {
 	}
 	// Link bayar Xendit yang masih aktif ikut dimatikan (best effort).
 	paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
-	c.JSON(200, gin.H{"message": "order canceled successfully"})
+	response.OK(c, "Order canceled successfully", nil)
 }
 
 func UpdateOrderStatusHandler(c *gin.Context) {
@@ -95,7 +96,7 @@ func UpdateOrderStatusHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"message": "order status updated successfully"})
+	response.OK(c, "Order status updated successfully", nil)
 }
 
 func currentUser(c *gin.Context) (uint, bool) {

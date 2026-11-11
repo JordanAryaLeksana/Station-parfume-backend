@@ -2,6 +2,7 @@ package services
 
 import (
 	"backend/src/config"
+	httperror "backend/src/middlewares/Error"
 	"backend/src/modules/auth/models"
 	"backend/src/repository"
 	authhandler "backend/src/utils/AuthHandler"
@@ -198,12 +199,12 @@ func cookieSecure() bool {
 // lalu redirect ke halaman persetujuan Google.
 func HandleGoogleLogin(c *gin.Context) {
 	if !authhandler.GoogleConfigured() {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Login Google belum dikonfigurasi"})
+		httperror.ServiceUnavailableError(c, "Login Google belum dikonfigurasi")
 		return
 	}
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		httperror.InternalServerError(c, "Internal server error")
 		return
 	}
 	state := base64.RawURLEncoding.EncodeToString(b)
@@ -218,7 +219,7 @@ func HandleGoogleLogin(c *gin.Context) {
 // tidak masuk log, dan tidak ikut di header Referer.
 func HandleGoogleCallback(c *gin.Context) {
 	if !authhandler.GoogleConfigured() {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Login Google belum dikonfigurasi"})
+		httperror.ServiceUnavailableError(c, "Login Google belum dikonfigurasi")
 		return
 	}
 	cookie, _ := c.Cookie(stateCookie)
@@ -226,7 +227,7 @@ func HandleGoogleCallback(c *gin.Context) {
 	c.SetCookie(stateCookie, "", -1, "/", "", cookieSecure(), true) // sekali pakai
 	state := c.Query("state")
 	if cookie == "" || state == "" || subtle.ConstantTimeCompare([]byte(cookie), []byte(state)) != 1 {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "State OAuth tidak valid, ulangi login"})
+		httperror.BadRequestError(c, "State OAuth tidak valid, ulangi login")
 		return
 	}
 	if c.Query("error") != "" || c.Query("code") == "" {
