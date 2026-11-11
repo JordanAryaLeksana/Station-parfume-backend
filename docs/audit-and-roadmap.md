@@ -6,15 +6,15 @@
 
 ---
 
-## Status Terkini (2026-11-10)
+## Status Terkini (2026-11-11)
 
 | Milestone | Status | Bukti |
 |---|---|---|
 | Audit (§1–§10) | ✅ Selesai | dokumen ini |
 | **M1** Build Stabilization | ✅ Selesai | `8bf0e59`, `eb8368c` |
-| **M2** Startup & Migration Safety | 🟡 Sebagian | AutoMigrate/DropColumn dihapus (`faa6654`); `.env` dimuat di awal `main`. **Belum:** DSN dari env (masih hardcode + password), logger GORM Warn, migrasi goose, rotasi password DB |
-| **M3** Security Hotfix | ✅ Hampir selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (M8 commit). Sisa kecil: register belum wajib password ≥ 8 |
-| M4, M5, M10, M11 | ⏳ Belum dimulai | |
+| **M2** Startup & Migration Safety | 🟡 Sebagian | AutoMigrate/DropColumn dihapus (`faa6654`); `.env` dimuat di awal `main`; secret JWT & Redis divalidasi saat start (fail-fast). **Belum:** DSN dari env (masih hardcode + password), logger GORM Warn, migrasi goose, rotasi password DB |
+| **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
+| M4, M5, M10, M11 | ⏳ Belum dimulai | Rate limit & trusted proxy (bagian dari M5) sudah dikerjakan di M3 |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
 | **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
 | **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
@@ -400,6 +400,8 @@ sequenceDiagram
 | C21 | Katalog produk (GET) mewajibkan login. Sementara itu POST parfum/brand/bottle tidak dibatasi admin. | `parfume.routes.go:12-33` | Medium |
 | — | **Positif:** bcrypt dipakai untuk password (register/admin), query `Where("x = ?", v)` sudah terparameterisasi, refresh token di-rotate dengan blacklist jti, dan cek `SigningMethodHMAC` (mencegah `alg` confusion). | | |
 
+> **Status 2026-11-11:** C12–C16 (kecuali CORS/batas body/security header), C18 dan H2/H16 sudah diperbaiki, dan modul `/admins` (C2, C19 sisi admin) dihapus. Lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11).
+
 ---
 
 ## 8. Go 1.27 Modernization Assessment
@@ -683,3 +685,53 @@ graph LR
 ---
 
 AUDIT COMPLETE — M1 DONE — AWAITING PILOT APPROVAL FOR M2
+
+---
+
+## Hasil Eksekusi M3 — hardening auth (2026-11-11)
+
+Branch `chore/m2-startup-safety`, di atas `e79373f`.
+
+### Temuan & perbaikan
+
+| Temuan | Bukti sebelum perbaikan | Perbaikan |
+|---|---|---|
+| **C18** `JWT_SECRET` kosong → token bisa dipalsukan (termasuk peran `owner`) | Terbukti: jwt v5 menerima key kosong untuk sign & verify | `config.LoadAuthConfig()` di awal `main`: kedua secret wajib ada, ≥ 32 karakter, dan berbeda. Kalau tidak, server tidak start. `Generate*Token` juga menolak secret kosong |
+| **H2** Logout selalu gagal (access token di-parse dengan secret refresh) → tidak ada token yang dicabut | Terbukti: `signature is invalid` → 500 | `jti` access token (dari context middleware) di-blacklist sampai `exp`; `refresh_token` di body (opsional, harus milik user yang sama) ikut dicabut. Jawab **204 tanpa body** (H16) |
+| Refresh tidak atomik: dua request bersamaan dengan refresh token yang sama bisa sama-sama berhasil | — | `ConsumeJti` = Redis `SET NX`: refresh token hanya bisa dipakai **sekali** |
+| Redis error di middleware refresh diloloskan (fail-open) | — | Kedua middleware **fail-closed** → 503 |
+| JWT: tanpa `iss`, metode tidak dikunci, parsing dobel | — | `jwt.ParseAccessToken/ParseRefreshToken`: hanya HS256, `iss=station-parfume`, `exp` wajib, leeway 30 dtk, `token_type` + `jti` + `user_id` wajib |
+| **C14** Pesan login membocorkan apakah email terdaftar; error mentah dikirim sebagai 500 | — | Satu pesan 401 "Email atau password salah" untuk email tidak ada, password salah, akun Google, dan bukan staf di `/auth/login/admin`. Waktu respons disamakan (bcrypt dummy). Error internal hanya ke log |
+| **C15** Register tanpa password | — | `password` wajib 8–72 karakter (batas bcrypt), nama & email maks 255. Email dobel → 409 (juga saat race, dari unique index) |
+| **C16** Tidak ada rate limit | — | `middlewares/RateLimit`: Redis `INCR`+`EXPIRE NX` per IP. login & login/admin 10/menit, register 5/menit, refresh 30/menit → 429 + `Retry-After`. Redis error → diloloskan & dicatat (supaya login tidak mati total) |
+| IP klien bisa dipalsukan lewat `X-Forwarded-For` (rate limit bisa dilewati) | — | `router.SetTrustedProxies` dari env `TRUSTED_PROXIES` (default kosong = IP koneksi langsung) |
+| Peran staf dibaca dari token → staf yang dihapus/diturunkan tetap punya akses sampai token habis (≤ 15 menit) | — | `RoleBasedAccess` membaca peran terbaru dari DB per request staf: dihapus → 401, diturunkan → 403 seketika |
+| **C12/C13** Google OAuth: `state` statis tanpa cek (CSRF), token di query string, redirect `localhost` hardcode, `verified_email` tidak dicek, `sub` selalu kosong | — | `state` acak 32 byte di cookie `oauth_state` (HttpOnly, SameSite=Lax, Secure kalau HTTPS, 10 menit) dicek constant-time; userinfo OIDC (`sub`, `email_verified` wajib true); user dicari lewat `sub` lalu email (email milik akun password **tidak** diambil alih); redirect ke `FRONTEND_URL` dengan token di **fragment** |
+| **C2** Modul `/admins` usang tanpa validasi | — | Dihapus. Kelola staf lewat `/users` (aturan owner, `e79373f`); owner pertama lewat `go run ./seed -admin` |
+
+### Kontrak frontend yang berubah
+
+| Endpoint | Sebelum | Sekarang |
+|---|---|---|
+| `POST /auth/logout` | Selalu gagal | Header `Authorization: Bearer <access>`, body opsional `{"refresh_token": "..."}` → **204 tanpa body** |
+| `POST /auth/refresh` | Refresh token bisa dipakai ulang | Header `Authorization: Bearer <refresh>` → `{"tokens": {"access_token", "refresh_token"}}`. Refresh token lama langsung mati: simpan yang baru, dan jangan kirim refresh paralel (hanya satu yang berhasil) |
+| `GET /auth/google/callback` | `http://localhost:3000/oauth-success?access_token=…` | `FRONTEND_URL/oauth-success#access_token=…&refresh_token=…` — baca dari `location.hash`, lalu hapus hash dari URL. Gagal: `#error=<kode>`, kode: `access_denied`, `google_failed`, `email_unverified`, `email_registered`, `server_error` |
+| `/auth/login`, `/auth/login/admin` | Pesan & status beragam | Semua kegagalan: 401 "Email atau password salah" |
+| `/auth/register` | Password opsional | Password 8–72 karakter; email dobel → 409 |
+| login/register/refresh | Tanpa batas | 429 + header `Retry-After` (detik) |
+| Endpoint ber-auth | — | 503 kalau Redis tidak bisa dicek |
+| `/admins/*` | CRUD terbuka | 404 (dihapus) |
+
+### Env baru / berubah (`.env.example`)
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`: wajib, ≥ 32 karakter, berbeda (contoh: `openssl rand -base64 48`).
+- `TRUSTED_PROXIES`: IP/CIDR reverse proxy dipisah koma (kosongkan kalau API langsung diakses).
+- `FRONTEND_URL`: tujuan redirect Google OAuth.
+
+### Verifikasi
+- `go build`, `go vet`, `gofmt -l` bersih; `go test ./...` lulus, termasuk test baru `src/config/auth_test.go` (secret kosong/pendek/sama) dan `src/utils/jwt/jwt_test.go` (tipe token tertukar, secret salah/kosong, HS512, `none`, issuer salah, tanpa `exp`, kedaluwarsa, tanpa `jti`).
+- Integrasi HTTP di Postgres 17 + Redis 7 sementara (dengan server Google palsu): **34/34 cek** — register, login seragam, logout, refresh sekali pakai (5 request bersamaan → tepat 1 berhasil), peran staf seketika, `/admins` 404, rate limit + `X-Forwarded-For` palsu, Google OAuth (state, fragment, `sub`, `email_verified`, akun password tidak diambil alih), Redis mati → 503.
+- Regresi: harness M8 Xendit **26/26**, harness katalog **40/40**.
+
+### Belum dikerjakan (sengaja)
+- CORS, timeout server, security header, batas ukuran body, `/healthz` → M5.
+- DSN dari env + rotasi password DB → M2.

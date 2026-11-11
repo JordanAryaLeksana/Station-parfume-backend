@@ -21,7 +21,14 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found (memakai environment variable sistem)")
 	}
-	config.InitRedis()
+	// Fail-fast: tanpa secret JWT yang kuat, siapa pun bisa memalsukan token.
+	if err := config.LoadAuthConfig(); err != nil {
+		log.Fatalf("config auth tidak valid: %v", err)
+	}
+	// Redis wajib: blacklist token (logout) dan rate limit bergantung padanya.
+	if err := config.InitRedis(); err != nil {
+		log.Fatalf("redis: %v", err)
+	}
 	config.ConnectDatabase()
 	// Pembayaran: Xendit Payment Sessions. Kalau env belum lengkap, server tetap
 	// jalan tapi endpoint bayar & webhook menjawab 503.
@@ -31,8 +38,13 @@ func main() {
 	// Seeder (src/config/seeders) dijalankan terpisah: go run ./seed — lihat seed/README.md.
 	go reconcileLoop(5 * time.Minute)
 	router := gin.Default()
-	routes.InitRoutes(router)
+	// Hanya proxy di TRUSTED_PROXIES yang boleh menentukan IP klien
+	// (X-Forwarded-For); default tidak ada → IP dari koneksi langsung.
+	if err := router.SetTrustedProxies(config.TrustedProxies()); err != nil {
+		log.Fatalf("TRUSTED_PROXIES tidak valid: %v", err)
+	}
 	authhandler.InitGoogleOauthConfig()
+	routes.InitRoutes(router)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

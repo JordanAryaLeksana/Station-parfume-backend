@@ -1,7 +1,6 @@
 package routes
 
 import (
-	adminRoutes "backend/src/modules/admin/routes"
 	authRoutes "backend/src/modules/auth/routes"
 	cartRoutes "backend/src/modules/cart/routes"
 	orderRoutes "backend/src/modules/order/routes"
@@ -16,7 +15,6 @@ func InitRoutes(router *gin.Engine) {
 	userRoutes.RegisterUserRoutes(api)
 	authRoutes.RegisterAuthRoutes(api)
 	productsRoutes.RegisterProductsRoutes(api)
-	adminRoutes.RegisterAdminRoutes(api)
 	cartRoutes.RegisterCartRoutes(api)
 	orderRoutes.RegisterOrderRoutes(api)
 	paymentRoutes.RegisterPaymentRoutes(api)
