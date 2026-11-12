@@ -128,10 +128,12 @@ type OrderItem struct {
 }
 
 // ---------------------------------------------------------------------
-// Payment — Xendit Payment Sessions
+// Payment — Midtrans Snap (satu baris = satu transaksi Snap)
 // ---------------------------------------------------------------------
 
 const (
+	PaymentProviderMidtrans = "midtrans"
+	// PaymentProviderXendit: gateway lama (sampai 2026-11); hanya untuk baris uji lama.
 	PaymentProviderXendit = "xendit"
 
 	PaymentPending   = "PENDING"
@@ -142,21 +144,24 @@ const (
 	PaymentRefunded  = "REFUNDED"
 )
 
+// Payment: ID internal Midtrans (Snap token di provider_session_id, transaction_id
+// di provider_payment_id) & failure_reason (catatan internal, mis. "refund manual")
+// tidak pernah dikirim ke klien (json:"-"). reference_id = order_id di Midtrans.
 type Payment struct {
 	ID                       uint           `gorm:"primaryKey" json:"id"`
 	OrderID                  uint           `gorm:"not null" json:"order_id"`
-	Provider                 string         `gorm:"size:20;not null;default:'xendit'" json:"provider"`
+	Provider                 string         `gorm:"size:20;not null;default:'midtrans'" json:"provider"`
 	ReferenceID              string         `gorm:"type:uuid;not null" json:"reference_id"`
-	ProviderSessionID        *string        `gorm:"size:100" json:"provider_session_id,omitempty"`
-	ProviderPaymentRequestID *string        `gorm:"size:100" json:"provider_payment_request_id,omitempty"`
-	ProviderPaymentID        *string        `gorm:"size:100" json:"provider_payment_id,omitempty"`
+	ProviderSessionID        *string        `gorm:"size:100" json:"-"`
+	ProviderPaymentRequestID *string        `gorm:"size:100" json:"-"`
+	ProviderPaymentID        *string        `gorm:"size:100" json:"-"`
 	CheckoutURL              *string        `gorm:"column:checkout_url" json:"checkout_url,omitempty"`
 	PaymentMethod            *string        `gorm:"size:50" json:"payment_method,omitempty"`
 	PaymentChannel           *string        `gorm:"size:50" json:"payment_channel,omitempty"`
 	Amount                   int64          `gorm:"not null" json:"amount"`
 	Currency                 string         `gorm:"type:char(3);not null;default:'IDR'" json:"currency"`
 	Status                   string         `gorm:"size:20;not null;default:'PENDING'" json:"status"`
-	FailureReason            *string        `json:"failure_reason,omitempty"`
+	FailureReason            *string        `json:"-"`
 	ExpiresAt                *time.Time     `json:"expires_at,omitempty"`
 	PaidAt                   *time.Time     `json:"paid_at,omitempty"`
 	ProviderResponse         datatypes.JSON `gorm:"type:jsonb" json:"-"`

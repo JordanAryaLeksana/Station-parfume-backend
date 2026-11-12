@@ -15,12 +15,14 @@
 | **M2** Startup & Migration Safety | ✅ Selesai (kode) | AutoMigrate/DropColumn dihapus (`faa6654`); fail-fast JWT & Redis (`8a23337`); DSN dari env, migrasi goose, logger Warn tanpa nilai parameter (lihat [Hasil Eksekusi M2](#hasil-eksekusi-m2--database-dari-env--migrasi-goose-2026-11-11)). **Tugas Pilot:** rotasi password DB (C5) |
 | **M3** Security Hotfix | ✅ Selesai | `c91ec56` (abort, `/admins`, jti, katalog publik, email) + peran `/users` dikunci (`e79373f`) + **hardening auth** (lihat [Hasil Eksekusi M3](#hasil-eksekusi-m3--hardening-auth-2026-11-11)) |
 | **M5** HTTP Server Hardening | ✅ Selesai (kode) | Timeout, graceful shutdown, CORS, security header, health check, format response seragam, Swagger `/docs` (lihat [Hasil Eksekusi M5](#hasil-eksekusi-m5--hardening-server--swagger-2026-11-11)) |
-| **M10** Tests & CI | 🟡 Sebagian | Test integrasi di repo (`scripts/test-integration.sh`); CI belum |
-| M4, M11 | ⏳ Belum dimulai | |
+| **M10** Tests & CI | ✅ Selesai | Test integrasi di repo + GitHub Actions (`.github/workflows/ci.yml`) + Dependabot mingguan |
+| **M4** Go & Dependency | ✅ Selesai | Go 1.26 (image build Go 1.27.4), library diperbarui, govulncheck 0 celah terpakai, image Docker distroless non-root tanpa `.env` (lihat [Hasil Eksekusi M4](#hasil-eksekusi-m4--go--docker-2026-11-11)) |
+| **M11** Deployment Readiness | ✅ Disiapkan & diuji lokal | VPS sendiri: Docker Compose (Caddy HTTPS otomatis, api, migrate, Postgres, Redis), `deploy/update.sh`, backup harian, runbook [`docs/deploy-vps.md`](deploy-vps.md) (lihat [Hasil Eksekusi M11](#hasil-eksekusi-m11--persiapan-deploy-vps-2026-11-11)). Belum di-deploy ke VPS sungguhan |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
 | **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
-| **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
-| **M9** Midtrans | ✅ Dihapus | Midtrans tidak pernah berjalan & tidak ada data produksi, jadi langsung dihapus bersama M8 |
+| **M8** Xendit (test mode) | ↩️ Diganti M12 | Akun Xendit ditolak (usaha perorangan, belum PT). Kode Xendit dihapus 2026-11-12 (ada di riwayat git) |
+| **M9** Midtrans (Core API lama) | ✅ Dihapus | Kode lama tidak pernah berjalan & tidak ada data produksi, jadi dihapus bersama M8 |
+| **M12** Midtrans Snap | ✅ Kode selesai, uji dengan server palsu | Alur M8 dipertahankan, gateway diganti Snap; migrasi `00002`. Perlu uji manual sandbox dengan key Midtrans Pilot |
 
 > **Catatan:** setelah M1, jalur file `src/modules/Order/...` yang disebut di dokumen ini sekarang menjadi `src/modules/order/...`. Nomor baris di file yang terkena `gofmt` bisa bergeser beberapa baris. Referensi baris di dokumen ini mengacu ke commit `8f6479d` (sebelum M1).
 
@@ -822,3 +824,99 @@ Branch `chore/m5-server-hardening`. Tidak ada perubahan database maupun logika b
 - Domain frontend wajib ada di `CORS_ALLOWED_ORIGINS`.
 - Kontrak lengkap & coba langsung: `http://localhost:8080/docs`.
 
+---
+
+## Perbaikan pesanan & pembayaran (2026-11-11)
+Branch `fix/order-payment-safety`. Perilaku endpoint yang sudah ada; tidak ada perubahan database.
+
+| Sebelum | Sesudah |
+|---|---|
+| Staf bisa set `PAID` manual → stok terpotong padahal link bayar Xendit masih hidup (risiko bayar ganda) | `PAID` & `EXPIRED` hanya dari sistem pembayaran; staf → 400 |
+| Staf membatalkan → link bayar Xendit tetap hidup; pembeli masih bisa membayar | Pembatalan oleh staf juga membatalkan sesi Xendit (sama seperti pembatalan pembeli) |
+| `warehouse` bisa membatalkan & refund | warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED/REFUNDED hanya owner/admin (403) |
+| REFUNDED hanya status order | Pembayaran lunas ikut ditandai REFUNDED (uang tetap dikembalikan manual di Dashboard Xendit) |
+| Response pesanan pembeli memuat ID internal Xendit & `failure_reason` | Tidak lagi dikirim ke klien |
+| `GET /orders/:id` hanya angka | Juga menerima nomor pesanan `SP…` (dari `?order=` halaman sukses Xendit), hanya milik pembeli itu |
+| `go run ./seed admin` diam-diam menjalankan seed katalog | Argumen tak dikenal → error "maksud Anda -admin?" |
+
+Rancangan pelacakan pesanan yang ditunda + riset pengiriman: [`docs/rancangan-pelacakan-pesanan.md`](rancangan-pelacakan-pesanan.md).
+
+---
+
+## Hasil Eksekusi M4 — Go & Docker (2026-11-11)
+Branch `chore/m4-go-docker`.
+
+| Bagian | Sebelum | Sesudah |
+|---|---|---|
+| Versi Go | `go 1.24.4` (Go 1.24/1.25 tidak lagi dapat patch keamanan) | `go 1.26.0` (diminta library); image dibangun dengan Go **1.27.4** (patch terbaru, sama dengan toolchain lokal) |
+| Library | Gin 1.10.1, go-redis 9.11, goose 3.26, kin-openapi 0.135, pgx 5.7, x/crypto 0.40, … | Gin 1.12.0, go-redis 9.23, goose 3.29, kin-openapi 0.152, pgx 5.11, gorm 1.31.2, cors 1.7.9, validator 10.30, oauth2 0.37, x/crypto 0.58, x/net 0.62. Versi dipilih yang sudah rilis ≥ 2 minggu, kecuali perbaikan keamanan tim Go (`x/net`). `mimetype` 1.4.15 (ditarik pembuatnya) → 1.4.16 |
+| Celah keamanan | belum pernah dicek | `govulncheck` v1.9.0: **0 celah yang terpakai kode**. Tersisa 1 di `x/crypto` yang tidak dipanggil (perbaikannya belum rilis bertag) |
+| Docker image | `golang:1.24.4` penuh (~1 GB), root, **`COPY . .` memasukkan `.env` & `.git`** | Multi-stage → `distroless/static-debian12:nonroot` (116 MB): hanya `/app/bin/{server,migrate,seed}` + CSV seed; tanpa shell, source, `.env`, `.git` (`.dockerignore`); `GIN_MODE=release` |
+| Zona waktu | bergantung tzdata sistem | di-embed (`time/tzdata`) |
+
+Pemakaian image:
+```bash
+docker build -t station-parfume-api .
+docker run --rm --env-file .env.prod --entrypoint /app/bin/migrate station-parfume-api up   # migrasi
+docker run --rm --env-file .env.prod --entrypoint /app/bin/seed station-parfume-api        # seed katalog
+docker run -d --env-file .env.prod -p 8080:8080 station-parfume-api                         # server
+```
+
+Verifikasi:
+- Unit test + test integrasi (128 cek, validasi spec) lulus setelah upgrade.
+- `docker build` sukses. Isi image dicek (`docker export`): tidak ada `.env`, `.go`, maupun `.git`.
+- Image dijalankan di jaringan Docker sementara: `migrate up` → `seed` → server `/readyz` 200, 66 produk publik, `/docs` mati di release.
+- `docker stop` → graceful shutdown, exit 0.
+
+---
+
+## Hasil Eksekusi M10 — CI GitHub Actions (2026-11-11)
+Branch `ci/github-actions`.
+- **`.github/workflows/ci.yml`**: jalan setiap push ke `master` dan setiap pull request.
+  - **check:** `gofmt`, `go vet` (termasuk tag `integration`), build, unit test.
+  - **integration:** `scripts/test-integration.sh`. Postgres 17 + Redis 7 sementara di runner GitHub; setiap response divalidasi terhadap `api/openapi.yaml`.
+  - **vuln:** `govulncheck` v1.9.0; gagal kalau ada celah yang dipanggil kode.
+  - **docker:** build image production + cek tidak ada `.env`, `.git`, atau source di dalamnya.
+- Konfigurasi: Go 1.27 (patch terbaru, sama dengan image build), `actions/checkout@v7` dan `actions/setup-go@v7`, izin token hanya `contents: read`, run lama dibatalkan saat ada push baru.
+- **`.github/dependabot.yml`**: PR mingguan untuk modul Go (dikelompokkan), GitHub Actions, dan image Docker. `cooldown` 14 hari: versi baru ditunggu dulu sebelum diusulkan.
+- Verifikasi: semua langkah workflow dijalankan lokal dengan perintah yang sama (lulus). Run pertama di GitHub terlihat setelah branch di-push.
+- Catatan: repo privat memakai kuota menit GitHub Actions gratis per bulan. Satu run kira-kira beberapa menit.
+
+---
+
+## Hasil Eksekusi M11 — persiapan deploy VPS (2026-11-11)
+Branch `deploy/vps`. Keputusan Pilot: **VPS sendiri**, satu server, Docker Compose. Panduan langkah demi langkah: [`docs/deploy-vps.md`](deploy-vps.md).
+
+File:
+- **`deploy/docker-compose.prod.yml`**:
+  - `caddy` satu-satunya yang membuka port (80/443, IPv4).
+  - `api`.
+  - `migrate`: sekali jalan, sebelum api start.
+  - `db`: Postgres 17.
+  - `redis`: Redis 7 dengan password dan AOF.
+  - Jaringan internal tetap `172.30.10.0/24`, dipakai untuk `TRUSTED_PROXIES`.
+  - Log dibatasi 5 × 10 MB per container.
+  - api/migrate: non-root, read-only, tanpa capability, `no-new-privileges`. Caddy hanya `NET_BIND_SERVICE`.
+- **`deploy/Caddyfile`**: HTTPS otomatis (Let's Encrypt), kompresi, tanpa access log (URL bisa berisi kode OAuth).
+- **`deploy/update.sh`**: backup → build → migrasi → ganti api. Gagal di tengah jalan = api lama tetap melayani.
+- **`deploy/backup.sh`**: `pg_dump` gzip, izin 600, disimpan 14 hari. Ada contoh cron.
+- **`deploy/compose.sh`**: `docker compose` dengan file & env production.
+- **`deploy/.env.prod.example`**: semua env production beserta aturan pengisiannya.
+- **`server -healthcheck`** (`main.go`) + `HEALTHCHECK` di `Dockerfile`. Image distroless tidak punya shell/curl, jadi binary server sendiri yang memanggil `/readyz`.
+- `.gitignore`: `.env.prod`, `deploy/backups/`.
+
+Temuan saat uji, sudah ditangani:
+1. **`compose up -d --build` membuat ulang api sebelum menunggu migrasi.** Kalau migrasi gagal, api ikut mati. → `update.sh` menjalankan migrasi dengan image baru lebih dulu, baru mengganti api. Diuji dengan migrasi rusak: api lama tetap melayani.
+2. **Lewat IPv6, Docker meneruskan koneksi melalui proxy-nya sendiri.** Semua pengunjung IPv6 terlihat ber-IP `172.30.10.1` dan berbagi batas rate limit. → Caddy hanya dibuka di IPv4; runbook: DNS cukup record A.
+3. **Setelah restore backup, ID user/pesanan bisa terpakai ulang.** → Runbook: ganti secret JWT setiap kali memulihkan production dari backup.
+
+Verifikasi: stack production dijalankan lokal (`-p sp-prodtest`, port 18080/18443, `API_DOMAIN=localhost`), lalu dihapus. Hasil per cek ada di tabel "Hasil uji lokal" di runbook. Ringkasnya:
+- `/readyz` 200 lewat HTTPS; db/redis/api tanpa port host; `/docs` 404.
+- IP pembeli asli tercatat dan `X-Forwarded-For` palsu diabaikan.
+- Redis menolak koneksi tanpa password, dan token yang sudah logout tetap ditolak setelah Redis restart.
+- `server -healthcheck` 0/1 sesuai kondisi db.
+- Backup → restore identik; latihan pemulihan production berhasil.
+- Rollback kode dengan DB lebih baru tetap jalan.
+- Graceful stop exit 0.
+
+Belum dikerjakan (butuh VPS & domain sungguhan): deploy pertama, sertifikat Let's Encrypt asli, webhook Xendit ke URL publik, uptime monitor.

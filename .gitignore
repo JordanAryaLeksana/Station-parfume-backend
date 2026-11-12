@@ -37,3 +37,7 @@ Thumbs.db
 .env.*.local
 
 docker-compose.yml
+
+# Deploy production (env berisi secret & hasil backup DB)
+.env.prod
+deploy/backups/

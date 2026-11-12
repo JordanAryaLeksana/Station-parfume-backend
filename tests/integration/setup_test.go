@@ -15,8 +15,8 @@ import (
 	"backend/migrations"
 	"backend/src/config"
 	"backend/src/config/seeders"
+	"backend/src/modules/payment/midtrans"
 	paymentservices "backend/src/modules/payment/services"
-	"backend/src/modules/payment/xendit"
 	"backend/src/routes"
 	authhandler "backend/src/utils/AuthHandler"
 	"bytes"
@@ -45,7 +45,7 @@ import (
 
 const (
 	frontendOrigin = "https://shop.test"
-	webhookToken   = "tok-rahasia"
+	serverKey      = "SB-Mid-server-test"
 	ownerEmail     = "owner@test.local"
 	ownerPassword  = "rahasia-panjang-123"
 	buyerPassword  = "rahasia-123"
@@ -55,7 +55,7 @@ var (
 	srv      *httptest.Server
 	specDoc  *openapi3.T
 	oaRouter routers.Router
-	fake     = newFakeXendit()
+	fake     = newFakeMidtrans()
 )
 
 func TestMain(m *testing.M) {
@@ -98,8 +98,7 @@ func TestMain(m *testing.M) {
 	authhandler.GoogleOauthConfig.Endpoint = oauth2.Endpoint{AuthURL: google.URL + "/auth", TokenURL: google.URL + "/token", AuthStyle: oauth2.AuthStyleInParams}
 	authhandler.UserInfoURL = google.URL + "/userinfo"
 
-	paymentservices.Configure(fake, paymentservices.Settings{WebhookToken: webhookToken,
-		SuccessURL: frontendOrigin + "/bayar/sukses", CancelURL: frontendOrigin + "/bayar/batal"})
+	paymentservices.Configure(fake, paymentservices.Settings{ServerKey: serverKey, SuccessURL: frontendOrigin + "/bayar/sukses"})
 
 	engine, err := routes.NewEngine(routes.Options{CORSOrigins: []string{frontendOrigin}, Docs: true})
 	must(err)
@@ -295,88 +294,141 @@ func registerBuyer(t *testing.T, email string) string {
 	return a
 }
 
-// ------------------------------------------------------------------ Xendit palsu
+// ------------------------------------------------------------------ Midtrans palsu
 
-type fakeXendit struct {
-	mu       sync.Mutex
-	n        int
-	sessions map[string]*xendit.Session
-	creates  int
+// fakeTx: satu transaksi Snap di Midtrans palsu, dikunci order_id (= reference_id kita).
+type fakeTx struct {
+	orderID, token, txID string
+	status               string // "" = pembeli belum memilih metode bayar (status → 404)
+	amount               int64
 }
 
-func newFakeXendit() *fakeXendit { return &fakeXendit{sessions: map[string]*xendit.Session{}} }
+type fakeMidtrans struct {
+	mu      sync.Mutex
+	n       int
+	txs     map[string]*fakeTx
+	creates int
+}
 
-func (f *fakeXendit) reset() {
+func newFakeMidtrans() *fakeMidtrans { return &fakeMidtrans{txs: map[string]*fakeTx{}} }
+
+func (f *fakeMidtrans) reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.sessions, f.creates = map[string]*xendit.Session{}, 0
+	f.txs, f.creates = map[string]*fakeTx{}, 0
 }
 
-func (f *fakeXendit) CreateSession(_ context.Context, req xendit.CreateSessionRequest) (*xendit.Session, error) {
+func (f *fakeMidtrans) CreateSnap(_ context.Context, req midtrans.SnapRequest) (*midtrans.SnapResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.n++
 	f.creates++
-	id := fmt.Sprintf("ps-%d", f.n)
-	s := &xendit.Session{PaymentSessionID: id, ReferenceID: req.ReferenceID, Status: "ACTIVE",
-		PaymentLinkURL: "https://pay.test/" + id, ExpiresAt: req.ExpiresAt,
-		Amount: json.Number(fmt.Sprint(req.Amount)), Currency: req.Currency}
-	s.Raw, _ = json.Marshal(s)
-	f.sessions[id] = s
-	cp := *s
-	return &cp, nil
+	tok := fmt.Sprintf("snap-%d", f.n)
+	f.txs[req.TransactionDetails.OrderID] = &fakeTx{orderID: req.TransactionDetails.OrderID, token: tok, amount: req.TransactionDetails.GrossAmount}
+	r := &midtrans.SnapResponse{Token: tok, RedirectURL: "https://pay.test/snap/" + tok}
+	r.Raw, _ = json.Marshal(r)
+	return r, nil
 }
 
-func (f *fakeXendit) GetSession(_ context.Context, id string) (*xendit.Session, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	s, ok := f.sessions[id]
-	if !ok {
-		return nil, &xendit.APIError{HTTPStatus: 404, ErrorCode: "NOT_FOUND", Message: "session not found"}
+// find: id = order_id atau transaction_id (seperti API Midtrans).
+func (f *fakeMidtrans) find(id string) *fakeTx {
+	if t, ok := f.txs[id]; ok {
+		return t
 	}
-	cp := *s
-	return &cp, nil
+	for _, t := range f.txs {
+		if t.txID != "" && t.txID == id {
+			return t
+		}
+	}
+	return nil
 }
 
-func (f *fakeXendit) CancelSession(_ context.Context, id string) (*xendit.Session, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	s, ok := f.sessions[id]
-	if !ok {
-		return nil, &xendit.APIError{HTTPStatus: 404, ErrorCode: "NOT_FOUND", Message: "session not found"}
+func fakeStatusCode(status string) string {
+	switch status {
+	case midtrans.StatusPending:
+		return "201"
+	case midtrans.StatusExpire:
+		return "407"
+	case midtrans.StatusDeny:
+		return "202"
 	}
-	if s.Status == "ACTIVE" {
-		s.Status = "CANCELED"
-	}
-	cp := *s
-	return &cp, nil
+	return "200"
 }
 
-// complete menandai sesi lunas di Xendit palsu (amount 0 = sesuai sesi).
-func (f *fakeXendit) complete(id string, amount int64) {
+func (t *fakeTx) transaction() *midtrans.Transaction {
+	return &midtrans.Transaction{StatusCode: fakeStatusCode(t.status), TransactionID: t.txID, OrderID: t.orderID,
+		GrossAmount: fmt.Sprintf("%d.00", t.amount), Currency: "IDR", PaymentType: "bank_transfer",
+		TransactionStatus: t.status, FraudStatus: midtrans.FraudAccept, VANumbers: []midtrans.VANumber{{Bank: "bca", VANumber: "12345"}}}
+}
+
+func (f *fakeMidtrans) GetStatus(_ context.Context, id string) (*midtrans.Transaction, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	s := f.sessions[id]
-	s.Status, s.PaymentID, s.PaymentRequestID = "COMPLETED", "py-"+id, "pr-"+id
+	t := f.find(id)
+	if t == nil || t.status == "" {
+		return nil, midtrans.ErrTransactionNotFound
+	}
+	return t.transaction(), nil
+}
+
+func (f *fakeMidtrans) Expire(_ context.Context, id string) (*midtrans.Transaction, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.find(id)
+	if t == nil || t.status == "" {
+		return nil, midtrans.ErrTransactionNotFound
+	}
+	if t.status != midtrans.StatusPending {
+		return nil, &midtrans.APIError{HTTPStatus: 200, StatusCode: "412", Messages: []string{"Merchant cannot modify the status of the transaction"}}
+	}
+	t.status = midtrans.StatusExpire
+	return t.transaction(), nil
+}
+
+// choose: pembeli memilih metode bayar di halaman Snap → transaksi pending.
+func (f *fakeMidtrans) choose(orderID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.txs[orderID]
+	t.status, t.txID = midtrans.StatusPending, "tx-"+t.token
+}
+
+// complete: transaksi lunas (amount 0 = sesuai transaksi). order_id yang sudah
+// di-expire juga bisa dibayar lagi lewat halaman Snap yang masih terbuka.
+func (f *fakeMidtrans) complete(orderID string, amount int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.txs[orderID]
+	t.status, t.txID = midtrans.StatusSettlement, "tx-"+t.token
 	if amount > 0 {
-		s.Amount = json.Number(fmt.Sprint(amount))
+		t.amount = amount
 	}
 }
 
-func (f *fakeXendit) status(id string) string {
+func (f *fakeMidtrans) status(orderID string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if s, ok := f.sessions[id]; ok {
-		return s.Status
+	if t, ok := f.txs[orderID]; ok {
+		return t.status
 	}
 	return ""
 }
 
-func webhook(t *testing.T, event, sessionID, token string) resp {
+// notify mengirim notifikasi Midtrans untuk orderID dengan status yang DIKLAIM
+// (boleh beda dengan status sebenarnya di Midtrans palsu), ditandatangani dengan key.
+func notify(t *testing.T, orderID, status, key string) resp {
 	t.Helper()
-	body := []byte(fmt.Sprintf(`{"event":%q,"business_id":"biz","created":%q,"data":{"payment_session_id":%q,"status":"X"}}`,
-		event, time.Now().UTC().Format(time.RFC3339), sessionID))
-	return call(t, "POST", "/api/v1/webhooks/xendit", "", body, "x-callback-token", token)
+	fake.mu.Lock()
+	tx := *fake.txs[orderID]
+	fake.mu.Unlock()
+	code, gross := fakeStatusCode(status), fmt.Sprintf("%d.00", tx.amount)
+	body := j(map[string]any{
+		"transaction_time": time.Now().Format("2006-01-02 15:04:05"), "transaction_status": status, "transaction_id": tx.txID,
+		"status_message": "midtrans payment notification", "status_code": code, "signature_key": midtrans.Signature(orderID, code, gross, key),
+		"payment_type": "bank_transfer", "order_id": orderID, "gross_amount": gross, "fraud_status": "accept", "currency": "IDR",
+		"va_numbers": []map[string]string{{"bank": "bca", "va_number": "12345"}},
+	})
+	return call(t, "POST", "/api/v1/webhooks/midtrans", "", []byte(body))
 }
 
 // ------------------------------------------------------------------ Google palsu

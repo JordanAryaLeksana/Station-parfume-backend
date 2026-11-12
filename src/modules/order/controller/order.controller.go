@@ -5,6 +5,7 @@ import (
 	"backend/src/modules/order/models"
 	"backend/src/modules/order/services"
 	paymentservices "backend/src/modules/payment/services"
+	"backend/src/repository"
 	"backend/src/utils/response"
 	"errors"
 	"strconv"
@@ -50,11 +51,8 @@ func GetOrderByIDHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
-	orderID, ok := parseID(c)
-	if !ok {
-		return
-	}
-	order, err := services.GetOrderForUser(orderID, userID)
+	// :id boleh ID angka atau nomor pesanan (SP…)
+	order, err := services.FindOrderForUser(c.Param("id"), userID)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -77,7 +75,7 @@ func CancelOrderHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	// Link bayar Xendit yang masih aktif ikut dimatikan (best effort).
+	// Transaksi Midtrans yang masih pending ikut di-expire (best effort).
 	paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	response.OK(c, "Order canceled successfully", nil)
 }
@@ -92,9 +90,14 @@ func UpdateOrderStatusHandler(c *gin.Context) {
 		httperror.BadRequestError(c, "Invalid request body")
 		return
 	}
-	if err := services.UpdateOrderStatus(orderID, &input); err != nil {
+	to, err := services.UpdateOrderStatus(orderID, c.GetString("role"), &input)
+	if err != nil {
 		writeError(c, err)
 		return
+	}
+	if to == repository.OrderCancelled {
+		// Sama seperti pembatalan oleh pembeli: transaksi Midtrans yang masih pending di-expire.
+		paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	}
 	response.OK(c, "Order status updated successfully", nil)
 }
@@ -125,6 +128,8 @@ func writeError(c *gin.Context, err error) {
 		httperror.NotFoundError(c, err.Error())
 	case errors.Is(err, services.ErrValidation):
 		httperror.BadRequestError(c, err.Error())
+	case errors.Is(err, services.ErrForbidden):
+		httperror.ForbiddenError(c, err.Error())
 	default:
 		httperror.InternalServerError(c, "Internal server error")
 	}

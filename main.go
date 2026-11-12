@@ -8,6 +8,7 @@ import (
 	authhandler "backend/src/utils/AuthHandler"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,6 +20,12 @@ import (
 )
 
 func main() {
+	healthcheck := flag.Bool("healthcheck", false, "cek GET /readyz server yang sedang jalan di port PORT lalu keluar (0 = sehat); dipakai HEALTHCHECK Docker")
+	flag.Parse()
+	if *healthcheck {
+		os.Exit(runHealthcheck())
+	}
+
 	// .env (khusus dev) dimuat PALING AWAL, sebelum config apa pun membaca env.
 	if found, err := config.LoadDotEnv(".env"); err != nil {
 		log.Fatal(err)
@@ -46,7 +53,7 @@ func main() {
 	if err := checkSchema(); err != nil {
 		log.Fatalf("database: %v", err)
 	}
-	// Pembayaran: Xendit Payment Sessions. Kalau env belum lengkap, server tetap
+	// Pembayaran: Midtrans Snap. Kalau env belum lengkap, server tetap
 	// jalan tapi endpoint bayar & webhook menjawab 503.
 	if err := paymentservices.ConfigureFromEnv(); err != nil {
 		log.Printf("PERINGATAN pembayaran: %v", err)
@@ -90,7 +97,7 @@ func main() {
 		Handler:           routes.Handler(engine),
 		ReadHeaderTimeout: 5 * time.Second,  // klien lambat (slowloris) tidak bisa menahan koneksi
 		ReadTimeout:       15 * time.Second, // body maks 1 MiB
-		WriteTimeout:      30 * time.Second, // panggilan Xendit dibatasi 10 dtk
+		WriteTimeout:      30 * time.Second, // panggilan Midtrans dibatasi 10 dtk
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
@@ -173,7 +180,7 @@ func runJobs(ctx context.Context, every time.Duration) {
 }
 
 // runJobsOnce: cek pembayaran yang webhook-nya terlewat, lalu order yang lewat
-// batas bayar dibatalkan sesi Xendit-nya dan ditandai EXPIRED (reservasi stok
+// batas bayar di-expire transaksi Midtrans-nya dan ditandai EXPIRED (reservasi stok
 // dilepas). Panic ditangkap supaya tidak mematikan server.
 func runJobsOnce(ctx context.Context) {
 	defer func() {
@@ -199,4 +206,27 @@ func runJobsOnce(ctx context.Context) {
 	} else if n > 0 {
 		log.Printf("rekonsiliasi pembayaran: %d order kedaluwarsa", n)
 	}
+}
+
+// runHealthcheck: image distroless tidak punya shell/curl, jadi HEALTHCHECK
+// Docker memanggil binary ini sendiri: GET http://127.0.0.1:PORT/readyz.
+// 0 = sehat (200); 1 = tidak sehat (DB/Redis mati, sedang shutdown, atau
+// server tidak menjawab).
+func runHealthcheck() int {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	res, err := client.Get("http://127.0.0.1:" + port + "/readyz")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "healthcheck:", err)
+		return 1
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "healthcheck: status", res.StatusCode)
+		return 1
+	}
+	return 0
 }

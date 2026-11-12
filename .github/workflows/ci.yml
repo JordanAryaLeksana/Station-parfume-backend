@@ -1,0 +1,86 @@
+# CI Station Parfume API: setiap push ke master dan setiap pull request.
+#   check       → gofmt, go vet, build, unit test (tanpa database)
+#   integration → scripts/test-integration.sh (Postgres + Redis sementara di runner,
+#                 setiap response divalidasi terhadap api/openapi.yaml)
+#   vuln        → govulncheck (gagal kalau ada celah yang dipanggil kode)
+#   docker      → build image production + pastikan tidak ada .env/.git/source di dalamnya
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Format, vet, unit test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27" # sama dengan image build (Dockerfile); patch terbaru
+          check-latest: true
+          cache: true
+      - name: gofmt
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "File belum di-gofmt (jalankan: gofmt -w .):"
+            echo "$out"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go vet -tags=integration ./tests/...
+      - run: go build ./...
+      - run: go test ./...
+
+  integration:
+    name: Integration tests (Postgres + Redis)
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache: true
+      - run: scripts/test-integration.sh
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t station-parfume-api:ci .
+      - name: Tidak ada secret atau source di image
+        run: |
+          cid="$(docker create station-parfume-api:ci)"
+          files="$(docker export "$cid" | tar -t)"
+          docker rm "$cid" >/dev/null
+          if echo "$files" | grep -E '(^|/)\.env|\.go$|(^|/)\.git(/|$)|(^|/)go\.mod$'; then
+            echo "File di atas tidak boleh ada di image (periksa .dockerignore)"
+            exit 1
+          fi
+          echo "$files" | grep -E '^app/'

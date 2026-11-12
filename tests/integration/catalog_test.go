@@ -142,6 +142,12 @@ func TestCatalogAndCheckout(t *testing.T) {
 		scalar[int](t, "select stock + reserved from variants where id = ?", dgID) == 0)
 	check(t, "keranjang kosong setelah checkout", len(call(t, "GET", "/api/v1/cart", buyer, nil).Data()["items"].([]any)) == 0)
 	r = call(t, "PUT", fmt.Sprintf("/api/v1/orders/%v/status", oid), owner, map[string]any{"status": "PAID"})
+	check(t, "staf tidak bisa menandai lunas manual → 400", r.Status == 400, r.Status)
+	// lunas lewat Midtrans (palsu): bayar → transaksi lunas → notifikasi
+	call(t, "POST", fmt.Sprintf("/api/v1/orders/%v/pay", oid), buyer, nil)
+	payRef := scalar[string](t, "select reference_id::text from payments where order_id = ?", oid)
+	fake.complete(payRef, 0)
+	r = notify(t, payRef, "settlement", serverKey)
 	check(t, "PAID: stok 4 → 1, reserved 0, 1 riwayat sale", r.Status == 200 && scalar[int](t, "select stock from variants where id = ?", bsID) == 1 &&
 		scalar[int](t, "select reserved from variants where id = ?", bsID) == 0 &&
 		scalar[int](t, "select count(*) from stock_movements where order_id = ?", oid) == 1, r.Status)

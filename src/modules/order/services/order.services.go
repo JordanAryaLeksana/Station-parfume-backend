@@ -8,6 +8,8 @@ import (
 	"backend/src/repository"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ var validate = validator.New()
 var (
 	ErrNotFound   = errors.New("not found")
 	ErrValidation = errors.New("validation error")
+	ErrForbidden  = errors.New("forbidden")
 )
 
 // PaymentWindow: batas waktu bayar setelah checkout. Lewat dari ini order
@@ -155,6 +158,28 @@ func snapshotItem(v *repository.Variant, qty int) repository.OrderItem {
 	return item
 }
 
+// FindOrderForUser mencari pesanan milik user lewat ID angka atau nomor
+// pesanan ("SP261111A1B2C3D4", tidak peka huruf besar/kecil). Halaman sukses
+// pembayaran (callbacks.finish Midtrans) membawa ?order=<nomor pesanan>.
+func FindOrderForUser(ref string, userID uint) (*repository.Order, error) {
+	ref = strings.TrimSpace(ref)
+	if id, err := strconv.ParseUint(ref, 10, 64); err == nil && id > 0 {
+		return GetOrderForUser(uint(id), userID)
+	}
+	if ref == "" || len(ref) > 32 {
+		return nil, fmt.Errorf("order %q: %w", ref, ErrNotFound)
+	}
+	var order repository.Order
+	err := orderQuery(config.DB).Where("order_no = ? AND user_id = ?", strings.ToUpper(ref), userID).First(&order).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("order %q: %w", ref, ErrNotFound)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
 func GetOrderForUser(orderID, userID uint) (*repository.Order, error) {
 	var order repository.Order
 	err := orderQuery(config.DB).Where("id = ? AND user_id = ?", orderID, userID).First(&order).Error
@@ -189,17 +214,42 @@ func CancelOrder(orderID, userID uint, reason *string) error {
 	})
 }
 
-// UpdateOrderStatus (admin): pindah status sesuai CanOrderTransition.
-func UpdateOrderStatus(orderID uint, input *models.UpdateOrderStatusDTO) error {
+// staffStatusRoles: status yang boleh diset staf lewat PUT /orders/:id/status,
+// dan peran yang boleh. PAID & EXPIRED hanya dari sistem (Midtrans / job
+// kedaluwarsa): menandai lunas manual memotong stok padahal link bayar Midtrans
+// masih hidup → risiko pembayaran ganda.
+var staffStatusRoles = map[string][]string{
+	repository.OrderProcessing: {repository.RoleOwner, repository.RoleAdmin, repository.RoleWarehouse},
+	repository.OrderShipped:    {repository.RoleOwner, repository.RoleAdmin, repository.RoleWarehouse},
+	repository.OrderCompleted:  {repository.RoleOwner, repository.RoleAdmin, repository.RoleWarehouse},
+	repository.OrderCancelled:  {repository.RoleOwner, repository.RoleAdmin},
+	repository.OrderRefunded:   {repository.RoleOwner, repository.RoleAdmin},
+}
+
+// UpdateOrderStatus (staf): pindah status sesuai CanOrderTransition dan peran.
+// Mengembalikan status tujuan (huruf besar). Pembatalan oleh staf: pemanggil
+// (controller) wajib mematikan transaksi Midtrans yang masih pending.
+func UpdateOrderStatus(orderID uint, role string, input *models.UpdateOrderStatusDTO) (string, error) {
 	if err := validate.Struct(input); err != nil {
-		return fmt.Errorf("%w: %v", ErrValidation, err)
+		return "", fmt.Errorf("%w: %v", ErrValidation, err)
 	}
-	return config.DB.Transaction(func(tx *gorm.DB) error {
+	to := strings.ToUpper(strings.TrimSpace(input.Status))
+	if to == repository.OrderPaid || to == repository.OrderExpired {
+		return "", fmt.Errorf("%w: status %s hanya diubah otomatis oleh sistem pembayaran", ErrValidation, to)
+	}
+	roles, ok := staffStatusRoles[to]
+	if !ok {
+		return "", fmt.Errorf("%w: status %q tidak dikenal", ErrValidation, input.Status)
+	}
+	if !slices.Contains(roles, role) {
+		return "", fmt.Errorf("%w: peran %s tidak boleh mengubah status ke %s", ErrForbidden, role, to)
+	}
+	return to, config.DB.Transaction(func(tx *gorm.DB) error {
 		order, err := lockOrder(tx, orderID, nil)
 		if err != nil {
 			return err
 		}
-		return ApplyStatus(tx, order, strings.ToUpper(input.Status), input.Reason)
+		return ApplyStatus(tx, order, to, input.Reason)
 	})
 }
 
@@ -225,6 +275,12 @@ func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string
 		updates["shipped_at"] = now
 	case repository.OrderCompleted:
 		updates["completed_at"] = now
+	case repository.OrderRefunded:
+		// Uang dikembalikan manual lewat Dashboard Midtrans; catatan pembayarannya ikut ditandai.
+		if err := tx.Model(&repository.Payment{}).Where("order_id = ? AND status = ?", order.ID, repository.PaymentPaid).
+			Update("status", repository.PaymentRefunded).Error; err != nil {
+			return fmt.Errorf("failed to mark payment refunded: %w", err)
+		}
 	case repository.OrderCancelled, repository.OrderExpired:
 		updates["cancelled_at"] = now
 		if reason != nil {
@@ -254,7 +310,7 @@ func orderItemsWithVariant(tx *gorm.DB, orderID uint) ([]repository.OrderItem, e
 // (mis. dibayar tepat saat batas waktu habis). Uang sudah diterima, jadi order
 // diterima sebagai PAID. Reservasi stoknya sudah dilepas, jadi stok dipotong
 // TANPA menyentuh reserved (milik order lain). Hanya dipanggil dari jalur pembayaran
-// yang sudah diverifikasi ke Xendit — admin tetap memakai ApplyStatus.
+// yang sudah diverifikasi ke Midtrans — admin tetap memakai ApplyStatus.
 func ApplyLatePayment(tx *gorm.DB, order *repository.Order) error {
 	if order.Status != repository.OrderExpired && order.Status != repository.OrderCancelled {
 		return fmt.Errorf("%w: pembayaran telat hanya untuk order EXPIRED/CANCELLED (status %s)", ErrValidation, order.Status)
@@ -349,8 +405,8 @@ func ExpireOrder(orderID uint) (bool, error) {
 }
 
 // ExpireOverdueOrders menandai semua order yang lewat batas bayar sebagai EXPIRED.
-// Catatan: modul payment memakai OverdueOrderIDs + ExpireOrder supaya sesi Xendit
-// dicek & dibatalkan dulu (lihat payment services ReconcileAndExpire).
+// Catatan: modul payment memakai OverdueOrderIDs + ExpireOrder supaya transaksi
+// Midtrans dicek & di-expire dulu (lihat payment services ReconcileAndExpire).
 func ExpireOverdueOrders(now time.Time) (int, error) {
 	ids, err := OverdueOrderIDs(now)
 	if err != nil {
