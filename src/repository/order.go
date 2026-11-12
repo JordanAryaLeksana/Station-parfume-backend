@@ -128,10 +128,12 @@ type OrderItem struct {
 }
 
 // ---------------------------------------------------------------------
-// Payment — Xendit Payment Sessions
+// Payment — Midtrans Snap (satu baris = satu transaksi Snap)
 // ---------------------------------------------------------------------
 
 const (
+	PaymentProviderMidtrans = "midtrans"
+	// PaymentProviderXendit: gateway lama (sampai 2026-11); hanya untuk baris uji lama.
 	PaymentProviderXendit = "xendit"
 
 	PaymentPending   = "PENDING"
@@ -142,12 +144,13 @@ const (
 	PaymentRefunded  = "REFUNDED"
 )
 
-// Payment: ID internal Xendit & failure_reason (catatan internal, mis. "refund
-// manual") tidak pernah dikirim ke klien (json:"-").
+// Payment: ID internal Midtrans (Snap token di provider_session_id, transaction_id
+// di provider_payment_id) & failure_reason (catatan internal, mis. "refund manual")
+// tidak pernah dikirim ke klien (json:"-"). reference_id = order_id di Midtrans.
 type Payment struct {
 	ID                       uint           `gorm:"primaryKey" json:"id"`
 	OrderID                  uint           `gorm:"not null" json:"order_id"`
-	Provider                 string         `gorm:"size:20;not null;default:'xendit'" json:"provider"`
+	Provider                 string         `gorm:"size:20;not null;default:'midtrans'" json:"provider"`
 	ReferenceID              string         `gorm:"type:uuid;not null" json:"reference_id"`
 	ProviderSessionID        *string        `gorm:"size:100" json:"-"`
 	ProviderPaymentRequestID *string        `gorm:"size:100" json:"-"`

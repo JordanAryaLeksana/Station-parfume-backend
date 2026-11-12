@@ -75,7 +75,7 @@ func CancelOrderHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	// Link bayar Xendit yang masih aktif ikut dimatikan (best effort).
+	// Transaksi Midtrans yang masih pending ikut di-expire (best effort).
 	paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	response.OK(c, "Order canceled successfully", nil)
 }
@@ -96,7 +96,7 @@ func UpdateOrderStatusHandler(c *gin.Context) {
 		return
 	}
 	if to == repository.OrderCancelled {
-		// Sama seperti pembatalan oleh pembeli: link bayar Xendit yang masih aktif dimatikan.
+		// Sama seperti pembatalan oleh pembeli: transaksi Midtrans yang masih pending di-expire.
 		paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	}
 	response.OK(c, "Order status updated successfully", nil)

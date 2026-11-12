@@ -53,7 +53,7 @@ func main() {
 	if err := checkSchema(); err != nil {
 		log.Fatalf("database: %v", err)
 	}
-	// Pembayaran: Xendit Payment Sessions. Kalau env belum lengkap, server tetap
+	// Pembayaran: Midtrans Snap. Kalau env belum lengkap, server tetap
 	// jalan tapi endpoint bayar & webhook menjawab 503.
 	if err := paymentservices.ConfigureFromEnv(); err != nil {
 		log.Printf("PERINGATAN pembayaran: %v", err)
@@ -97,7 +97,7 @@ func main() {
 		Handler:           routes.Handler(engine),
 		ReadHeaderTimeout: 5 * time.Second,  // klien lambat (slowloris) tidak bisa menahan koneksi
 		ReadTimeout:       15 * time.Second, // body maks 1 MiB
-		WriteTimeout:      30 * time.Second, // panggilan Xendit dibatasi 10 dtk
+		WriteTimeout:      30 * time.Second, // panggilan Midtrans dibatasi 10 dtk
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
@@ -180,7 +180,7 @@ func runJobs(ctx context.Context, every time.Duration) {
 }
 
 // runJobsOnce: cek pembayaran yang webhook-nya terlewat, lalu order yang lewat
-// batas bayar dibatalkan sesi Xendit-nya dan ditandai EXPIRED (reservasi stok
+// batas bayar di-expire transaksi Midtrans-nya dan ditandai EXPIRED (reservasi stok
 // dilepas). Panic ditangkap supaya tidak mematikan server.
 func runJobsOnce(ctx context.Context) {
 	defer func() {

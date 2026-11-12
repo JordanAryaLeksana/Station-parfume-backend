@@ -9,7 +9,9 @@
 
 **Update (2026-11-11) — schema disederhanakan ke kebutuhan sekarang (26 → 15 tabel):** reseller, voucher & promo, alamat tersimpan, audit log, stok multi lokasi, tabel `shipments`, serta kurir & nomor resi (tracking, menyusul di MVP berikutnya) dihapus. Stok produk umum sekarang langsung di `variants.stock` / `variants.reserved`; riwayatnya tetap di `stock_movements`. Pesanan dikirim manual dari toko: admin cukup mengubah status ke `SHIPPED`. Schema menjadi migrasi goose pertama `migrations/00001_init.sql`; server menolak start kalau database belum di versi migrasi terbaru. Fitur yang dihapus bisa ditambahkan lagi nanti sebagai migrasi baru (lihat §6).
 
-**Update pembayaran (2026-11-10) — M8 Xendit:** Midtrans dihapus; pembayaran lewat **Xendit Payment Sessions** (hosted checkout). Alur & kontrak API di §5b. Tabel tidak berubah (`payments`, `payment_events` sudah ada); transisi baru di Go: order `EXPIRED/CANCELLED → PAID` khusus untuk pembayaran yang terverifikasi datang terlambat. Diuji: 26 skenario dengan server Xendit palsu + regresi 40 cek.
+**Update pembayaran (2026-11-12) — Midtrans Snap:** akun Xendit ditolak (usaha perorangan, belum PT), jadi gateway diganti **Midtrans Snap**, yang menerima merchant perorangan. Alur, aturan keamanan, dan tabel tetap sama (§5b). Migrasi `00002` mengizinkan `payments.provider = 'midtrans'`. Diuji dengan server Midtrans palsu (signature asli), termasuk order yang kedaluwarsa sebelum pembeli memilih metode bayar.
+
+**Update pembayaran (2026-11-10) — M8 Xendit (sudah diganti, lihat di atas):** Midtrans dihapus; pembayaran lewat **Xendit Payment Sessions** (hosted checkout). Alur & kontrak API di §5b. Tabel tidak berubah (`payments`, `payment_events` sudah ada); transisi baru di Go: order `EXPIRED/CANCELLED → PAID` khusus untuk pembayaran yang terverifikasi datang terlambat. Diuji: 26 skenario dengan server Xendit palsu + regresi 40 cek.
 
 **Update stok & foto (2026-11-10):** `products.track_stock` — parfum diracik sendiri → `false` (selalu tersedia, tidak di-reserve, tidak ada riwayat stok; bibit habis = nonaktifkan wangian/varian). Produk umum (barang jadi) → `true`. Bisa diubah admin per produk; `order_items.track_stock` menyimpan snapshot-nya. Foto: `product_images.url` = link CDN (file di-upload ke storage/CDN, bukan ke backend); endpoint admin tambah/ubah/hapus foto. Diuji: 40 cek HTTP lolos.
 
@@ -45,7 +47,7 @@
 3. carts · cart_items
 4. orders (alamat snapshot, expires_at, shipped_at) · order_items (snapshot)
 5. stock_movements (riwayat stok)
-6. payments · payment_events (Xendit)
+6. payments · payment_events (Midtrans)
 ```
 
 ### ERD
@@ -69,7 +71,7 @@ erDiagram
     orders ||--|{ order_items : "snapshot"
     variants |o--o{ order_items : "referensi"
     orders |o--o{ stock_movements : "penjualan"
-    orders ||--o{ payments : "Xendit"
+    orders ||--o{ payments : "Midtrans"
     payments |o--o{ payment_events : webhooks
 
     products {
@@ -158,7 +160,7 @@ erDiagram
 | `orders.status` | Arti | Stok |
 |---|---|---|
 | `PENDING_PAYMENT` | Belum bayar (batas `expires_at`) | di-reserve |
-| `PAID` | Pembayaran Xendit terverifikasi | dipotong (`sale`) |
+| `PAID` | Pembayaran Midtrans terverifikasi | dipotong (`sale`) |
 | `PROCESSING` | Dikemas | — |
 | `SHIPPED` | Dikirim (manual dari toko) | — |
 | `COMPLETED` | Selesai | — |
@@ -178,23 +180,25 @@ Stok (owner, admin, warehouse): `POST /admin/inventory/adjustments` (`mode: set|
 
 Pesanan (owner, admin, warehouse): `PUT /orders/:id/status` `{status, reason?}`.
 
-## 5b. Pembayaran (Xendit Payment Sessions)
+## 5b. Pembayaran (Midtrans Snap)
 
 ```
 FE: POST /orders (checkout, stok di-reserve)          → order PENDING_PAYMENT (expires_at = +24 jam)
-FE: POST /orders/:id/pay                               → {payment: {checkout_url, expires_at, status}}
-     (idempoten: selama sesi masih aktif, checkout_url yang sama dikembalikan)
-FE: redirect ke checkout_url → pembeli bayar di halaman Xendit (VA/QRIS/e-wallet)
-Xendit → POST /api/v1/webhooks/xendit (header x-callback-token)
-     → event disimpan di payment_events (dedup) → status dicek ulang: GET /sessions/{id}
-     → COMPLETED + nominal cocok → payment PAID, order PAID (stok terpotong)
+FE: POST /orders/:id/pay                               → {payment: {checkout_url, snap_token, expires_at, status}}
+     (idempoten: selama transaksi masih aktif, checkout_url & snap_token yang sama dikembalikan)
+FE: redirect ke checkout_url (atau popup snap.js dengan snap_token) → pembeli bayar di halaman Snap (VA/QRIS/GoPay, sesuai Dashboard)
+Midtrans → POST /api/v1/webhooks/midtrans (signature_key = SHA512(order_id+status_code+gross_amount+ServerKey))
+     → notifikasi disimpan di payment_events (dedup) → status dicek ulang: GET /v2/{transaction_id}/status
+     → settlement (atau capture + fraud accept) + nominal cocok → payment PAID, order PAID (stok terpotong)
 FE: kembali ke CHECKOUT_SUCCESS_URL?order=SP… → polling GET /orders/:id sampai status PAID
 ```
 
-- **Isi webhook tidak dipercaya.** Status dan nominal selalu dari `GET /sessions/{id}`. Nominal ≠ `orders.total` → payment `FAILED`. Event yang statusnya belum sesuai dijawab 503 supaya Xendit mengirim ulang.
-- **Kedaluwarsa:** loop tiap 5 menit (`ReconcileAndExpire`) mengecek payment PENDING > 10 menit (webhook terlewat), lalu untuk order yang lewat batas bayar: sesi Xendit dicek & **dibatalkan dulu** (link bayar mati), baru order `EXPIRED` dan reservasi dilepas. Pembeli yang membatalkan order juga membatalkan sesinya.
-- **Pembayaran telat** (uang masuk tepat saat order kedaluwarsa): order tetap diterima sebagai `PAID`, stok dipotong tanpa menyentuh reservasi order lain; jejaknya terlihat di order (status `PAID` dengan `cancelled_at` terisi) dan di log server. Pembayaran ganda untuk order yang sudah lunas → `FAILED` + catatan refund manual.
-- **Env:** `XENDIT_SECRET_KEY`, `XENDIT_WEBHOOK_TOKEN`, `CHECKOUT_SUCCESS_URL`, `CHECKOUT_CANCEL_URL` (HTTPS), opsional `XENDIT_API_URL`, `XENDIT_SESSION_MAX_TTL`. Lihat `.env.example`.
+- **Kolom `payments` untuk Midtrans:** `reference_id` = order_id di Midtrans, `provider_session_id` = Snap token, `checkout_url` = redirect_url, `provider_payment_id` = transaction_id (diisi setelah pembeli memilih metode), `payment_method`/`payment_channel` = jenis & bank (mis. `BANK_TRANSFER` / `BCA`).
+- **Isi notifikasi tidak dipercaya.** Signature diverifikasi, lalu status dan nominal selalu diambil dari API status Midtrans. Nominal ≠ `orders.total` → payment `FAILED`. Notifikasi lunas yang statusnya di Midtrans masih pending dijawab 503 supaya Midtrans mengirim ulang. Notifikasi untuk order_id yang bukan milik toko (mis. tombol uji di Dashboard) dijawab 200 dan hanya dicatat.
+- **Kedaluwarsa:** loop tiap 5 menit (`ReconcileAndExpire`) mengecek payment PENDING > 10 menit (notifikasi terlewat). Untuk order yang lewat batas bayar, transaksinya di-**expire dulu** di Midtrans, baru order `EXPIRED` dan reservasi dilepas. Pembeli/staf yang membatalkan order juga meng-expire transaksinya.
+- **Batasan Snap:** kalau pembeli belum memilih metode bayar, Midtrans belum punya transaksi yang bisa di-expire. Payment ditutup di sisi kita, dan halaman Snap habis sendiri pada batas waktunya (`expiry` = batas bayar order). Kalau pembeli tetap membayar lewat halaman yang masih terbuka, notifikasinya diproses sebagai pembayaran telat.
+- **Pembayaran telat** (uang masuk setelah order kedaluwarsa/batal): order tetap diterima sebagai `PAID`, stok dipotong tanpa menyentuh reservasi order lain. Jejaknya terlihat di order (status `PAID` dengan `cancelled_at` terisi) dan di log server. Pembayaran ganda untuk order yang sudah lunas → `FAILED` + catatan refund manual.
+- **Env:** `MIDTRANS_SERVER_KEY`, `CHECKOUT_SUCCESS_URL` (HTTPS; http hanya localhost), opsional `MIDTRANS_IS_PRODUCTION` (default false), `MIDTRANS_SNAP_URL`/`MIDTRANS_API_URL`, `PAYMENT_SESSION_MAX_TTL`. Lihat `.env.example`.
 - **Ongkir:** ditanggung pemilik → `shipping_fee = 0`. Dikirim manual dari toko.
 
 ## 6. Belum ada (tambahkan sebagai migrasi baru saat dibutuhkan)
@@ -209,7 +213,7 @@ FE: kembali ke CHECKOUT_SUCCESS_URL?order=SP… → polling GET /orders/:id samp
 | Kurir & nomor resi (tracking) | kolom `courier` + `tracking_number` di `orders` (atau tabel pengiriman kalau 1 order bisa beberapa paket) |
 | Ongkir otomatis (Biteship/RajaOngkir) | ongkir & area di order, atau tabel pengiriman terpisah |
 
-Refund masih manual lewat Dashboard Xendit. Akses CS (peran `cs`) belum punya endpoint.
+Refund masih manual lewat Dashboard Midtrans. Akses CS (peran `cs`) belum punya endpoint.
 
 ## 7. Menerapkan ke database
 

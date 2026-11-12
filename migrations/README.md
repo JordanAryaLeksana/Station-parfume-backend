@@ -6,6 +6,7 @@ File `*.sql` di folder ini di-embed ke binary, jadi tidak perlu install CLI goos
 | File | Isi |
 |---|---|
 | `00001_init.sql` | Schema awal sesuai kebutuhan sekarang: 15 tabel, FK, CHECK, partial index. Penjelasan & ERD: [`docs/schema/README.md`](../docs/schema/README.md) |
+| `00002_payments_midtrans.sql` | Gateway pindah ke Midtrans Snap: `payments.provider` boleh `midtrans` (default), `xendit` tetap diizinkan untuk baris uji lama |
 
 ## Perintah
 

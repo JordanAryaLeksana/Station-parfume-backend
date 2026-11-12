@@ -1103,7 +1103,7 @@ paths:
       - Pesanan
       summary: Detail pesanan milik user (ID atau nomor pesanan)
       operationId: get_api_v1_orders_id
-      description: Halaman sukses bayar Xendit membawa `?order=SP…`; nomor itu bisa dipakai langsung di sini.
+      description: Halaman finish pembayaran (Midtrans) membawa `?order=SP…`; nomor itu bisa dipakai langsung di sini.
       security:
       - bearerAuth: []
       parameters:
@@ -1132,7 +1132,7 @@ paths:
       - Pesanan
       summary: Batalkan pesanan yang belum dibayar
       operationId: put_api_v1_orders_id_cancel
-      description: Sesi bayar Xendit ikut dibatalkan.
+      description: Transaksi Midtrans yang masih pending ikut di-expire.
       security:
       - bearerAuth: []
       parameters:
@@ -1167,10 +1167,10 @@ paths:
     post:
       tags:
       - Pembayaran
-      summary: Buat/ambil sesi bayar Xendit
+      summary: Buat/ambil transaksi bayar Midtrans (Snap)
       operationId: post_api_v1_orders_id_pay
-      description: 'Idempoten: selama sesi masih aktif, checkout_url yang sama dikembalikan. Redirect pembeli ke `checkout_url`.
-        503 kalau pembayaran belum dikonfigurasi.'
+      description: 'Idempoten: selama transaksi masih aktif, checkout_url & snap_token yang sama dikembalikan. Redirect pembeli ke `checkout_url`
+        (atau buka popup snap.js dengan `snap_token`). 503 kalau pembayaran belum dikonfigurasi.'
       security:
       - bearerAuth: []
       parameters:
@@ -1208,7 +1208,7 @@ paths:
       summary: Ubah status pesanan (staf)
       operationId: put_api_v1_orders_id_status
       description: |-
-        Transisi: PENDING_PAYMENT→CANCELLED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. PAID & EXPIRED hanya dari sistem pembayaran. warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED & REFUNDED hanya owner/admin (lainnya 403). Pembatalan juga mematikan link bayar Xendit; REFUNDED menandai pembayaran lunas sebagai REFUNDED (uang dikembalikan manual lewat Dashboard Xendit).
+        Transisi: PENDING_PAYMENT→CANCELLED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. PAID & EXPIRED hanya dari sistem pembayaran. warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED & REFUNDED hanya owner/admin (lainnya 403). Pembatalan juga meng-expire transaksi Midtrans yang masih pending; REFUNDED menandai pembayaran lunas sebagai REFUNDED (uang dikembalikan manual lewat Dashboard Midtrans).
 
         **Peran:** owner, admin, warehouse.
       security:
@@ -1513,17 +1513,24 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
-  /api/v1/webhooks/xendit:
+  /api/v1/webhooks/midtrans:
     post:
       tags:
       - Pembayaran
-      summary: Webhook Xendit (khusus server Xendit)
-      operationId: post_api_v1_webhooks_xendit
-      description: 'Header `x-callback-token` wajib. Isi webhook tidak dipercaya: status selalu dicek ulang ke Xendit.'
+      summary: Notifikasi Midtrans (khusus server Midtrans)
+      operationId: post_api_v1_webhooks_midtrans
+      description: 'Daftarkan sebagai Payment Notification URL di Dashboard Midtrans. `signature_key` wajib valid
+        (SHA512(order_id+status_code+gross_amount+ServerKey)). Isi notifikasi tidak dipercaya: status selalu dicek ulang
+        ke Midtrans. order_id yang bukan milik toko (mis. notifikasi uji dari Dashboard) dijawab 200 dan hanya dicatat.
+        Selain 200, Midtrans mengirim ulang.'
       security: []
       responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/BadGateway'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
         default:
@@ -1539,13 +1546,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/XenditWebhook'
-      parameters:
-      - name: x-callback-token
-        in: header
-        required: true
-        schema:
-          type: string
+              $ref: '#/components/schemas/MidtransNotification'
   /healthz:
     get:
       tags:
@@ -2499,10 +2500,13 @@ components:
         provider:
           type: string
           enum:
+          - midtrans
           - xendit
+          description: xendit hanya untuk data lama (gateway sebelum 2026-11)
         reference_id:
           type: string
           format: uuid
+          description: order_id transaksi di Midtrans
         checkout_url:
           type: string
         payment_method:
@@ -2560,9 +2564,10 @@ components:
         provider:
           type: string
           enum:
-          - xendit
+          - midtrans
         reference_id:
           type: string
+          description: order_id transaksi di Midtrans
         status:
           type: string
           enum:
@@ -2573,7 +2578,11 @@ components:
           - FAILED
         checkout_url:
           type: string
-          description: Redirect pembeli ke halaman bayar Xendit
+          description: Redirect pembeli ke halaman bayar Midtrans (Snap)
+          nullable: true
+        snap_token:
+          type: string
+          description: Opsional, untuk popup snap.js (`window.snap.pay(snap_token)`)
           nullable: true
         amount:
           type: integer
@@ -2598,6 +2607,7 @@ components:
       - reference_id
       - status
       - checkout_url
+      - snap_token
       - amount
       - currency
       - created_at
@@ -3729,27 +3739,37 @@ components:
       required:
       - received
       additionalProperties: false
-    XenditWebhook:
+    MidtransNotification:
       type: object
+      description: Body notifikasi HTTP(S) Midtrans (contoh lengkap di docs.midtrans.com). Field lain diabaikan.
       properties:
-        event:
+        order_id:
           type: string
-          enum:
-          - payment_session.completed
-          - payment_session.expired
-        business_id:
+          description: reference_id payment kita
+        status_code:
           type: string
-        created:
+          example: '200'
+        gross_amount:
           type: string
-        data:
-          type: object
-          properties:
-            payment_session_id:
-              type: string
-            status:
-              type: string
-          required:
-          - payment_session_id
+          example: '100000.00'
+        signature_key:
+          type: string
+          description: SHA512(order_id+status_code+gross_amount+ServerKey), hex
+        transaction_status:
+          type: string
+          example: settlement
+          description: pending, settlement, capture, deny, cancel, expire, failure, refund, partial_refund, ...
+        transaction_id:
+          type: string
+        fraud_status:
+          type: string
+        payment_type:
+          type: string
+        currency:
+          type: string
       required:
-      - event
-      - data
+      - order_id
+      - status_code
+      - gross_amount
+      - signature_key
+      - transaction_status

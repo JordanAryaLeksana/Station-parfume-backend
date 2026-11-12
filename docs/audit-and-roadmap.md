@@ -20,8 +20,9 @@
 | **M11** Deployment Readiness | ✅ Disiapkan & diuji lokal | VPS sendiri: Docker Compose (Caddy HTTPS otomatis, api, migrate, Postgres, Redis), `deploy/update.sh`, backup harian, runbook [`docs/deploy-vps.md`](deploy-vps.md) (lihat [Hasil Eksekusi M11](#hasil-eksekusi-m11--persiapan-deploy-vps-2026-11-11)). Belum di-deploy ke VPS sungguhan |
 | **M6** Data Model | ✅ Diganti schema v3 | `35dc5c5` (katalog sendiri, harga per ml, stok, BIGINT, CHECK) — lihat `docs/schema/README.md` |
 | **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
-| **M8** Xendit (test mode) | ✅ Kode selesai, uji dengan server palsu | Payment Sessions; perlu uji manual test mode dengan key Xendit Pilot |
-| **M9** Midtrans | ✅ Dihapus | Midtrans tidak pernah berjalan & tidak ada data produksi, jadi langsung dihapus bersama M8 |
+| **M8** Xendit (test mode) | ↩️ Diganti M12 | Akun Xendit ditolak (usaha perorangan, belum PT). Kode Xendit dihapus 2026-11-12 (ada di riwayat git) |
+| **M9** Midtrans (Core API lama) | ✅ Dihapus | Kode lama tidak pernah berjalan & tidak ada data produksi, jadi dihapus bersama M8 |
+| **M12** Midtrans Snap | ✅ Kode selesai, uji dengan server palsu | Alur M8 dipertahankan, gateway diganti Snap; migrasi `00002`. Perlu uji manual sandbox dengan key Midtrans Pilot |
 
 > **Catatan:** setelah M1, jalur file `src/modules/Order/...` yang disebut di dokumen ini sekarang menjadi `src/modules/order/...`. Nomor baris di file yang terkena `gofmt` bisa bergeser beberapa baris. Referensi baris di dokumen ini mengacu ke commit `8f6479d` (sebelum M1).
 

@@ -4,9 +4,9 @@ Panduan langkah demi langkah untuk menjalankan backend Station Parfume di satu V
 dengan Docker Compose dan HTTPS otomatis. Semua perintah di sini sudah diuji lokal
 (lihat [Hasil uji](#hasil-uji-lokal-2026-11-11)).
 
-> **Pembayaran live** baru bisa setelah aktivasi akun Xendit disetujui. Sebelum itu
-> server tetap bisa di-deploy dengan key TEST Xendit, atau tanpa key sama sekali
-> (endpoint bayar & webhook menjawab 503).
+> **Pembayaran live** baru bisa setelah akun Midtrans aktif (production). Sebelum itu
+> server tetap bisa di-deploy dengan server key SANDBOX Midtrans, atau tanpa key sama
+> sekali (endpoint bayar & webhook menjawab 503).
 
 ## Ringkasan perintah
 
@@ -175,8 +175,8 @@ Yang wajib diganti di `nano`:
 | `CORS_ALLOWED_ORIGINS` | Semua domain frontend, mis. `https://tokoanda.com,https://www.tokoanda.com` |
 | `GOOGLE_REDIRECT_URL` | `https://api.tokoanda.com/api/v1/auth/google/callback` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Dari Google Cloud Console (boleh kosong dulu) |
-| `XENDIT_SECRET_KEY` / `XENDIT_WEBHOOK_TOKEN` | Dari Dashboard Xendit (boleh kosong dulu) |
-| `CHECKOUT_SUCCESS_URL` / `CHECKOUT_CANCEL_URL` | Halaman frontend setelah bayar/batal (HTTPS) |
+| `MIDTRANS_SERVER_KEY` / `MIDTRANS_IS_PRODUCTION` | Dari Dashboard Midtrans → Settings → Access Keys (boleh kosong dulu). Key sandbox `SB-Mid-server-…` + `false`; key production `Mid-server-…` + `true` |
+| `CHECKOUT_SUCCESS_URL` | Halaman frontend setelah bayar (HTTPS) |
 
 Aturan file: tanpa `$`, spasi, atau tanda kutip di nilai, dan komentar di baris sendiri.
 
@@ -228,7 +228,8 @@ Output `owner: dibuat`. Login staf di `POST https://api.tokoanda.com/api/v1/auth
 |---|---|
 | Frontend | Base URL API `https://api.tokoanda.com/api/v1`. Domain frontend harus ada di `CORS_ALLOWED_ORIGINS`, persis termasuk `https://` dan `www` |
 | Google Cloud Console → Credentials → OAuth client | *Authorized redirect URIs* = nilai `GOOGLE_REDIRECT_URL`, persis |
-| Dashboard Xendit → Settings → Webhooks | URL webhook Payment Sessions: `https://api.tokoanda.com/api/v1/webhooks/xendit` (event `payment_session.completed` & `payment_session.expired`). Salin *verification token* ke `XENDIT_WEBHOOK_TOKEN`. Mode TEST dan LIVE punya pengaturan masing-masing |
+| Dashboard Midtrans → Settings → Configuration | *Payment Notification URL* = `https://api.tokoanda.com/api/v1/webhooks/midtrans`. Tombol uji notifikasi di Dashboard dijawab 200. Sandbox dan production punya pengaturan masing-masing |
+| Dashboard Midtrans → Settings → Snap Preferences | Metode bayar yang tampil, serta *Unfinish/Error Redirect URL* (halaman frontend kalau pembeli menutup/gagal bayar) |
 
 Setiap selesai mengubah `deploy/.env.prod`:
 
@@ -324,7 +325,7 @@ deploy/compose.sh up -d
 ```
 
 Kenapa secret JWT diganti: ID user/pesanan yang dibuat setelah backup akan terpakai ulang,
-dan token lama jangan sampai berlaku untuk akun lain. Setelah pulih, cek Dashboard Xendit
+dan token lama jangan sampai berlaku untuk akun lain. Setelah pulih, cek Dashboard Midtrans
 untuk pembayaran sejak waktu backup. Pesanannya sudah tidak ada di database dan perlu
 ditangani manual.
 
@@ -379,7 +380,7 @@ ditangani manual.
 | Caddy tidak mendapat sertifikat | DNS A belum menunjuk ke VPS, atau port 80/443 tertutup (ufw / firewall panel penyedia). `deploy/compose.sh logs caddy` |
 | Browser: error CORS, API menjawab 403 | Domain frontend belum ada di `CORS_ALLOWED_ORIGINS` (harus persis), lalu `up -d` |
 | Login Google: `redirect_uri_mismatch` | `GOOGLE_REDIRECT_URL` tidak sama persis dengan di Google Cloud Console |
-| Bayar / webhook menjawab 503 | Env Xendit kosong atau salah. Cari `PERINGATAN pembayaran` di log api |
+| Bayar / webhook menjawab 503 | Env Midtrans kosong atau salah (mis. key sandbox dengan `MIDTRANS_IS_PRODUCTION=true`). Cari `PERINGATAN pembayaran` di log api |
 | `api` unhealthy | `curl https://api.tokoanda.com/readyz` menunjukkan database/redis mana yang mati |
 | Banyak pembeli kena 429 bersamaan | Semua terlihat ber-IP sama. Cek `TRUSTED_PROXIES=172.30.10.0/24` dan tidak ada record AAAA |
 
