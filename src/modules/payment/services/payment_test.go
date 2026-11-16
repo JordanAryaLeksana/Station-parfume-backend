@@ -1,50 +1,68 @@
 package services
 
 import (
+	"backend/src/modules/payment/doku"
 	"backend/src/repository"
 	"errors"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestBuildSnapRequest(t *testing.T) {
+func TestInvoiceNumber(t *testing.T) {
+	// Nomor pesanan asli: "SP" + yymmdd + 8 karakter acak.
+	inv := invoiceNumber("SP261116A1B2C3D4", 1)
+	if inv != "SP261116A1B2C3D4P01" {
+		t.Fatalf("invoice = %q", inv)
+	}
+	// Batas DOKU: maks 30 karakter kalau kartu kredit aktif, tanpa simbol untuk KKI.
+	if !regexp.MustCompile(`^[A-Za-z0-9]{1,30}$`).MatchString(invoiceNumber("SP261116A1B2C3D4", 123)) {
+		t.Fatalf("invoice percobaan ke-123 tidak aman: %q", invoiceNumber("SP261116A1B2C3D4", 123))
+	}
+}
+
+func TestBuildCheckoutRequest(t *testing.T) {
 	Configure(nil, Settings{SuccessURL: "https://shop.test/bayar/sukses?x=1"})
-	now := time.Date(2026, 11, 12, 3, 26, 30, 0, time.UTC)
+	now := time.Date(2026, 11, 16, 3, 26, 30, 0, time.UTC)
 	exp := now.Add(90 * time.Minute)
-	order := &repository.Order{OrderNo: "SP2611100ABC", Total: 190000}
-	pay := &repository.Payment{ReferenceID: "ref-1", Amount: 190000, ExpiresAt: &exp}
+	order := &repository.Order{OrderNo: "SP261116A1B2C3D4", Total: 190000}
+	pay := &repository.Payment{ReferenceID: "SP261116A1B2C3D4P01", Amount: 190000, ExpiresAt: &exp}
 	vn := "Dolly Girl, 30 ml, Murni"
-	items := []repository.OrderItem{{ProductName: "Annasui", VariantName: &vn, VariantCode: "annasui-dolly-girl-30-murni", UnitPrice: 95000, Quantity: 2, Subtotal: 190000}}
-	req := buildSnapRequest(order, pay, items, now)
-	if req.TransactionDetails.OrderID != "ref-1" || req.TransactionDetails.GrossAmount != 190000 || req.CustomField1 != "SP2611100ABC" {
+	items := []repository.OrderItem{{ProductName: "Parfum A", VariantName: &vn, VariantCode: "parfum-a-dolly-girl-30-murni", UnitPrice: 95000, Quantity: 2, Subtotal: 190000}}
+	cust := &doku.Customer{Name: "Budi", Email: "budi@test.local"}
+	req := buildCheckoutRequest(order, pay, items, cust, now)
+	o := req.Order
+	if o.InvoiceNumber != "SP261116A1B2C3D4P01" || o.Amount != 190000 || o.Currency != "IDR" || !o.AutoRedirect || req.Customer != cust {
 		t.Fatalf("field wajib salah: %+v", req)
 	}
-	if len(req.ItemDetails) != 1 || req.ItemDetails[0].Name != "Annasui - Dolly Girl, 30 ml, Murni" || req.ItemDetails[0].Price != 95000 ||
-		req.ItemDetails[0].Quantity != 2 || len(req.ItemDetails[0].ID) > 50 {
-		t.Fatalf("items salah: %+v", req.ItemDetails)
+	if len(o.LineItems) != 1 || o.LineItems[0].Name != "Parfum A - Dolly Girl, 30 ml, Murni" || o.LineItems[0].Price != 95000 ||
+		o.LineItems[0].Quantity != 2 || len(o.LineItems[0].ID) > 64 {
+		t.Fatalf("items salah: %+v", o.LineItems)
 	}
-	// start_time dalam WIB, durasi menit sampai batas bayar.
-	if req.Expiry == nil || req.Expiry.StartTime != "2026-11-12 10:26:30 +0700" || req.Expiry.Unit != "minute" || req.Expiry.Duration != 90 ||
-		req.PageExpiry == nil || req.PageExpiry.Duration != 90 {
-		t.Fatalf("expiry salah: %+v %+v", req.Expiry, req.PageExpiry)
+	// payment_due_date = menit sampai batas bayar, dihitung sejak halaman dibuat.
+	if req.Payment.PaymentDueDate != 90 {
+		t.Fatalf("payment_due_date = %d", req.Payment.PaymentDueDate)
 	}
-	u, _ := url.Parse(req.Callbacks.Finish)
-	if u.Query().Get("order") != "SP2611100ABC" || u.Query().Get("x") != "1" || u.Scheme != "https" {
-		t.Fatalf("finish url salah: %s", req.Callbacks.Finish)
+	for _, cb := range []string{o.CallbackURL, o.CallbackURLResult} {
+		u, _ := url.Parse(cb)
+		if u.Query().Get("order") != "SP261116A1B2C3D4" || u.Query().Get("x") != "1" || u.Scheme != "https" {
+			t.Fatalf("callback url salah: %s", cb)
+		}
 	}
-	// Jumlah item ≠ total (mis. nanti ada diskon) → items tidak dikirim (Midtrans menolak).
+	// Jumlah item ≠ total (mis. nanti ada diskon) → items tidak dikirim.
 	pay.Amount, order.Total = 180000, 180000
-	if req := buildSnapRequest(order, pay, items, now); req.ItemDetails != nil {
+	if req := buildCheckoutRequest(order, pay, items, nil, now); req.Order.LineItems != nil || req.Customer != nil {
 		t.Fatal("items harus dikosongkan kalau jumlahnya beda dengan amount")
 	}
-	// Nama item maks 50 karakter, tidak memotong huruf UTF-8.
-	long := strings.Repeat("é", 60)
+	// Nama item maks 255 karakter, tidak memotong huruf UTF-8.
+	long := strings.Repeat("é", 300)
 	items[0].ProductName, items[0].VariantName = long, nil
 	pay.Amount = 190000
-	if req := buildSnapRequest(order, pay, items, now); len([]rune(req.ItemDetails[0].Name)) != 50 || !strings.HasPrefix(long, req.ItemDetails[0].Name) {
-		t.Fatalf("nama dipotong salah: %q", req.ItemDetails[0].Name)
+	if req := buildCheckoutRequest(order, pay, items, nil, now); len([]rune(req.Order.LineItems[0].Name)) != 255 ||
+		!strings.HasPrefix(long, req.Order.LineItems[0].Name) {
+		t.Fatalf("nama dipotong salah: %q", req.Order.LineItems[0].Name)
 	}
 }
 
@@ -57,43 +75,47 @@ func TestSessionExpiry(t *testing.T) {
 	if got := sessionExpiry(now, now.Add(time.Hour)); !got.Equal(now.Add(time.Hour)) {
 		t.Fatalf("batas order lebih awal harus dipakai: %v", got)
 	}
-	// Dibulatkan ke bawah ke menit penuh dari now (expiry Midtrans dalam menit).
+	// Dibulatkan ke bawah ke menit penuh dari now (payment_due_date dalam menit).
 	if got := sessionExpiry(now, now.Add(time.Hour+59*time.Second)); !got.Equal(now.Add(time.Hour)) {
 		t.Fatalf("harus dibulatkan ke menit: %v", got)
 	}
 }
 
 func TestConfigureFromEnv(t *testing.T) {
-	set := func(key, prod, success string) error {
-		t.Setenv("MIDTRANS_SERVER_KEY", key)
-		t.Setenv("MIDTRANS_IS_PRODUCTION", prod)
+	set := func(id, key, prod, success, api string) error {
+		t.Setenv("DOKU_CLIENT_ID", id)
+		t.Setenv("DOKU_SECRET_KEY", key)
+		t.Setenv("DOKU_IS_PRODUCTION", prod)
+		t.Setenv("DOKU_API_URL", api)
 		t.Setenv("CHECKOUT_SUCCESS_URL", success)
 		t.Setenv("PAYMENT_SESSION_MAX_TTL", "")
 		return ConfigureFromEnv()
 	}
-	ok := []struct{ key, prod, success string }{
-		{"SB-Mid-server-abc", "", "https://shop.test/bayar/sukses"},
-		{"SB-Mid-server-abc", "false", "http://localhost:3000/bayar/sukses"},
-		{"Mid-server-abc", "true", "https://stationparfume.com/bayar/sukses"},
+	ok := []struct{ id, key, prod, success, api string }{
+		{"BRN-1", "SK-1", "", "https://shop.test/bayar/sukses", ""},
+		{"BRN-1", "SK-1", "false", "http://localhost:3000/bayar/sukses", ""},
+		{"BRN-1", "SK-1", "true", "https://stationparfume.com/bayar/sukses", ""},
+		{"BRN-1", "SK-1", "", "https://shop.test/x", "http://127.0.0.1:9999"},
 	}
 	for _, c := range ok {
-		if err := set(c.key, c.prod, c.success); err != nil || !configured() || settings.ServerKey != c.key {
+		if err := set(c.id, c.key, c.prod, c.success, c.api); err != nil || !configured() || settings.ClientID != c.id || settings.SecretKey != c.key {
 			t.Errorf("%+v harus valid: %v", c, err)
 		}
 	}
-	bad := []struct{ key, prod, success string }{
-		{"", "", "https://shop.test/x"},                      // key kosong
-		{"SB-Mid-server-abc", "", ""},                        // URL kosong
-		{"SB-Mid-server-abc", "", "http://shop.test/x"},      // http selain localhost
-		{"SB-Mid-server-abc", "true", "https://shop.test/x"}, // key sandbox di production
-		{"Mid-server-abc", "", "https://shop.test/x"},        // key production di sandbox
-		{"SB-Mid-server-abc", "ya", "https://shop.test/x"},   // bool tidak valid
+	bad := []struct{ id, key, prod, success, api string }{
+		{"", "SK-1", "", "https://shop.test/x", ""},             // client id kosong
+		{"BRN-1", "", "", "https://shop.test/x", ""},            // secret kosong
+		{"BRN-1", "SK-1", "", "", ""},                           // URL kosong
+		{"BRN-1", "SK-1", "", "http://shop.test/x", ""},         // http selain localhost
+		{"BRN-1", "SK-1", "ya", "https://shop.test/x", ""},      // bool tidak valid
+		{"BRN-1", "SK-1", "", "https://shop.test/x", "ftp://x"}, // API URL aneh
 	}
 	for _, c := range bad {
-		if err := set(c.key, c.prod, c.success); !errors.Is(err, ErrNotConfigured) || configured() {
+		if err := set(c.id, c.key, c.prod, c.success, c.api); !errors.Is(err, ErrNotConfigured) || configured() {
 			t.Errorf("%+v harus ditolak: %v", c, err)
 		}
 	}
+	set("BRN-1", "SK-1", "", "https://shop.test/x", "")
 	t.Setenv("PAYMENT_SESSION_MAX_TTL", "5m")
 	if err := ConfigureFromEnv(); !errors.Is(err, ErrNotConfigured) {
 		t.Errorf("TTL < 15m harus ditolak: %v", err)

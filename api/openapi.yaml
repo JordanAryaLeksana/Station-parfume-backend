@@ -1103,7 +1103,7 @@ paths:
       - Pesanan
       summary: Detail pesanan milik user (ID atau nomor pesanan)
       operationId: get_api_v1_orders_id
-      description: Halaman finish pembayaran (Midtrans) membawa `?order=SP…`; nomor itu bisa dipakai langsung di sini.
+      description: Halaman sukses pembayaran (callback DOKU) membawa `?order=SP…`; nomor itu bisa dipakai langsung di sini.
       security:
       - bearerAuth: []
       parameters:
@@ -1132,7 +1132,7 @@ paths:
       - Pesanan
       summary: Batalkan pesanan yang belum dibayar
       operationId: put_api_v1_orders_id_cancel
-      description: Transaksi Midtrans yang masih pending ikut di-expire.
+      description: Halaman DOKU Checkout yang masih pending ikut ditutup (VA & QRIS dibatalkan di DOKU; channel lain ditutup di sisi toko dan habis sendiri pada batas waktunya).
       security:
       - bearerAuth: []
       parameters:
@@ -1167,10 +1167,10 @@ paths:
     post:
       tags:
       - Pembayaran
-      summary: Buat/ambil transaksi bayar Midtrans (Snap)
+      summary: Buat/ambil halaman bayar DOKU Checkout
       operationId: post_api_v1_orders_id_pay
-      description: 'Idempoten: selama transaksi masih aktif, checkout_url & snap_token yang sama dikembalikan. Redirect pembeli ke `checkout_url`
-        (atau buka popup snap.js dengan `snap_token`). 503 kalau pembayaran belum dikonfigurasi.'
+      description: 'Idempoten: selama halaman Checkout masih aktif, checkout_url yang sama dikembalikan. Redirect pembeli ke `checkout_url`;
+        setelah bayar DOKU mengarahkan kembali ke halaman sukses `?order=SP…`. 503 kalau pembayaran belum dikonfigurasi.'
       security:
       - bearerAuth: []
       parameters:
@@ -1208,7 +1208,7 @@ paths:
       summary: Ubah status pesanan (staf)
       operationId: put_api_v1_orders_id_status
       description: |-
-        Transisi: PENDING_PAYMENT→CANCELLED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. PAID & EXPIRED hanya dari sistem pembayaran. warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED & REFUNDED hanya owner/admin (lainnya 403). Pembatalan juga meng-expire transaksi Midtrans yang masih pending; REFUNDED menandai pembayaran lunas sebagai REFUNDED (uang dikembalikan manual lewat Dashboard Midtrans).
+        Transisi: PENDING_PAYMENT→CANCELLED, PAID→PROCESSING/REFUNDED, PROCESSING→SHIPPED/REFUNDED, SHIPPED→COMPLETED/REFUNDED. PAID & EXPIRED hanya dari sistem pembayaran. warehouse hanya PROCESSING/SHIPPED/COMPLETED; CANCELLED & REFUNDED hanya owner/admin (lainnya 403). Pembatalan juga menutup halaman DOKU Checkout yang masih pending; REFUNDED menandai pembayaran lunas sebagai REFUNDED (uang dikembalikan manual lewat dashboard DOKU).
 
         **Peran:** owner, admin, warehouse.
       security:
@@ -1513,17 +1513,41 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
-  /api/v1/webhooks/midtrans:
+  /api/v1/webhooks/doku:
     post:
       tags:
       - Pembayaran
-      summary: Notifikasi Midtrans (khusus server Midtrans)
-      operationId: post_api_v1_webhooks_midtrans
-      description: 'Daftarkan sebagai Payment Notification URL di Dashboard Midtrans. `signature_key` wajib valid
-        (SHA512(order_id+status_code+gross_amount+ServerKey)). Isi notifikasi tidak dipercaya: status selalu dicek ulang
-        ke Midtrans. order_id yang bukan milik toko (mis. notifikasi uji dari Dashboard) dijawab 200 dan hanya dicatat.
-        Selain 200, Midtrans mengirim ulang.'
+      summary: Notifikasi DOKU (khusus server DOKU)
+      operationId: post_api_v1_webhooks_doku
+      description: 'Daftarkan sebagai Notification URL di dashboard DOKU (Settings → Payment Settings, dan Expired Notification
+        di pengaturan Checkout). Header `Signature` wajib valid: HMACSHA256=base64(HMAC-SHA256(Secret Key, komponen Client-Id,
+        Request-Id, Request-Timestamp, Request-Target = path ini, Digest = base64(SHA256(body)))). Isi notifikasi tidak dipercaya:
+        status selalu dicek ulang ke DOKU. Invoice yang bukan milik toko (mis. notifikasi uji) dijawab 200 dan hanya dicatat.
+        Selain 2xx, DOKU mengirim ulang (30 menit, 6 jam, 12 jam).'
       security: []
+      parameters:
+      - name: Client-Id
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: Request-Id
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: Request-Timestamp
+        in: header
+        required: true
+        schema:
+          type: string
+          example: '2026-11-16T03:00:00Z'
+      - name: Signature
+        in: header
+        required: true
+        schema:
+          type: string
+          example: HMACSHA256=...
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -1546,7 +1570,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MidtransNotification'
+              $ref: '#/components/schemas/DokuNotification'
   /healthz:
     get:
       tags:
@@ -2500,13 +2524,13 @@ components:
         provider:
           type: string
           enum:
+          - doku
           - midtrans
           - xendit
-          description: xendit hanya untuk data lama (gateway sebelum 2026-11)
+          description: midtrans & xendit hanya untuk data lama (gateway sebelum DOKU, 2026-11)
         reference_id:
           type: string
-          format: uuid
-          description: order_id transaksi di Midtrans
+          description: invoice di DOKU (nomor pesanan + P + nomor percobaan, mis. SP261116A1B2C3D4P01); data lama berupa UUID
         checkout_url:
           type: string
         payment_method:
@@ -2564,10 +2588,10 @@ components:
         provider:
           type: string
           enum:
-          - midtrans
+          - doku
         reference_id:
           type: string
-          description: order_id transaksi di Midtrans
+          description: invoice di DOKU (nomor pesanan + P + nomor percobaan, mis. SP261116A1B2C3D4P01)
         status:
           type: string
           enum:
@@ -2578,11 +2602,7 @@ components:
           - FAILED
         checkout_url:
           type: string
-          description: Redirect pembeli ke halaman bayar Midtrans (Snap)
-          nullable: true
-        snap_token:
-          type: string
-          description: Opsional, untuk popup snap.js (`window.snap.pay(snap_token)`)
+          description: Redirect pembeli ke halaman bayar DOKU Checkout
           nullable: true
         amount:
           type: integer
@@ -2607,7 +2627,6 @@ components:
       - reference_id
       - status
       - checkout_url
-      - snap_token
       - amount
       - currency
       - created_at
@@ -3739,37 +3758,52 @@ components:
       required:
       - received
       additionalProperties: false
-    MidtransNotification:
+    DokuNotification:
       type: object
-      description: Body notifikasi HTTP(S) Midtrans (contoh lengkap di docs.midtrans.com). Field lain diabaikan.
+      description: Body notifikasi HTTP DOKU (non-SNAP). Field lain diabaikan; status selalu dicek ulang lewat Check Status.
       properties:
-        order_id:
-          type: string
-          description: reference_id payment kita
-        status_code:
-          type: string
-          example: '200'
-        gross_amount:
-          type: string
-          example: '100000.00'
-        signature_key:
-          type: string
-          description: SHA512(order_id+status_code+gross_amount+ServerKey), hex
-        transaction_status:
-          type: string
-          example: settlement
-          description: pending, settlement, capture, deny, cancel, expire, failure, refund, partial_refund, ...
-        transaction_id:
-          type: string
-        fraud_status:
-          type: string
-        payment_type:
-          type: string
-        currency:
-          type: string
+        order:
+          type: object
+          properties:
+            invoice_number:
+              type: string
+              description: reference_id payment kita
+            amount:
+              oneOf:
+              - type: integer
+              - type: string
+            status:
+              type: string
+              description: ORDER_GENERATED, ORDER_EXPIRED, ORDER_RECOVERED (notifikasi kedaluwarsa)
+          required:
+          - invoice_number
+        transaction:
+          type: object
+          properties:
+            status:
+              type: string
+              example: SUCCESS
+              description: PENDING, SUCCESS, FAILED, EXPIRED, REFUNDED, TIMEOUT, REDIRECT
+            date:
+              type: string
+            original_request_id:
+              type: string
+        service:
+          type: object
+          properties:
+            id:
+              type: string
+              example: VIRTUAL_ACCOUNT
+        acquirer:
+          type: object
+          properties:
+            id:
+              type: string
+        channel:
+          type: object
+          properties:
+            id:
+              type: string
+              example: VIRTUAL_ACCOUNT_BRI
       required:
-      - order_id
-      - status_code
-      - gross_amount
-      - signature_key
-      - transaction_status
+      - order

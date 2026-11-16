@@ -14,8 +14,8 @@ import (
 )
 
 // PayOrderHandler: POST /orders/:id/pay → {payment: {checkout_url, expires_at, status, ...}}.
-// Frontend redirect ke checkout_url (atau buka popup snap.js dengan snap_token); setelah
-// kembali ke halaman sukses, polling GET /orders/:id.
+// Frontend redirect ke checkout_url (halaman DOKU Checkout); setelah kembali ke
+// halaman sukses (?order=), polling GET /orders/:id.
 func PayOrderHandler(c *gin.Context) {
 	userID := c.GetUint("userID")
 	if userID == 0 {
@@ -35,20 +35,21 @@ func PayOrderHandler(c *gin.Context) {
 	response.OK(c, "Payment ready", payment)
 }
 
-// maxWebhookBody: batas body notifikasi Midtrans.
+// maxWebhookBody: batas body notifikasi DOKU.
 const maxWebhookBody = 64 << 10
 
-// MidtransWebhookHandler: POST /webhooks/midtrans (tanpa JWT; diverifikasi
-// signature_key di body). HTTP 200 = diterima; selain itu Midtrans mengirim ulang.
-func MidtransWebhookHandler(c *gin.Context) {
+// DokuWebhookHandler: POST /webhooks/doku (tanpa JWT; diverifikasi header Signature
+// dengan Request-Target = path request ini). HTTP 2xx = diterima; selain itu DOKU
+// mengirim ulang (30 menit, 6 jam, 12 jam).
+func DokuWebhookHandler(c *gin.Context) {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxWebhookBody))
 	if err != nil {
 		httperror.BadRequestError(c, "Body terlalu besar atau tidak terbaca")
 		return
 	}
-	if err := services.HandleWebhook(c.Request.Context(), body); err != nil {
+	if err := services.HandleWebhook(c.Request.Context(), c.Request.URL.EscapedPath(), c.Request.Header, body); err != nil {
 		if !errors.Is(err, services.ErrUnauthorized) {
-			log.Printf("webhook midtrans: %v", err)
+			log.Printf("webhook doku: %v", err)
 		}
 		writeError(c, err)
 		return

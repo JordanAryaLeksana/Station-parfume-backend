@@ -75,7 +75,7 @@ func CancelOrderHandler(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	// Transaksi Midtrans yang masih pending ikut di-expire (best effort).
+	// Halaman DOKU Checkout yang masih pending ikut ditutup (best effort).
 	paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	response.OK(c, "Order canceled successfully", nil)
 }
@@ -96,7 +96,7 @@ func UpdateOrderStatusHandler(c *gin.Context) {
 		return
 	}
 	if to == repository.OrderCancelled {
-		// Sama seperti pembatalan oleh pembeli: transaksi Midtrans yang masih pending di-expire.
+		// Sama seperti pembatalan oleh pembeli: halaman DOKU Checkout yang masih pending ditutup.
 		paymentservices.CancelOrderSessions(c.Request.Context(), orderID)
 	}
 	response.OK(c, "Order status updated successfully", nil)

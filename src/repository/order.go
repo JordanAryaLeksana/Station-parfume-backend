@@ -128,13 +128,15 @@ type OrderItem struct {
 }
 
 // ---------------------------------------------------------------------
-// Payment — Midtrans Snap (satu baris = satu transaksi Snap)
+// Payment — DOKU Checkout (satu baris = satu halaman Checkout / invoice)
 // ---------------------------------------------------------------------
 
 const (
+	PaymentProviderDoku = "doku"
+	// PaymentProviderMidtrans & PaymentProviderXendit: gateway lama (sampai 2026-11);
+	// hanya untuk baris uji lama.
 	PaymentProviderMidtrans = "midtrans"
-	// PaymentProviderXendit: gateway lama (sampai 2026-11); hanya untuk baris uji lama.
-	PaymentProviderXendit = "xendit"
+	PaymentProviderXendit   = "xendit"
 
 	PaymentPending   = "PENDING"
 	PaymentPaid      = "PAID"
@@ -144,14 +146,14 @@ const (
 	PaymentRefunded  = "REFUNDED"
 )
 
-// Payment: ID internal Midtrans (Snap token di provider_session_id, transaction_id
-// di provider_payment_id) & failure_reason (catatan internal, mis. "refund manual")
-// tidak pernah dikirim ke klien (json:"-"). reference_id = order_id di Midtrans.
+// Payment: ID internal DOKU (token_id di provider_session_id, Request-Id create di
+// provider_payment_request_id) & failure_reason (catatan internal, mis. "refund manual")
+// tidak pernah dikirim ke klien (json:"-"). reference_id = invoice_number di DOKU.
 type Payment struct {
 	ID                       uint           `gorm:"primaryKey" json:"id"`
 	OrderID                  uint           `gorm:"not null" json:"order_id"`
-	Provider                 string         `gorm:"size:20;not null;default:'midtrans'" json:"provider"`
-	ReferenceID              string         `gorm:"type:uuid;not null" json:"reference_id"`
+	Provider                 string         `gorm:"size:20;not null;default:'doku'" json:"provider"`
+	ReferenceID              string         `gorm:"size:64;not null" json:"reference_id"`
 	ProviderSessionID        *string        `gorm:"size:100" json:"-"`
 	ProviderPaymentRequestID *string        `gorm:"size:100" json:"-"`
 	ProviderPaymentID        *string        `gorm:"size:100" json:"-"`
