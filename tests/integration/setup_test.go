@@ -15,7 +15,7 @@ import (
 	"backend/migrations"
 	"backend/src/config"
 	"backend/src/config/seeders"
-	"backend/src/modules/payment/midtrans"
+	"backend/src/modules/payment/doku"
 	paymentservices "backend/src/modules/payment/services"
 	"backend/src/routes"
 	authhandler "backend/src/utils/AuthHandler"
@@ -45,7 +45,8 @@ import (
 
 const (
 	frontendOrigin = "https://shop.test"
-	serverKey      = "SB-Mid-server-test"
+	dokuClientID   = "BRN-0001-TEST"
+	dokuSecret     = "SK-test-rahasia"
 	ownerEmail     = "owner@test.local"
 	ownerPassword  = "rahasia-panjang-123"
 	buyerPassword  = "rahasia-123"
@@ -55,7 +56,7 @@ var (
 	srv      *httptest.Server
 	specDoc  *openapi3.T
 	oaRouter routers.Router
-	fake     = newFakeMidtrans()
+	fake     = newFakeDoku()
 )
 
 func TestMain(m *testing.M) {
@@ -98,7 +99,7 @@ func TestMain(m *testing.M) {
 	authhandler.GoogleOauthConfig.Endpoint = oauth2.Endpoint{AuthURL: google.URL + "/auth", TokenURL: google.URL + "/token", AuthStyle: oauth2.AuthStyleInParams}
 	authhandler.UserInfoURL = google.URL + "/userinfo"
 
-	paymentservices.Configure(fake, paymentservices.Settings{ServerKey: serverKey, SuccessURL: frontendOrigin + "/bayar/sukses"})
+	paymentservices.Configure(fake, paymentSettings)
 
 	engine, err := routes.NewEngine(routes.Options{CORSOrigins: []string{frontendOrigin}, Docs: true})
 	must(err)
@@ -115,6 +116,10 @@ func TestMain(m *testing.M) {
 	srv.Close()
 	os.Exit(code)
 }
+
+// paymentSettings: konfigurasi pembayaran untuk test (cek ulang status tanpa jeda panjang).
+var paymentSettings = paymentservices.Settings{ClientID: dokuClientID, SecretKey: dokuSecret,
+	SuccessURL: frontendOrigin + "/bayar/sukses", RecheckDelay: time.Millisecond}
 
 func must(err error) {
 	if err != nil {
@@ -294,141 +299,149 @@ func registerBuyer(t *testing.T, email string) string {
 	return a
 }
 
-// ------------------------------------------------------------------ Midtrans palsu
+// ------------------------------------------------------------------ DOKU palsu
 
-// fakeTx: satu transaksi Snap di Midtrans palsu, dikunci order_id (= reference_id kita).
+// fakeTx: satu halaman Checkout di DOKU palsu, dikunci invoice (= reference_id kita).
 type fakeTx struct {
-	orderID, token, txID string
-	status               string // "" = pembeli belum memilih metode bayar (status → 404)
-	amount               int64
+	invoice, token, requestID string
+	status                    string // transaction.status: PENDING, SUCCESS, EXPIRED, FAILED, CANCELLED
+	service, channel          string // kosong = pembeli belum memilih channel
+	amount                    int64
 }
 
-type fakeMidtrans struct {
+type fakeDoku struct {
 	mu      sync.Mutex
 	n       int
 	txs     map[string]*fakeTx
 	creates int
+	lastReq doku.PaymentRequest
 }
 
-func newFakeMidtrans() *fakeMidtrans { return &fakeMidtrans{txs: map[string]*fakeTx{}} }
+func newFakeDoku() *fakeDoku { return &fakeDoku{txs: map[string]*fakeTx{}} }
 
-func (f *fakeMidtrans) reset() {
+func (f *fakeDoku) reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.txs, f.creates = map[string]*fakeTx{}, 0
 }
 
-func (f *fakeMidtrans) CreateSnap(_ context.Context, req midtrans.SnapRequest) (*midtrans.SnapResponse, error) {
+func (f *fakeDoku) CreatePayment(_ context.Context, req doku.PaymentRequest) (*doku.PaymentResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.n++
 	f.creates++
-	tok := fmt.Sprintf("snap-%d", f.n)
-	f.txs[req.TransactionDetails.OrderID] = &fakeTx{orderID: req.TransactionDetails.OrderID, token: tok, amount: req.TransactionDetails.GrossAmount}
-	r := &midtrans.SnapResponse{Token: tok, RedirectURL: "https://pay.test/snap/" + tok}
-	r.Raw, _ = json.Marshal(r)
+	f.lastReq = req
+	tok, reqID := fmt.Sprintf("tok-%d", f.n), fmt.Sprintf("req-%d", f.n)
+	f.txs[req.Order.InvoiceNumber] = &fakeTx{invoice: req.Order.InvoiceNumber, token: tok, requestID: reqID,
+		status: doku.StatusPending, amount: req.Order.Amount}
+	r := &doku.PaymentResponse{URL: "https://pay.test/checkout/" + tok, TokenID: tok, RequestID: reqID}
+	r.Raw, _ = json.Marshal(map[string]any{"response": map[string]any{"payment": map[string]any{"url": r.URL, "token_id": tok}}})
 	return r, nil
 }
 
-// find: id = order_id atau transaction_id (seperti API Midtrans).
-func (f *fakeMidtrans) find(id string) *fakeTx {
-	if t, ok := f.txs[id]; ok {
-		return t
+func (t *fakeTx) state() *doku.Status {
+	s := &doku.Status{Order: doku.OrderInfo{InvoiceNumber: t.invoice, Amount: doku.Amount(fmt.Sprint(t.amount)), Status: doku.OrderGenerated},
+		Transaction: doku.TransactionInfo{Status: t.status, OriginalRequestID: t.requestID},
+		Service:     doku.Ref{ID: t.service}, Channel: doku.Ref{ID: t.channel}}
+	if t.status == doku.StatusExpired {
+		s.Order.Status = doku.OrderExpired
 	}
-	for _, t := range f.txs {
-		if t.txID != "" && t.txID == id {
-			return t
-		}
+	return s
+}
+
+func (f *fakeDoku) GetStatus(_ context.Context, invoice string) (*doku.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.txs[invoice]
+	if t == nil {
+		return nil, doku.ErrTransactionNotFound
 	}
+	return t.state(), nil
+}
+
+// Cancel seperti DOKU: hanya VA & QRIS yang masih PENDING; selain itu ditolak (400).
+func (f *fakeDoku) Cancel(_ context.Context, invoice, originalRequestID, _ string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.txs[invoice]
+	switch {
+	case t == nil:
+		return &doku.APIError{HTTPStatus: 404, Messages: []string{"Not Found"}}
+	case originalRequestID != t.requestID:
+		return &doku.APIError{HTTPStatus: 400, Messages: []string{"payment.original_request_id is invalid"}}
+	case t.status != doku.StatusPending:
+		return &doku.APIError{HTTPStatus: 400, Messages: []string{"Transaction cannot be cancelled"}}
+	case t.service != "VIRTUAL_ACCOUNT" && t.service != "QRIS":
+		return &doku.APIError{HTTPStatus: 400, Messages: []string{"Cancellation is not supported for this channel"}}
+	}
+	t.status = "CANCELLED"
 	return nil
 }
 
-func fakeStatusCode(status string) string {
-	switch status {
-	case midtrans.StatusPending:
-		return "201"
-	case midtrans.StatusExpire:
-		return "407"
-	case midtrans.StatusDeny:
-		return "202"
-	}
-	return "200"
-}
-
-func (t *fakeTx) transaction() *midtrans.Transaction {
-	return &midtrans.Transaction{StatusCode: fakeStatusCode(t.status), TransactionID: t.txID, OrderID: t.orderID,
-		GrossAmount: fmt.Sprintf("%d.00", t.amount), Currency: "IDR", PaymentType: "bank_transfer",
-		TransactionStatus: t.status, FraudStatus: midtrans.FraudAccept, VANumbers: []midtrans.VANumber{{Bank: "bca", VANumber: "12345"}}}
-}
-
-func (f *fakeMidtrans) GetStatus(_ context.Context, id string) (*midtrans.Transaction, error) {
+// choose: pembeli memilih channel di halaman Checkout (transaksi tetap PENDING).
+func (f *fakeDoku) choose(invoice, service, channel string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	t := f.find(id)
-	if t == nil || t.status == "" {
-		return nil, midtrans.ErrTransactionNotFound
-	}
-	return t.transaction(), nil
+	t := f.txs[invoice]
+	t.service, t.channel = service, channel
 }
 
-func (f *fakeMidtrans) Expire(_ context.Context, id string) (*midtrans.Transaction, error) {
+// complete: transaksi lunas (amount 0 = sesuai invoice). Halaman Checkout yang
+// sudah ditutup di sisi toko (e-wallet/kartu) tetap bisa dibayar sampai batas waktunya.
+func (f *fakeDoku) complete(invoice string, amount int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	t := f.find(id)
-	if t == nil || t.status == "" {
-		return nil, midtrans.ErrTransactionNotFound
+	t := f.txs[invoice]
+	t.status = doku.StatusSuccess
+	if t.channel == "" {
+		t.service, t.channel = "VIRTUAL_ACCOUNT", "VIRTUAL_ACCOUNT_BRI"
 	}
-	if t.status != midtrans.StatusPending {
-		return nil, &midtrans.APIError{HTTPStatus: 200, StatusCode: "412", Messages: []string{"Merchant cannot modify the status of the transaction"}}
-	}
-	t.status = midtrans.StatusExpire
-	return t.transaction(), nil
-}
-
-// choose: pembeli memilih metode bayar di halaman Snap → transaksi pending.
-func (f *fakeMidtrans) choose(orderID string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	t := f.txs[orderID]
-	t.status, t.txID = midtrans.StatusPending, "tx-"+t.token
-}
-
-// complete: transaksi lunas (amount 0 = sesuai transaksi). order_id yang sudah
-// di-expire juga bisa dibayar lagi lewat halaman Snap yang masih terbuka.
-func (f *fakeMidtrans) complete(orderID string, amount int64) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	t := f.txs[orderID]
-	t.status, t.txID = midtrans.StatusSettlement, "tx-"+t.token
 	if amount > 0 {
 		t.amount = amount
 	}
 }
 
-func (f *fakeMidtrans) status(orderID string) string {
+func (f *fakeDoku) setStatus(invoice, status string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if t, ok := f.txs[orderID]; ok {
+	f.txs[invoice].status = status
+}
+
+func (f *fakeDoku) status(invoice string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if t, ok := f.txs[invoice]; ok {
 		return t.status
 	}
 	return ""
 }
 
-// notify mengirim notifikasi Midtrans untuk orderID dengan status yang DIKLAIM
-// (boleh beda dengan status sebenarnya di Midtrans palsu), ditandatangani dengan key.
-func notify(t *testing.T, orderID, status, key string) resp {
+var notifySeq int
+
+// notifyBody mengirim body notifikasi apa adanya, ditandatangani seperti DOKU
+// (Request-Target = path webhook kita) dengan secret.
+func notifyBody(t *testing.T, body []byte, secret string) resp {
+	t.Helper()
+	notifySeq++
+	path := "/api/v1/webhooks/doku"
+	reqID, ts := fmt.Sprintf("notif-%d", notifySeq), time.Now().UTC().Format(doku.TimestampLayout)
+	return call(t, "POST", path, "", body, "Client-Id", dokuClientID, "Request-Id", reqID, "Request-Timestamp", ts,
+		"Signature", doku.Sign(dokuClientID, reqID, ts, path, body, secret))
+}
+
+// notify mengirim notifikasi DOKU untuk invoice dengan status yang DIKLAIM (boleh
+// beda dengan status sebenarnya di DOKU palsu).
+func notify(t *testing.T, invoice, status, secret string) resp {
 	t.Helper()
 	fake.mu.Lock()
-	tx := *fake.txs[orderID]
+	tx := *fake.txs[invoice]
 	fake.mu.Unlock()
-	code, gross := fakeStatusCode(status), fmt.Sprintf("%d.00", tx.amount)
 	body := j(map[string]any{
-		"transaction_time": time.Now().Format("2006-01-02 15:04:05"), "transaction_status": status, "transaction_id": tx.txID,
-		"status_message": "midtrans payment notification", "status_code": code, "signature_key": midtrans.Signature(orderID, code, gross, key),
-		"payment_type": "bank_transfer", "order_id": orderID, "gross_amount": gross, "fraud_status": "accept", "currency": "IDR",
-		"va_numbers": []map[string]string{{"bank": "bca", "va_number": "12345"}},
+		"order":       map[string]any{"invoice_number": invoice, "amount": tx.amount},
+		"transaction": map[string]any{"status": status, "date": time.Now().UTC().Format(doku.TimestampLayout), "original_request_id": tx.requestID},
+		"service":     map[string]any{"id": tx.service}, "acquirer": map[string]any{"id": "BRI"}, "channel": map[string]any{"id": tx.channel},
 	})
-	return call(t, "POST", "/api/v1/webhooks/midtrans", "", []byte(body))
+	return notifyBody(t, []byte(body), secret)
 }
 
 // ------------------------------------------------------------------ Google palsu

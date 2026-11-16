@@ -9,7 +9,9 @@
 
 **Update (2026-11-11) — schema disederhanakan ke kebutuhan sekarang (26 → 15 tabel):** reseller, voucher & promo, alamat tersimpan, audit log, stok multi lokasi, tabel `shipments`, serta kurir & nomor resi (tracking, menyusul di MVP berikutnya) dihapus. Stok produk umum sekarang langsung di `variants.stock` / `variants.reserved`; riwayatnya tetap di `stock_movements`. Pesanan dikirim manual dari toko: admin cukup mengubah status ke `SHIPPED`. Schema menjadi migrasi goose pertama `migrations/00001_init.sql`; server menolak start kalau database belum di versi migrasi terbaru. Fitur yang dihapus bisa ditambahkan lagi nanti sebagai migrasi baru (lihat §6).
 
-**Update pembayaran (2026-11-12) — Midtrans Snap:** akun Xendit ditolak (usaha perorangan, belum PT), jadi gateway diganti **Midtrans Snap**, yang menerima merchant perorangan. Alur, aturan keamanan, dan tabel tetap sama (§5b). Migrasi `00002` mengizinkan `payments.provider = 'midtrans'`. Diuji dengan server Midtrans palsu (signature asli), termasuk order yang kedaluwarsa sebelum pembeli memilih metode bayar.
+**Update pembayaran (2026-11-16) — DOKU Checkout:** aktivasi Midtrans ditolak final (13 Nov), jadi gateway diganti **DOKU Checkout** (akun Personal untuk usaha perorangan). Alur, aturan keamanan, dan tabel tetap sama (§5b). Migrasi `00003` mengubah `payments.reference_id` menjadi teks (invoice DOKU = nomor pesanan + `P` + nomor percobaan) dan mengizinkan `provider = 'doku'`. Diuji dengan server DOKU palsu (signature HMAC asli), termasuk channel yang tidak bisa dibatalkan (e-wallet) dan notifikasi SUCCESS yang datang sebelum status DOKU berubah.
+
+**Update pembayaran (2026-11-12) — Midtrans Snap (sudah diganti, lihat di atas):** akun Xendit ditolak (usaha perorangan, belum PT), jadi gateway diganti **Midtrans Snap**, yang menerima merchant perorangan. Alur, aturan keamanan, dan tabel tetap sama (§5b). Migrasi `00002` mengizinkan `payments.provider = 'midtrans'`. Diuji dengan server Midtrans palsu (signature asli), termasuk order yang kedaluwarsa sebelum pembeli memilih metode bayar.
 
 **Update pembayaran (2026-11-10) — M8 Xendit (sudah diganti, lihat di atas):** Midtrans dihapus; pembayaran lewat **Xendit Payment Sessions** (hosted checkout). Alur & kontrak API di §5b. Tabel tidak berubah (`payments`, `payment_events` sudah ada); transisi baru di Go: order `EXPIRED/CANCELLED → PAID` khusus untuk pembayaran yang terverifikasi datang terlambat. Diuji: 26 skenario dengan server Xendit palsu + regresi 40 cek.
 
@@ -47,7 +49,7 @@
 3. carts · cart_items
 4. orders (alamat snapshot, expires_at, shipped_at) · order_items (snapshot)
 5. stock_movements (riwayat stok)
-6. payments · payment_events (Midtrans)
+6. payments · payment_events (DOKU)
 ```
 
 ### ERD
@@ -71,7 +73,7 @@ erDiagram
     orders ||--|{ order_items : "snapshot"
     variants |o--o{ order_items : "referensi"
     orders |o--o{ stock_movements : "penjualan"
-    orders ||--o{ payments : "Midtrans"
+    orders ||--o{ payments : "DOKU"
     payments |o--o{ payment_events : webhooks
 
     products {
@@ -160,7 +162,7 @@ erDiagram
 | `orders.status` | Arti | Stok |
 |---|---|---|
 | `PENDING_PAYMENT` | Belum bayar (batas `expires_at`) | di-reserve |
-| `PAID` | Pembayaran Midtrans terverifikasi | dipotong (`sale`) |
+| `PAID` | Pembayaran DOKU terverifikasi | dipotong (`sale`) |
 | `PROCESSING` | Dikemas | — |
 | `SHIPPED` | Dikirim (manual dari toko) | — |
 | `COMPLETED` | Selesai | — |
@@ -180,25 +182,26 @@ Stok (owner, admin, warehouse): `POST /admin/inventory/adjustments` (`mode: set|
 
 Pesanan (owner, admin, warehouse): `PUT /orders/:id/status` `{status, reason?}`.
 
-## 5b. Pembayaran (Midtrans Snap)
+## 5b. Pembayaran (DOKU Checkout)
 
 ```
 FE: POST /orders (checkout, stok di-reserve)          → order PENDING_PAYMENT (expires_at = +24 jam)
-FE: POST /orders/:id/pay                               → {payment: {checkout_url, snap_token, expires_at, status}}
-     (idempoten: selama transaksi masih aktif, checkout_url & snap_token yang sama dikembalikan)
-FE: redirect ke checkout_url (atau popup snap.js dengan snap_token) → pembeli bayar di halaman Snap (VA/QRIS/GoPay, sesuai Dashboard)
-Midtrans → POST /api/v1/webhooks/midtrans (signature_key = SHA512(order_id+status_code+gross_amount+ServerKey))
-     → notifikasi disimpan di payment_events (dedup) → status dicek ulang: GET /v2/{transaction_id}/status
-     → settlement (atau capture + fraud accept) + nominal cocok → payment PAID, order PAID (stok terpotong)
+FE: POST /orders/:id/pay                               → {payment: {checkout_url, reference_id, expires_at, status}}
+     (idempoten: selama halaman Checkout masih aktif, checkout_url yang sama dikembalikan)
+FE: redirect ke checkout_url → pembeli bayar di halaman DOKU Checkout (VA/QRIS/e-wallet, sesuai dashboard DOKU)
+DOKU → POST /api/v1/webhooks/doku (header Signature = HMACSHA256 atas Client-Id, Request-Id, Request-Timestamp,
+     Request-Target = path webhook, Digest = SHA256 body)
+     → notifikasi disimpan di payment_events (dedup) → status dicek ulang: GET /orders/v1/status/{invoice}
+     → SUCCESS + nominal cocok → payment PAID, order PAID (stok terpotong)
 FE: kembali ke CHECKOUT_SUCCESS_URL?order=SP… → polling GET /orders/:id sampai status PAID
 ```
 
-- **Kolom `payments` untuk Midtrans:** `reference_id` = order_id di Midtrans, `provider_session_id` = Snap token, `checkout_url` = redirect_url, `provider_payment_id` = transaction_id (diisi setelah pembeli memilih metode), `payment_method`/`payment_channel` = jenis & bank (mis. `BANK_TRANSFER` / `BCA`).
-- **Isi notifikasi tidak dipercaya.** Signature diverifikasi, lalu status dan nominal selalu diambil dari API status Midtrans. Nominal ≠ `orders.total` → payment `FAILED`. Notifikasi lunas yang statusnya di Midtrans masih pending dijawab 503 supaya Midtrans mengirim ulang. Notifikasi untuk order_id yang bukan milik toko (mis. tombol uji di Dashboard) dijawab 200 dan hanya dicatat.
-- **Kedaluwarsa:** loop tiap 5 menit (`ReconcileAndExpire`) mengecek payment PENDING > 10 menit (notifikasi terlewat). Untuk order yang lewat batas bayar, transaksinya di-**expire dulu** di Midtrans, baru order `EXPIRED` dan reservasi dilepas. Pembeli/staf yang membatalkan order juga meng-expire transaksinya.
-- **Batasan Snap:** kalau pembeli belum memilih metode bayar, Midtrans belum punya transaksi yang bisa di-expire. Payment ditutup di sisi kita, dan halaman Snap habis sendiri pada batas waktunya (`expiry` = batas bayar order). Kalau pembeli tetap membayar lewat halaman yang masih terbuka, notifikasinya diproses sebagai pembayaran telat.
+- **Kolom `payments` untuk DOKU:** `reference_id` = `order.invoice_number` (nomor pesanan + `P` + nomor percobaan 2 digit, mis. `SP261116A1B2C3D4P01`; alfanumerik ≤30 karakter supaya aman untuk kartu kredit & KKI), `provider_session_id` = token_id, `provider_payment_request_id` = Request-Id saat create (dibutuhkan API cancel), `checkout_url` = payment.url, `payment_method`/`payment_channel` = service & channel DOKU (mis. `VIRTUAL_ACCOUNT` / `VIRTUAL_ACCOUNT_BRI`).
+- **Isi notifikasi tidak dipercaya.** Signature header diverifikasi (Client-Id harus milik kita), lalu status dan nominal selalu diambil dari Check Status DOKU. Nominal ≠ `orders.total` → payment `FAILED`. Notifikasi SUCCESS yang statusnya di DOKU belum lunas dicek ulang 2× (jeda 2 detik), lalu dijawab 503; rekonsiliasi berikutnya juga mengecek payment yang punya notifikasi belum terproses. `FAILED` tidak menutup payment (pembeli masih bisa mencoba lagi di halaman yang sama). Invoice yang bukan milik toko (notifikasi uji) dijawab 200 dan hanya dicatat.
+- **Kedaluwarsa:** halaman Checkout dibuat dengan `payment_due_date` = batas bayar order (dibatasi `PAYMENT_SESSION_MAX_TTL`). Loop tiap 5 menit (`ReconcileAndExpire`) mengecek payment PENDING > 10 menit (notifikasi terlewat). Untuk order yang lewat batas bayar, halaman Checkout-nya **ditutup dulu**, baru order `EXPIRED` dan reservasi dilepas. Pembeli/staf yang membatalkan order juga menutup halamannya.
+- **Batasan cancel DOKU:** API cancel hanya untuk VA & QRIS (fitur *Order Cancellation* harus dinyalakan di dashboard). Untuk e-wallet/kartu, atau kalau pembeli belum memilih channel, payment ditutup di sisi kita dan link DOKU habis sendiri pada batas waktunya. Kalau pembeli tetap membayar lewat link itu, notifikasinya diproses sebagai pembayaran telat.
 - **Pembayaran telat** (uang masuk setelah order kedaluwarsa/batal): order tetap diterima sebagai `PAID`, stok dipotong tanpa menyentuh reservasi order lain. Jejaknya terlihat di order (status `PAID` dengan `cancelled_at` terisi) dan di log server. Pembayaran ganda untuk order yang sudah lunas → `FAILED` + catatan refund manual.
-- **Env:** `MIDTRANS_SERVER_KEY`, `CHECKOUT_SUCCESS_URL` (HTTPS; http hanya localhost), opsional `MIDTRANS_IS_PRODUCTION` (default false), `MIDTRANS_SNAP_URL`/`MIDTRANS_API_URL`, `PAYMENT_SESSION_MAX_TTL`. Lihat `.env.example`.
+- **Env:** `DOKU_CLIENT_ID`, `DOKU_SECRET_KEY`, `CHECKOUT_SUCCESS_URL` (HTTPS; http hanya localhost), opsional `DOKU_IS_PRODUCTION` (default false), `DOKU_API_URL`, `PAYMENT_SESSION_MAX_TTL`. Lihat `.env.example`.
 - **Ongkir:** ditanggung pemilik → `shipping_fee = 0`. Dikirim manual dari toko.
 
 ## 6. Belum ada (tambahkan sebagai migrasi baru saat dibutuhkan)
@@ -213,7 +216,7 @@ FE: kembali ke CHECKOUT_SUCCESS_URL?order=SP… → polling GET /orders/:id samp
 | Kurir & nomor resi (tracking) | kolom `courier` + `tracking_number` di `orders` (atau tabel pengiriman kalau 1 order bisa beberapa paket) |
 | Ongkir otomatis (Biteship/RajaOngkir) | ongkir & area di order, atau tabel pengiriman terpisah |
 
-Refund masih manual lewat Dashboard Midtrans. Akses CS (peran `cs`) belum punya endpoint.
+Refund masih manual lewat dashboard DOKU. Akses CS (peran `cs`) belum punya endpoint.
 
 ## 7. Menerapkan ke database
 

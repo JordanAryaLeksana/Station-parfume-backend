@@ -160,7 +160,7 @@ func snapshotItem(v *repository.Variant, qty int) repository.OrderItem {
 
 // FindOrderForUser mencari pesanan milik user lewat ID angka atau nomor
 // pesanan ("SP261111A1B2C3D4", tidak peka huruf besar/kecil). Halaman sukses
-// pembayaran (callbacks.finish Midtrans) membawa ?order=<nomor pesanan>.
+// pembayaran (callback_url DOKU) membawa ?order=<nomor pesanan>.
 func FindOrderForUser(ref string, userID uint) (*repository.Order, error) {
 	ref = strings.TrimSpace(ref)
 	if id, err := strconv.ParseUint(ref, 10, 64); err == nil && id > 0 {
@@ -215,8 +215,8 @@ func CancelOrder(orderID, userID uint, reason *string) error {
 }
 
 // staffStatusRoles: status yang boleh diset staf lewat PUT /orders/:id/status,
-// dan peran yang boleh. PAID & EXPIRED hanya dari sistem (Midtrans / job
-// kedaluwarsa): menandai lunas manual memotong stok padahal link bayar Midtrans
+// dan peran yang boleh. PAID & EXPIRED hanya dari sistem (DOKU / job
+// kedaluwarsa): menandai lunas manual memotong stok padahal link bayar DOKU
 // masih hidup → risiko pembayaran ganda.
 var staffStatusRoles = map[string][]string{
 	repository.OrderProcessing: {repository.RoleOwner, repository.RoleAdmin, repository.RoleWarehouse},
@@ -228,7 +228,7 @@ var staffStatusRoles = map[string][]string{
 
 // UpdateOrderStatus (staf): pindah status sesuai CanOrderTransition dan peran.
 // Mengembalikan status tujuan (huruf besar). Pembatalan oleh staf: pemanggil
-// (controller) wajib mematikan transaksi Midtrans yang masih pending.
+// (controller) wajib menutup halaman DOKU Checkout yang masih pending.
 func UpdateOrderStatus(orderID uint, role string, input *models.UpdateOrderStatusDTO) (string, error) {
 	if err := validate.Struct(input); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrValidation, err)
@@ -276,7 +276,7 @@ func ApplyStatus(tx *gorm.DB, order *repository.Order, to string, reason *string
 	case repository.OrderCompleted:
 		updates["completed_at"] = now
 	case repository.OrderRefunded:
-		// Uang dikembalikan manual lewat Dashboard Midtrans; catatan pembayarannya ikut ditandai.
+		// Uang dikembalikan manual lewat dashboard DOKU; catatan pembayarannya ikut ditandai.
 		if err := tx.Model(&repository.Payment{}).Where("order_id = ? AND status = ?", order.ID, repository.PaymentPaid).
 			Update("status", repository.PaymentRefunded).Error; err != nil {
 			return fmt.Errorf("failed to mark payment refunded: %w", err)
@@ -310,7 +310,7 @@ func orderItemsWithVariant(tx *gorm.DB, orderID uint) ([]repository.OrderItem, e
 // (mis. dibayar tepat saat batas waktu habis). Uang sudah diterima, jadi order
 // diterima sebagai PAID. Reservasi stoknya sudah dilepas, jadi stok dipotong
 // TANPA menyentuh reserved (milik order lain). Hanya dipanggil dari jalur pembayaran
-// yang sudah diverifikasi ke Midtrans — admin tetap memakai ApplyStatus.
+// yang sudah diverifikasi ke DOKU — admin tetap memakai ApplyStatus.
 func ApplyLatePayment(tx *gorm.DB, order *repository.Order) error {
 	if order.Status != repository.OrderExpired && order.Status != repository.OrderCancelled {
 		return fmt.Errorf("%w: pembayaran telat hanya untuk order EXPIRED/CANCELLED (status %s)", ErrValidation, order.Status)
@@ -406,7 +406,7 @@ func ExpireOrder(orderID uint) (bool, error) {
 
 // ExpireOverdueOrders menandai semua order yang lewat batas bayar sebagai EXPIRED.
 // Catatan: modul payment memakai OverdueOrderIDs + ExpireOrder supaya transaksi
-// Midtrans dicek & di-expire dulu (lihat payment services ReconcileAndExpire).
+// DOKU dicek & ditutup dulu (lihat payment services ReconcileAndExpire).
 func ExpireOverdueOrders(now time.Time) (int, error) {
 	ids, err := OverdueOrderIDs(now)
 	if err != nil {

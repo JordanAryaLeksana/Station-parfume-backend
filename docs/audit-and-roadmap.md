@@ -22,7 +22,8 @@
 | **M7** Order & Checkout | ✅ Selesai | checkout transaksional, snapshot, state machine, reservasi stok, expiry |
 | **M8** Xendit (test mode) | ↩️ Diganti M12 | Akun Xendit ditolak (usaha perorangan, belum PT). Kode Xendit dihapus 2026-11-12 (ada di riwayat git) |
 | **M9** Midtrans (Core API lama) | ✅ Dihapus | Kode lama tidak pernah berjalan & tidak ada data produksi, jadi dihapus bersama M8 |
-| **M12** Midtrans Snap | ✅ Kode selesai, uji dengan server palsu | Alur M8 dipertahankan, gateway diganti Snap; migrasi `00002`. Perlu uji manual sandbox dengan key Midtrans Pilot |
+| **M12** Midtrans Snap | ⛔ Diganti M13 | Aktivasi Midtrans ditolak final (13 Nov 2026); kode dihapus, riwayat di git |
+| **M13** DOKU Checkout | ✅ Kode selesai, uji dengan server palsu | Alur M8 dipertahankan, gateway diganti DOKU Checkout; migrasi `00003` (reference_id teks). Perlu uji manual sandbox dengan key DOKU Pilot |
 
 > **Catatan:** setelah M1, jalur file `src/modules/Order/...` yang disebut di dokumen ini sekarang menjadi `src/modules/order/...`. Nomor baris di file yang terkena `gofmt` bisa bergeser beberapa baris. Referensi baris di dokumen ini mengacu ke commit `8f6479d` (sebelum M1).
 

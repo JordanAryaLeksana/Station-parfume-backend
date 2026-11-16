@@ -1,19 +1,19 @@
-// Package services: pembayaran lewat Midtrans Snap (hosted checkout).
+// Package services: pembayaran lewat DOKU Checkout (hosted payment page).
 //
 // Alur: POST /orders (checkout) → POST /orders/:id/pay → redirect ke checkout_url
-// (halaman Snap) → notifikasi Midtrans → status dicek ulang lewat GET status → order PAID.
-// Isi notifikasi TIDAK pernah dipercaya; status PAID hanya dari GetStatus.
+// (halaman DOKU Checkout) → notifikasi DOKU → status dicek ulang lewat Check Status →
+// order PAID. Isi notifikasi TIDAK pernah dipercaya; status PAID hanya dari GetStatus.
 //
-// Satu baris payments = satu transaksi Snap: payments.reference_id (UUID) dikirim
-// sebagai order_id Midtrans, provider_session_id = Snap token, checkout_url =
-// redirect_url, provider_payment_id = transaction_id (diisi setelah pembeli
-// memilih metode bayar).
+// Satu baris payments = satu halaman Checkout: payments.reference_id dikirim sebagai
+// order.invoice_number (nomor pesanan + "P" + nomor percobaan), provider_session_id =
+// token_id, provider_payment_request_id = Request-Id create (dibutuhkan API cancel),
+// checkout_url = payment.url.
 package services
 
 import (
 	"backend/src/config"
 	orderservices "backend/src/modules/order/services"
-	"backend/src/modules/payment/midtrans"
+	"backend/src/modules/payment/doku"
 	"backend/src/modules/payment/models"
 	"backend/src/repository"
 	"context"
@@ -21,13 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -40,22 +40,26 @@ var (
 	ErrUnauthorized  = errors.New("unauthorized")
 	ErrGateway       = errors.New("payment gateway error")
 	ErrNotConfigured = errors.New("pembayaran belum dikonfigurasi")
-	// ErrRetryLater: notifikasi belum bisa diproses (mis. status di Midtrans belum
-	// sesuai notifikasi) → dijawab 503 supaya Midtrans mengirim ulang.
+	// ErrRetryLater: notifikasi belum bisa diproses (status di DOKU belum sesuai
+	// notifikasi) → dijawab 503 supaya DOKU mengirim ulang.
 	ErrRetryLater = errors.New("retry later")
 )
 
-// Gateway = bagian client Midtrans yang dipakai service (diganti server palsu saat test).
+// Gateway = bagian client DOKU yang dipakai service (diganti server palsu saat test).
 type Gateway interface {
-	CreateSnap(ctx context.Context, req midtrans.SnapRequest) (*midtrans.SnapResponse, error)
-	GetStatus(ctx context.Context, id string) (*midtrans.Transaction, error)
-	Expire(ctx context.Context, id string) (*midtrans.Transaction, error)
+	CreatePayment(ctx context.Context, req doku.PaymentRequest) (*doku.PaymentResponse, error)
+	GetStatus(ctx context.Context, invoice string) (*doku.Status, error)
+	Cancel(ctx context.Context, invoice, originalRequestID, note string) error
 }
 
 type Settings struct {
-	ServerKey     string        // untuk memverifikasi signature_key notifikasi
-	SuccessURL    string        // halaman FE "memverifikasi pembayaran" (callbacks.finish)
-	MaxSessionTTL time.Duration // batas atas umur transaksi Snap (default 24 jam)
+	ClientID      string        // Client-Id notifikasi harus sama dengan ini
+	SecretKey     string        // untuk memverifikasi Signature notifikasi
+	SuccessURL    string        // halaman FE "memverifikasi pembayaran" (callback_url)
+	MaxSessionTTL time.Duration // batas atas umur halaman Checkout (default 24 jam)
+	// RecheckDelay: jeda cek status ulang saat notifikasi SUCCESS tapi DOKU masih
+	// PENDING (default 2 detik, 2× sebelum dijawab 503).
+	RecheckDelay time.Duration
 }
 
 var (
@@ -68,14 +72,17 @@ func Configure(g Gateway, s Settings) {
 	if s.MaxSessionTTL <= 0 {
 		s.MaxSessionTTL = 24 * time.Hour
 	}
+	if s.RecheckDelay <= 0 {
+		s.RecheckDelay = 2 * time.Second
+	}
 	gateway, settings = g, s
 }
 
-// ConfigureFromEnv membaca MIDTRANS_SERVER_KEY, CHECKOUT_SUCCESS_URL (wajib),
-// MIDTRANS_IS_PRODUCTION (opsional, default false = sandbox), MIDTRANS_SNAP_URL /
-// MIDTRANS_API_URL (opsional, override URL), PAYMENT_SESSION_MAX_TTL (opsional,
-// mis. "24h"). Kalau ada yang kosong/salah, pembayaran dimatikan (endpoint bayar &
-// webhook menjawab 503) dan error dikembalikan untuk di-log.
+// ConfigureFromEnv membaca DOKU_CLIENT_ID, DOKU_SECRET_KEY, CHECKOUT_SUCCESS_URL
+// (wajib), DOKU_IS_PRODUCTION (opsional, default false = sandbox), DOKU_API_URL
+// (opsional, override URL), PAYMENT_SESSION_MAX_TTL (opsional, mis. "24h"). Kalau
+// ada yang kosong/salah, pembayaran dimatikan (endpoint bayar & webhook menjawab
+// 503) dan error dikembalikan untuk di-log.
 func ConfigureFromEnv() error {
 	fail := func(format string, a ...any) error {
 		gateway = nil
@@ -89,7 +96,7 @@ func ConfigureFromEnv() error {
 		}
 		return v
 	}
-	key, success := get("MIDTRANS_SERVER_KEY"), get("CHECKOUT_SUCCESS_URL")
+	clientID, secret, success := get("DOKU_CLIENT_ID"), get("DOKU_SECRET_KEY"), get("CHECKOUT_SUCCESS_URL")
 	if len(missing) > 0 {
 		return fail("env kosong: %s", strings.Join(missing, ", "))
 	}
@@ -97,19 +104,16 @@ func ConfigureFromEnv() error {
 		return fail("CHECKOUT_SUCCESS_URL harus URL HTTPS (http hanya untuk localhost)")
 	}
 	production := false
-	if v := strings.TrimSpace(os.Getenv("MIDTRANS_IS_PRODUCTION")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("DOKU_IS_PRODUCTION")); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return fail("MIDTRANS_IS_PRODUCTION %q tidak valid (true/false)", v)
+			return fail("DOKU_IS_PRODUCTION %q tidak valid (true/false)", v)
 		}
 		production = b
 	}
-	// Key sandbox diawali "SB-"; key production tidak. Campur keduanya pasti 401.
-	if production && strings.HasPrefix(key, "SB-") {
-		return fail("MIDTRANS_IS_PRODUCTION=true tapi MIDTRANS_SERVER_KEY adalah key sandbox (SB-...)")
-	}
-	if !production && strings.HasPrefix(key, "Mid-server-") {
-		return fail("MIDTRANS_SERVER_KEY adalah key production; set MIDTRANS_IS_PRODUCTION=true atau pakai key sandbox")
+	apiURL := strings.TrimSpace(os.Getenv("DOKU_API_URL"))
+	if apiURL != "" && !validReturnURL(apiURL) {
+		return fail("DOKU_API_URL %q harus URL HTTPS", apiURL)
 	}
 	ttl := 24 * time.Hour
 	if v := os.Getenv("PAYMENT_SESSION_MAX_TTL"); v != "" {
@@ -119,8 +123,8 @@ func ConfigureFromEnv() error {
 		}
 		ttl = d
 	}
-	Configure(midtrans.New(key, production, os.Getenv("MIDTRANS_SNAP_URL"), os.Getenv("MIDTRANS_API_URL")),
-		Settings{ServerKey: key, SuccessURL: success, MaxSessionTTL: ttl})
+	Configure(doku.New(clientID, secret, production, apiURL),
+		Settings{ClientID: clientID, SecretKey: secret, SuccessURL: success, MaxSessionTTL: ttl})
 	return nil
 }
 
@@ -137,17 +141,19 @@ func configured() bool { return gateway != nil }
 
 const (
 	// Payment PENDING tanpa checkout_url yang lebih baru dari ini dianggap masih
-	// dibuat oleh request lain (jangan buat transaksi Snap kedua).
+	// dibuat oleh request lain (jangan buat halaman Checkout kedua).
 	pendingCreateGrace = 30 * time.Second
-	// Sisa waktu bayar minimal supaya transaksi Snap baru masih masuk akal.
+	// Sisa waktu bayar minimal supaya halaman Checkout baru masih masuk akal.
 	minSessionTTL = 11 * time.Minute
-	// Rekonsiliasi: payment PENDING lebih tua dari ini dicek ke Midtrans (notifikasi terlewat).
+	// Rekonsiliasi: payment PENDING lebih tua dari ini dicek ke DOKU (notifikasi terlewat).
 	reconcileAfter = 10 * time.Minute
+	// Cek status ulang sebelum notifikasi SUCCESS dijawab 503.
+	recheckAttempts = 2
 )
 
-// PayOrder membuat (atau memakai ulang) transaksi Snap untuk order milik user.
-// Idempoten: selama ada payment PENDING yang belum kedaluwarsa, checkout_url yang
-// sama dikembalikan.
+// PayOrder membuat (atau memakai ulang) halaman DOKU Checkout untuk order milik
+// user. Idempoten: selama ada payment PENDING yang belum kedaluwarsa, checkout_url
+// yang sama dikembalikan.
 func PayOrder(ctx context.Context, userID, orderID uint) (*models.PaymentResponseDTO, error) {
 	if !configured() {
 		return nil, ErrNotConfigured
@@ -175,7 +181,7 @@ func PayOrder(ctx context.Context, userID, orderID uint) (*models.PaymentRespons
 		var existing repository.Payment
 		err = tx.Where("order_id = ? AND status = ?", order.ID, repository.PaymentPending).First(&existing).Error
 		switch {
-		case err == nil && existing.Provider == repository.PaymentProviderMidtrans && existing.CheckoutURL != nil &&
+		case err == nil && existing.Provider == repository.PaymentProviderDoku && existing.CheckoutURL != nil &&
 			(existing.ExpiresAt == nil || existing.ExpiresAt.After(now.Add(time.Minute))):
 			pay, reuse = existing, true
 			return nil
@@ -190,9 +196,16 @@ func PayOrder(ctx context.Context, userID, orderID uint) (*models.PaymentRespons
 		case !errors.Is(err, gorm.ErrRecordNotFound):
 			return err
 		}
+		// Nomor percobaan dihitung di bawah lock order (termasuk baris soft-delete,
+		// karena reference_id unik untuk semua baris).
+		var attempts int64
+		if err := tx.Unscoped().Model(&repository.Payment{}).Where("order_id = ?", order.ID).Count(&attempts).Error; err != nil {
+			return err
+		}
 		expires := sessionExpiry(now, *order.ExpiresAt)
-		pay = repository.Payment{OrderID: order.ID, Provider: repository.PaymentProviderMidtrans, ReferenceID: uuid.NewString(),
-			Amount: order.Total, Currency: "IDR", Status: repository.PaymentPending, ExpiresAt: &expires}
+		pay = repository.Payment{OrderID: order.ID, Provider: repository.PaymentProviderDoku,
+			ReferenceID: invoiceNumber(order.OrderNo, attempts+1), Amount: order.Total, Currency: "IDR",
+			Status: repository.PaymentPending, ExpiresAt: &expires}
 		return tx.Create(&pay).Error
 	})
 	if err != nil {
@@ -206,15 +219,20 @@ func PayOrder(ctx context.Context, userID, orderID uint) (*models.PaymentRespons
 	if err := config.DB.Where("order_id = ?", order.ID).Order("id").Find(&items).Error; err != nil {
 		return nil, err
 	}
-	snap, gwErr := gateway.CreateSnap(ctx, buildSnapRequest(order, &pay, items, now))
+	var buyer repository.User
+	var customer *doku.Customer
+	if err := config.DB.Select("id", "name", "email").First(&buyer, order.UserID).Error; err == nil {
+		customer = &doku.Customer{Name: truncate(buyer.Name, 255), Email: truncate(buyer.Email, 128)}
+	}
+	res, gwErr := gateway.CreatePayment(ctx, buildCheckoutRequest(order, &pay, items, customer, now))
 	if gwErr != nil {
 		reason := truncate(gwErr.Error(), 500)
 		config.DB.Model(&pay).Updates(map[string]any{"status": repository.PaymentFailed, "failure_reason": reason})
-		log.Printf("midtrans create snap order %s: %v", order.OrderNo, gwErr)
+		log.Printf("doku create checkout order %s: %v", order.OrderNo, gwErr)
 		return nil, fmt.Errorf("%w: gagal membuat transaksi pembayaran, coba lagi", ErrGateway)
 	}
-	upd := map[string]any{"provider_session_id": snap.Token, "checkout_url": snap.RedirectURL,
-		"provider_response": datatypes.JSON(snap.Raw)}
+	upd := map[string]any{"provider_session_id": truncate(res.TokenID, 100), "provider_payment_request_id": truncate(res.RequestID, 100),
+		"checkout_url": res.URL, "provider_response": datatypes.JSON(res.Raw)}
 	if err := config.DB.Model(&pay).Updates(upd).Error; err != nil {
 		return nil, err
 	}
@@ -224,8 +242,15 @@ func PayOrder(ctx context.Context, userID, orderID uint) (*models.PaymentRespons
 	return toResponse(pay), nil
 }
 
-// sessionExpiry: batas transaksi = batas bayar order, dibatasi MaxSessionTTL,
-// dibulatkan ke bawah ke menit penuh dari `now` (expiry Midtrans dalam menit).
+// invoiceNumber: invoice DOKU = nomor pesanan + "P" + nomor percobaan 2 digit, mis.
+// SP261116A1B2C3D4P01. Alfanumerik dan ≤30 karakter (batas kalau kartu kredit aktif;
+// KKI tidak menerima simbol), dan mudah dicocokkan pemilik di dashboard DOKU.
+func invoiceNumber(orderNo string, attempt int64) string {
+	return fmt.Sprintf("%sP%02d", orderNo, attempt)
+}
+
+// sessionExpiry: batas halaman Checkout = batas bayar order, dibatasi MaxSessionTTL,
+// dibulatkan ke bawah ke menit penuh dari `now` (payment_due_date DOKU dalam menit).
 func sessionExpiry(now, orderExpiry time.Time) time.Time {
 	exp := orderExpiry
 	if limit := now.Add(settings.MaxSessionTTL); exp.After(limit) {
@@ -234,35 +259,33 @@ func sessionExpiry(now, orderExpiry time.Time) time.Time {
 	return now.Add(exp.Sub(now).Truncate(time.Minute))
 }
 
-func buildSnapRequest(order *repository.Order, pay *repository.Payment, items []repository.OrderItem, now time.Time) midtrans.SnapRequest {
-	req := midtrans.SnapRequest{
-		TransactionDetails: midtrans.TransactionDetails{OrderID: pay.ReferenceID, GrossAmount: pay.Amount},
-		Callbacks:          &midtrans.Callbacks{Finish: withOrderParam(settings.SuccessURL, order.OrderNo)},
-		CustomField1:       order.OrderNo,
+func buildCheckoutRequest(order *repository.Order, pay *repository.Payment, items []repository.OrderItem, customer *doku.Customer, now time.Time) doku.PaymentRequest {
+	finish := withOrderParam(settings.SuccessURL, order.OrderNo)
+	req := doku.PaymentRequest{
+		Order: doku.OrderRequest{Amount: pay.Amount, InvoiceNumber: pay.ReferenceID, Currency: "IDR",
+			CallbackURL: finish, CallbackURLResult: finish, AutoRedirect: true},
+		Customer: customer,
 	}
 	if pay.ExpiresAt != nil {
 		if minutes := int(pay.ExpiresAt.Sub(now) / time.Minute); minutes > 0 {
-			// start_time diisi supaya batas waktu dihitung sejak link dibuat, bukan
-			// sejak pembeli memilih metode bayar.
-			req.Expiry = &midtrans.Expiry{StartTime: midtrans.FormatTime(now), Unit: "minute", Duration: minutes}
-			req.PageExpiry = &midtrans.PageExpiry{Duration: minutes, Unit: "minute"}
+			req.Payment.PaymentDueDate = minutes // dihitung sejak halaman dibuat
 		}
 	}
-	// Rincian item hanya dikirim kalau jumlahnya persis sama dengan total (Midtrans
-	// menolak kalau beda; ongkir & diskon sekarang 0, jadi biasanya sama).
+	// Rincian item hanya dikirim kalau jumlahnya persis sama dengan total (DOKU
+	// mensyaratkan price×quantity = amount; ongkir & diskon sekarang 0, jadi biasanya sama).
 	var sum int64
-	list := make([]midtrans.Item, 0, len(items))
+	list := make([]doku.LineItem, 0, len(items))
 	for _, it := range items {
 		name := it.ProductName
 		if it.VariantName != nil && *it.VariantName != "" {
 			name += " - " + *it.VariantName
 		}
-		list = append(list, midtrans.Item{ID: truncate(it.VariantCode, 50), Price: it.UnitPrice, Quantity: it.Quantity,
-			Name: truncate(name, 50), Category: "Parfum"})
+		list = append(list, doku.LineItem{ID: truncate(it.VariantCode, 64), Name: truncate(name, 255), Price: it.UnitPrice,
+			Quantity: it.Quantity, Category: "Parfum"})
 		sum += it.Subtotal
 	}
 	if sum == pay.Amount {
-		req.ItemDetails = list
+		req.Order.LineItems = list
 	}
 	return req
 }
@@ -278,42 +301,31 @@ func withOrderParam(base, orderNo string) string {
 	return u.String()
 }
 
-// finalStatus: notifikasi yang mengubah payment (status lain hanya disimpan).
-func finalStatus(s string) bool {
-	switch s {
-	case midtrans.StatusSettlement, midtrans.StatusCapture, midtrans.StatusDeny, midtrans.StatusCancel,
-		midtrans.StatusExpire, midtrans.StatusFailure:
-		return true
-	}
-	return false
-}
-
-// HandleWebhook memproses notifikasi Midtrans. signature_key diverifikasi
-// (constant-time), notifikasi mentah disimpan (dedup), lalu status dicek ulang
-// lewat GetStatus. Error yang dikembalikan → handler menjawab non-2xx supaya
-// Midtrans mengirim ulang.
-func HandleWebhook(ctx context.Context, body []byte) error {
-	if !configured() || settings.ServerKey == "" {
+// HandleWebhook memproses notifikasi DOKU. Signature header diverifikasi
+// (constant-time, Request-Target = path), notifikasi mentah disimpan (dedup), lalu
+// status dicek ulang lewat GetStatus. Error yang dikembalikan → handler menjawab
+// non-2xx supaya DOKU mengirim ulang.
+func HandleWebhook(ctx context.Context, path string, header http.Header, body []byte) error {
+	if !configured() || settings.SecretKey == "" {
 		return ErrNotConfigured
 	}
-	var n midtrans.Transaction
-	if err := json.Unmarshal(body, &n); err != nil || n.OrderID == "" || n.StatusCode == "" || n.GrossAmount == "" || n.TransactionStatus == "" {
-		return fmt.Errorf("%w: body notifikasi tidak dikenali", ErrValidation)
-	}
-	if !midtrans.VerifySignature(&n, settings.ServerKey) {
+	if err := doku.VerifyNotification(header, path, body, settings.ClientID, settings.SecretKey); err != nil {
 		return ErrUnauthorized
 	}
-	status := n.Status()
-	eventType := status
-	if f := n.Fraud(); f != "" {
-		eventType += "/" + f // capture/challenge lalu capture/accept = dua event berbeda
+	var n doku.Status
+	if err := json.Unmarshal(body, &n); err != nil || n.Order.InvoiceNumber == "" {
+		return fmt.Errorf("%w: body notifikasi tidak dikenali", ErrValidation)
 	}
-	lookup := n.TransactionID
-	if lookup == "" {
-		lookup = n.OrderID
+	status := n.TxStatus()
+	if status == "" && n.OrderStatus() == doku.OrderExpired {
+		status = doku.StatusExpired // notifikasi kedaluwarsa halaman Checkout
 	}
-	row := repository.PaymentEvent{Provider: repository.PaymentProviderMidtrans, EventType: truncate(eventType, 100),
-		ProviderPaymentID: truncate(lookup, 100), Payload: datatypes.JSON(body)}
+	if status == "" {
+		return fmt.Errorf("%w: notifikasi tanpa transaction.status", ErrValidation)
+	}
+	invoice := n.Order.InvoiceNumber
+	row := repository.PaymentEvent{Provider: repository.PaymentProviderDoku, EventType: truncate(status, 100),
+		ProviderPaymentID: truncate(invoice, 100), Payload: datatypes.JSON(body)}
 	if err := config.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 		return err
 	}
@@ -326,27 +338,34 @@ func HandleWebhook(ctx context.Context, body []byte) error {
 			return nil // duplikat yang sudah diproses → no-op
 		}
 	}
-	known, err := knownOrderID(n.OrderID)
+	known, err := knownInvoice(invoice)
 	if err != nil {
 		return err
 	}
 	if !known {
-		// Bukan transaksi toko ini (mis. tombol "test notification" di Dashboard):
-		// dijawab 200 supaya Midtrans tidak mengirim ulang, catatannya tetap disimpan.
+		// Bukan transaksi toko ini (mis. notifikasi uji dari dashboard): dijawab 200
+		// supaya DOKU tidak mengirim ulang, catatannya tetap disimpan.
 		return config.DB.Model(&row).Updates(map[string]any{"processed_at": time.Now(),
-			"process_error": "order_id tidak dikenal (bukan transaksi toko ini / notifikasi uji)"}).Error
+			"process_error": "invoice tidak dikenal (bukan transaksi toko ini / notifikasi uji)"}).Error
 	}
-	if !finalStatus(status) {
-		now := time.Now()
-		return config.DB.Model(&row).Update("processed_at", now).Error // pending/refund/...: disimpan saja
+	if status != doku.StatusSuccess && status != doku.StatusExpired {
+		// PENDING/FAILED (pembeli masih bisa coba lagi)/REFUNDED/...: disimpan saja
+		return config.DB.Model(&row).Update("processed_at", time.Now()).Error
 	}
-	// transaction_id dari notifikasi yang signature-nya valid dipakai untuk cek
-	// status (DANA hanya bisa dicek dengan transaction_id).
-	paymentID, cur, err := syncTransaction(ctx, lookup, n.OrderID)
-	if err == nil && (cur == "" || cur == midtrans.StatusPending) {
-		// Status di Midtrans belum sesuai notifikasi → jangan tandai selesai; biarkan
-		// Midtrans mengirim ulang (rekonsiliasi berkala juga akan mengecek).
-		err = fmt.Errorf("%w: notifikasi %s tapi status di Midtrans %q", ErrRetryLater, status, cur)
+	paymentID, cur, err := syncTransaction(ctx, invoice)
+	for i := 0; i < recheckAttempts && err == nil && status == doku.StatusSuccess && cur != doku.StatusSuccess; i++ {
+		// DOKU menyarankan cek status ±1 menit setelah bayar: status bisa tertinggal.
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+		case <-time.After(settings.RecheckDelay):
+			paymentID, cur, err = syncTransaction(ctx, invoice)
+		}
+	}
+	if err == nil && status == doku.StatusSuccess && cur != doku.StatusSuccess {
+		// Status di DOKU belum lunas → jangan tandai selesai; DOKU mengirim ulang dan
+		// rekonsiliasi berkala juga mengecek payment yang punya notifikasi belum terproses.
+		err = fmt.Errorf("%w: notifikasi %s tapi status di DOKU %q", ErrRetryLater, status, cur)
 	}
 	upd := map[string]any{}
 	if paymentID != 0 {
@@ -364,71 +383,53 @@ func HandleWebhook(ctx context.Context, body []byte) error {
 	return err
 }
 
-// knownOrderID: order_id Midtrans milik salah satu payment kita (reference_id UUID).
-func knownOrderID(id string) (bool, error) {
-	if _, err := uuid.Parse(id); err != nil {
-		return false, nil
-	}
+// knownInvoice: invoice DOKU milik salah satu payment kita.
+func knownInvoice(invoice string) (bool, error) {
 	var n int64
 	err := config.DB.Model(&repository.Payment{}).
-		Where("provider = ? AND reference_id = ?", repository.PaymentProviderMidtrans, id).Count(&n).Error
+		Where("provider = ? AND reference_id = ?", repository.PaymentProviderDoku, invoice).Count(&n).Error
 	return n > 0, err
 }
 
-// gatewayID: id untuk API status/expire. transaction_id kalau sudah diketahui
-// (wajib untuk DANA), kalau belum order_id (= reference_id kita).
-func gatewayID(p repository.Payment) string {
-	if p.ProviderPaymentID != nil && *p.ProviderPaymentID != "" {
-		return *p.ProviderPaymentID
-	}
-	return p.ReferenceID
-}
-
-// syncTransaction mengambil status dari Midtrans (sumber kebenaran) lalu
-// menerapkannya ke payment + order. orderID = order_id Midtrans yang diharapkan.
-// Mengembalikan id payment kita dan transaction_status ("" = transaksi belum ada).
-func syncTransaction(ctx context.Context, id, orderID string) (uint, string, error) {
+// syncTransaction mengambil status dari DOKU (sumber kebenaran) lalu menerapkannya
+// ke payment + order. Mengembalikan id payment kita dan transaction.status
+// ("" = DOKU belum mengenal invoice ini).
+func syncTransaction(ctx context.Context, invoice string) (uint, string, error) {
 	if !configured() {
 		return 0, "", ErrNotConfigured
 	}
-	t, err := gateway.GetStatus(ctx, id)
-	if errors.Is(err, midtrans.ErrTransactionNotFound) {
-		return 0, "", nil // pembeli belum memilih metode bayar
+	s, err := gateway.GetStatus(ctx, invoice)
+	if errors.Is(err, doku.ErrTransactionNotFound) {
+		return 0, "", nil
 	}
 	if err != nil {
-		return 0, "", fmt.Errorf("%w: status %s: %v", ErrGateway, id, err)
+		return 0, "", fmt.Errorf("%w: status %s: %v", ErrGateway, invoice, err)
 	}
-	if orderID != "" && t.OrderID != orderID {
-		return 0, t.Status(), fmt.Errorf("%w: order_id status %q ≠ %q", ErrValidation, t.OrderID, orderID)
+	if s.Order.InvoiceNumber != "" && s.Order.InvoiceNumber != invoice {
+		return 0, s.TxStatus(), fmt.Errorf("%w: invoice status %q ≠ %q", ErrValidation, s.Order.InvoiceNumber, invoice)
 	}
-	pid, err := applyTransaction(t)
-	return pid, t.Status(), err
+	pid, err := applyStatus(invoice, s)
+	return pid, s.TxStatus(), err
 }
 
-func applyTransaction(t *midtrans.Transaction) (uint, error) {
-	if _, err := uuid.Parse(t.OrderID); err != nil {
-		return 0, fmt.Errorf("payment untuk order_id %q: %w", t.OrderID, ErrNotFound)
-	}
+func applyStatus(invoice string, s *doku.Status) (uint, error) {
 	var paymentID uint
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
 		var p repository.Payment
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("provider = ? AND reference_id = ?", repository.PaymentProviderMidtrans, t.OrderID).First(&p).Error
+			Where("provider = ? AND reference_id = ?", repository.PaymentProviderDoku, invoice).First(&p).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("payment untuk order_id %s: %w", t.OrderID, ErrNotFound)
+			return fmt.Errorf("payment untuk invoice %s: %w", invoice, ErrNotFound)
 		}
 		if err != nil {
 			return err
 		}
 		paymentID = p.ID
 		info := map[string]any{}
-		if t.TransactionID != "" && (p.ProviderPaymentID == nil || *p.ProviderPaymentID != t.TransactionID) {
-			info["provider_payment_id"] = truncate(t.TransactionID, 100)
+		if m := s.Method(); m != "" {
+			info["payment_method"] = truncate(m, 50)
 		}
-		if t.PaymentType != "" {
-			info["payment_method"] = truncate(strings.ToUpper(t.PaymentType), 50)
-		}
-		if ch := t.Channel(); ch != "" {
+		if ch := s.ChannelName(); ch != "" {
 			info["payment_channel"] = truncate(ch, 50)
 		}
 		if len(info) > 0 {
@@ -436,30 +437,26 @@ func applyTransaction(t *midtrans.Transaction) (uint, error) {
 				return err
 			}
 		}
-		switch s := t.Status(); {
-		case t.Paid():
-			return applyCompleted(tx, &p, t)
-		case s == midtrans.StatusExpire:
+		switch {
+		case s.Paid():
+			return applyCompleted(tx, &p, s)
+		case s.Expired():
 			return closePending(tx, &p, repository.PaymentExpired)
-		case s == midtrans.StatusCancel:
-			return closePending(tx, &p, repository.PaymentCancelled)
-		case s == midtrans.StatusDeny, s == midtrans.StatusFailure, s == midtrans.StatusCapture && t.Fraud() == midtrans.FraudDeny:
-			if p.Status == repository.PaymentPending {
-				return markFailed(tx, &p, "ditolak Midtrans: "+s)
-			}
+		case s.TxStatus() == doku.StatusRefunded:
+			log.Printf("payment %d (%s): DOKU melaporkan REFUNDED; status order diurus pemilik", p.ID, p.ReferenceID)
 		}
-		return nil // pending/authorize/challenge/refund: belum ada perubahan
+		return nil // PENDING/FAILED/TIMEOUT/REDIRECT: belum ada perubahan
 	})
 	return paymentID, err
 }
 
-func applyCompleted(tx *gorm.DB, p *repository.Payment, t *midtrans.Transaction) error {
+func applyCompleted(tx *gorm.DB, p *repository.Payment, s *doku.Status) error {
 	if p.Status == repository.PaymentPaid {
 		return nil // idempoten
 	}
-	amount, err := t.AmountRupiah()
-	if err != nil || amount != p.Amount || (t.Currency != "" && t.Currency != "IDR") {
-		return markFailed(tx, p, fmt.Sprintf("nominal transaksi %s %s ≠ %d IDR", t.GrossAmount, t.Currency, p.Amount))
+	amount, err := s.AmountRupiah()
+	if cur := strings.ToUpper(s.Order.Currency); err != nil || amount != p.Amount || (cur != "" && cur != "IDR") {
+		return markFailed(tx, p, fmt.Sprintf("nominal transaksi %s %s ≠ %d IDR", s.Order.Amount, s.Order.Currency, p.Amount))
 	}
 	order, err := orderservices.LockOrder(tx, p.OrderID, nil)
 	if err != nil {
@@ -471,7 +468,7 @@ func applyCompleted(tx *gorm.DB, p *repository.Payment, t *midtrans.Transaction)
 		return err
 	}
 	if paidCount > 0 {
-		return markFailed(tx, p, "pembayaran ganda untuk order yang sudah lunas — refund manual lewat Dashboard Midtrans")
+		return markFailed(tx, p, "pembayaran ganda untuk order yang sudah lunas — refund manual lewat dashboard DOKU")
 	}
 	now := time.Now()
 	if err := tx.Model(p).Updates(map[string]any{"status": repository.PaymentPaid, "paid_at": now, "failure_reason": nil}).Error; err != nil {
@@ -508,15 +505,15 @@ func markFailed(tx *gorm.DB, p *repository.Payment, reason string) error {
 	return tx.Model(p).Updates(map[string]any{"status": repository.PaymentFailed, "failure_reason": truncate(reason, 500)}).Error
 }
 
-// CancelOrderSessions mematikan transaksi Midtrans yang masih pending untuk order
-// (mis. setelah pembeli membatalkan order), supaya tidak bisa dibayar. Best effort.
+// CancelOrderSessions menutup halaman Checkout yang masih pending untuk order (mis.
+// setelah pembeli membatalkan order), supaya tidak bisa dibayar. Best effort.
 func CancelOrderSessions(ctx context.Context, orderID uint) {
 	if !configured() {
 		return
 	}
 	var pending []repository.Payment
 	if err := config.DB.Where("order_id = ? AND status = ? AND provider = ? AND provider_session_id IS NOT NULL",
-		orderID, repository.PaymentPending, repository.PaymentProviderMidtrans).Find(&pending).Error; err != nil {
+		orderID, repository.PaymentPending, repository.PaymentProviderDoku).Find(&pending).Error; err != nil {
 		log.Printf("batalkan pembayaran order %d: %v", orderID, err)
 		return
 	}
@@ -527,32 +524,53 @@ func CancelOrderSessions(ctx context.Context, orderID uint) {
 	}
 }
 
-// closeAtGateway: expire transaksi di Midtrans lalu tutup payment sebagai closeAs.
-//   - Kalau ternyata sudah lunas (412), status sebenarnya diterapkan (bukan dibatalkan).
-//   - Kalau pembeli belum memilih metode bayar, tidak ada transaksi yang bisa
-//     dimatikan: payment ditutup di sisi kita dan halaman Snap habis sendiri. Kalau
-//     tetap dibayar, notifikasinya diproses sebagai pembayaran telat.
+// closeAtGateway: tutup halaman Checkout di DOKU lalu tutup payment sebagai closeAs.
+//   - Sudah lunas di DOKU → status sebenarnya diterapkan (bukan dibatalkan).
+//   - Masih PENDING → API cancel. DOKU hanya bisa membatalkan VA & QRIS; kalau
+//     ditolak (e-wallet/kartu, atau pembeli belum memilih channel), payment ditutup di
+//     sisi kita dan link DOKU habis sendiri pada payment_due_date (≤ batas bayar
+//     order). Kalau tetap dibayar, notifikasinya diproses sebagai pembayaran telat.
 //
 // Error jaringan/5xx dikembalikan supaya dicoba lagi.
 func closeAtGateway(ctx context.Context, p repository.Payment, closeAs string) error {
-	id := gatewayID(p)
-	t, err := gateway.Expire(ctx, id)
-	var apiErr *midtrans.APIError
-	if errors.As(err, &apiErr) && apiErr.Rejected() {
-		t, err = gateway.GetStatus(ctx, id) // mis. 412: sudah tidak pending → ambil status sebenarnya
-	}
+	s, err := gateway.GetStatus(ctx, p.ReferenceID)
 	switch {
-	case errors.Is(err, midtrans.ErrTransactionNotFound):
+	case errors.Is(err, doku.ErrTransactionNotFound):
 		return closeLocal(p.ID, closeAs)
 	case err != nil:
 		return err
-	case t.OrderID != "" && t.OrderID != p.ReferenceID:
-		return fmt.Errorf("%w: order_id %q ≠ %q", ErrValidation, t.OrderID, p.ReferenceID)
-	case t.Status() == midtrans.StatusExpire:
+	case s.Paid():
+		_, err = applyStatus(p.ReferenceID, s)
+		return err
+	case s.Expired():
 		return closeLocal(p.ID, closeAs)
 	}
-	_, err = applyTransaction(t)
-	return err
+	reqID := ""
+	if p.ProviderPaymentRequestID != nil {
+		reqID = *p.ProviderPaymentRequestID
+	}
+	note := "pesanan dibatalkan"
+	if closeAs == repository.PaymentExpired {
+		note = "batas waktu pembayaran pesanan habis"
+	}
+	if err := gateway.Cancel(ctx, p.ReferenceID, reqID, note); err != nil {
+		var apiErr *doku.APIError
+		if !errors.As(err, &apiErr) || !apiErr.Rejected() {
+			return err
+		}
+		// Ditolak: cek lagi, siapa tahu baru saja dibayar.
+		s2, err2 := gateway.GetStatus(ctx, p.ReferenceID)
+		switch {
+		case err2 == nil && s2.Paid():
+			_, err = applyStatus(p.ReferenceID, s2)
+			return err
+		case err2 != nil && !errors.Is(err2, doku.ErrTransactionNotFound):
+			return err2
+		}
+		log.Printf("payment %d (%s): DOKU menolak cancel (%v); ditutup di sisi toko, link habis sendiri pada batas waktunya",
+			p.ID, p.ReferenceID, apiErr)
+	}
+	return closeLocal(p.ID, closeAs)
 }
 
 // closeLocal menutup payment yang masih PENDING (tidak menimpa PAID dari notifikasi
@@ -563,22 +581,34 @@ func closeLocal(paymentID uint, status string) error {
 }
 
 // ReconcileAndExpire dipanggil berkala dari main.go:
-//  1. payment PENDING yang > 10 menit dicek ke Midtrans (notifikasi terlewat);
-//  2. order yang lewat batas bayar: transaksinya di-expire dulu, baru order EXPIRED.
-//     Kalau expire gagal karena jaringan, order dilewati sampai putaran berikutnya
-//     (supaya tidak ada transaksi pending yang masih hidup untuk order EXPIRED).
+//  1. payment PENDING yang > 10 menit, atau yang punya notifikasi belum terproses
+//     (mis. SUCCESS saat status DOKU masih tertinggal), dicek ke DOKU;
+//  2. order yang lewat batas bayar: halaman Checkout-nya ditutup dulu, baru order
+//     EXPIRED. Kalau gagal karena jaringan, order dilewati sampai putaran berikutnya.
 func ReconcileAndExpire(ctx context.Context, now time.Time) (expired int, err error) {
 	if !configured() {
 		return orderservices.ExpireOverdueOrders(now)
 	}
+	unprocessed := config.DB.Model(&repository.PaymentEvent{}).Select("provider_payment_id").
+		Where("provider = ? AND processed_at IS NULL", repository.PaymentProviderDoku)
 	var stale []repository.Payment
-	if err := config.DB.Where("provider = ? AND status = ? AND provider_session_id IS NOT NULL AND created_at < ?",
-		repository.PaymentProviderMidtrans, repository.PaymentPending, now.Add(-reconcileAfter)).Order("id").Find(&stale).Error; err != nil {
+	if err := config.DB.Where("provider = ? AND status = ? AND provider_session_id IS NOT NULL",
+		repository.PaymentProviderDoku, repository.PaymentPending).
+		Where("(created_at < ? OR reference_id IN (?))", now.Add(-reconcileAfter), unprocessed).
+		Order("id").Find(&stale).Error; err != nil {
 		return 0, err
 	}
 	for _, p := range stale {
-		if _, _, err := syncTransaction(ctx, gatewayID(p), p.ReferenceID); err != nil {
+		_, cur, err := syncTransaction(ctx, p.ReferenceID)
+		if err != nil {
 			log.Printf("rekonsiliasi payment %d: %v", p.ID, err)
+			continue
+		}
+		if cur == doku.StatusSuccess {
+			// notifikasi yang tadinya dijawab 503 sekarang sudah tertangani
+			config.DB.Model(&repository.PaymentEvent{}).
+				Where("provider = ? AND provider_payment_id = ? AND processed_at IS NULL", repository.PaymentProviderDoku, p.ReferenceID).
+				Updates(map[string]any{"processed_at": time.Now(), "process_error": nil, "payment_id": p.ID})
 		}
 	}
 	ids, err := orderservices.OverdueOrderIDs(now)
@@ -588,23 +618,23 @@ func ReconcileAndExpire(ctx context.Context, now time.Time) (expired int, err er
 	for _, id := range ids {
 		var pending []repository.Payment
 		if err := config.DB.Where("order_id = ? AND status = ? AND provider = ? AND provider_session_id IS NOT NULL",
-			id, repository.PaymentPending, repository.PaymentProviderMidtrans).Find(&pending).Error; err != nil {
+			id, repository.PaymentPending, repository.PaymentProviderDoku).Find(&pending).Error; err != nil {
 			return expired, err
 		}
 		ok := true
 		for _, p := range pending {
 			if err := closeAtGateway(ctx, p, repository.PaymentExpired); err != nil {
-				log.Printf("expire order %d: payment %d gagal di-expire, dicoba lagi nanti: %v", id, p.ID, err)
+				log.Printf("expire order %d: payment %d gagal ditutup, dicoba lagi nanti: %v", id, p.ID, err)
 				ok = false
 			}
 		}
 		if !ok {
 			continue
 		}
-		// percobaan yang transaksinya tidak pernah jadi (create gagal di tengah jalan),
-		// atau sisa gateway lama
+		// percobaan yang halaman Checkout-nya tidak pernah jadi (create gagal di tengah
+		// jalan), atau sisa gateway lama
 		if err := config.DB.Model(&repository.Payment{}).
-			Where("order_id = ? AND status = ? AND (provider_session_id IS NULL OR provider <> ?)", id, repository.PaymentPending, repository.PaymentProviderMidtrans).
+			Where("order_id = ? AND status = ? AND (provider_session_id IS NULL OR provider <> ?)", id, repository.PaymentPending, repository.PaymentProviderDoku).
 			Updates(map[string]any{"status": repository.PaymentCancelled, "failure_reason": "order kedaluwarsa"}).Error; err != nil {
 			return expired, err
 		}
@@ -621,7 +651,7 @@ func ReconcileAndExpire(ctx context.Context, now time.Time) (expired int, err er
 
 func toResponse(p repository.Payment) *models.PaymentResponseDTO {
 	return &models.PaymentResponseDTO{ID: p.ID, OrderID: p.OrderID, Provider: p.Provider, ReferenceID: p.ReferenceID, Status: p.Status,
-		CheckoutURL: p.CheckoutURL, SnapToken: p.ProviderSessionID, Amount: p.Amount, Currency: p.Currency,
+		CheckoutURL: p.CheckoutURL, Amount: p.Amount, Currency: p.Currency,
 		ExpiresAt: p.ExpiresAt, PaidAt: p.PaidAt, CreatedAt: p.CreatedAt}
 }
 

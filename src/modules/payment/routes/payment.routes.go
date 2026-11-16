@@ -8,12 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterPaymentRoutes: pembayaran Midtrans Snap.
-//   - POST /orders/:id/pay     (JWT, pemilik order) → checkout_url (halaman Snap)
-//   - POST /webhooks/midtrans  (TANPA JWT; diverifikasi signature_key di body,
-//     status selalu dicek ulang ke Midtrans). Daftarkan URL ini sebagai
-//     Payment Notification URL di Dashboard Midtrans.
+// RegisterPaymentRoutes: pembayaran DOKU Checkout.
+//   - POST /orders/:id/pay  (JWT, pemilik order) → checkout_url (halaman DOKU Checkout)
+//   - POST /webhooks/doku   (TANPA JWT; diverifikasi header Signature, status selalu
+//     dicek ulang ke DOKU). Daftarkan URL ini sebagai Notification URL di dashboard
+//     DOKU (Settings → Payment Settings, plus Expired Notification di Checkout).
 func RegisterPaymentRoutes(r *gin.RouterGroup) {
-	r.POST("/webhooks/midtrans", controller.MidtransWebhookHandler)
+	r.POST("/webhooks/doku", controller.DokuWebhookHandler)
 	r.POST("/orders/:id/pay", authmiddlewares.AuthMiddleware(os.Getenv("JWT_SECRET")), controller.PayOrderHandler)
 }
