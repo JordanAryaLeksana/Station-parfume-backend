@@ -7,9 +7,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ---------------------------------------------------------------------
-// Keranjang — tidak menyimpan harga; harga selalu dihitung live dari Variant.
-// ---------------------------------------------------------------------
 
 type Cart struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
@@ -31,10 +28,6 @@ type CartItem struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ---------------------------------------------------------------------
-// Order — status VARCHAR + CHECK constraint (bukan tabel lookup).
-// ---------------------------------------------------------------------
-
 const (
 	OrderPendingPayment = "PENDING_PAYMENT" // Belum Bayar (stok di-reserve)
 	OrderPaid           = "PAID"            // Sudah bayar (stok terpotong)
@@ -46,7 +39,7 @@ const (
 	OrderRefunded       = "REFUNDED"        // Dana dikembalikan
 )
 
-// orderTransitions: transisi yang diizinkan (hanya maju).
+
 var orderTransitions = map[string][]string{
 	OrderPendingPayment: {OrderPaid, OrderCancelled, OrderExpired},
 	OrderPaid:           {OrderProcessing, OrderRefunded},
@@ -54,7 +47,7 @@ var orderTransitions = map[string][]string{
 	OrderShipped:        {OrderCompleted, OrderRefunded},
 }
 
-// CanOrderTransition melaporkan apakah status order boleh berpindah dari → ke.
+
 func CanOrderTransition(from, to string) bool {
 	for _, s := range orderTransitions[from] {
 		if s == to {
@@ -100,8 +93,6 @@ type Order struct {
 	Payments []Payment   `gorm:"foreignKey:OrderID" json:"payments,omitempty"`
 }
 
-// OrderItem menyimpan SNAPSHOT saat checkout. Jangan pernah membaca harga
-// order dari Variant — selalu dari UnitPrice/Subtotal di sini.
 type OrderItem struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
 	OrderID       uint      `gorm:"not null" json:"order_id"`
@@ -127,9 +118,6 @@ type OrderItem struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// ---------------------------------------------------------------------
-// Payment — DOKU Checkout (satu baris = satu halaman Checkout / invoice)
-// ---------------------------------------------------------------------
 
 const (
 	PaymentProviderDoku = "doku"
@@ -146,9 +134,7 @@ const (
 	PaymentRefunded  = "REFUNDED"
 )
 
-// Payment: ID internal DOKU (token_id di provider_session_id, Request-Id create di
-// provider_payment_request_id) & failure_reason (catatan internal, mis. "refund manual")
-// tidak pernah dikirim ke klien (json:"-"). reference_id = invoice_number di DOKU.
+
 type Payment struct {
 	ID                       uint           `gorm:"primaryKey" json:"id"`
 	OrderID                  uint           `gorm:"not null" json:"order_id"`

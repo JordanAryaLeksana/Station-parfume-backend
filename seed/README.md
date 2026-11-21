@@ -25,7 +25,7 @@ Harga khusus per varian (promo, ukuran spesial) opsional di `varian_parfum.csv` 
 |---|---|---|
 | `categories.csv` | kategori toko | ✅ 7 kategori |
 | `sizes.csv` | ukuran botol + harga botol + default | ✅ 20 / 30 / 50 ml, botol Rp5.000 (berat kirim belum diisi) |
-| `wangian.csv` | produk parfum (1 grup foto) + wangian + tarif per ml | ✅ 53 grup Regular (49 aktif) + 4 grup Exclusive (foto baru), 92 wangian, tarif dari daftar harga 2026-11-10 |
+| `wangian.csv` | produk parfum (1 baris = 1 parfum = 1 produk) + tarif per ml | ✅ 92 parfum: 81 Regular (73 aktif) + 11 Exclusive, tarif dari daftar harga 2026-11-10 |
 | `varian_parfum.csv` | pengecualian per varian parfum: harga khusus, harga coret, nonaktif | ✅ kosong (tidak wajib diisi) |
 | `produk_umum.csv` | produk non-parfum (botol spray, souvenir, parfum mobil, Al Rehab, …) | ✅ 16 produk, harga dari Shopee; ⚠️ 3 souvenir belum ada harga, **stok masih kosong** (produk umum memakai stok) |
 
@@ -62,24 +62,41 @@ Aturan seeder:
 - **Kolom kosong = tidak diubah.** Tarif, harga khusus, dan stok yang sudah diisi admin lewat website tidak terhapus kalau seeder dijalankan lagi dengan kolom kosong.
 - Setiap wangian otomatis dibuatkan semua kombinasi ukuran (default atau khusus produk) × Murni/Campur, langsung berharga sesuai rumus.
 - Tidak ada yang dihapus. Wangian/produk parfum yang tidak ada lagi di `wangian.csv` dinonaktifkan.
+- Wangian **tidak bisa dipindah** ke produk lain: `code` yang sudah tersimpan terikat ke produknya. Seeder menolak dengan pesan "sudah milik produk lain" dan tidak menyimpan apa pun.
 - Stok produk umum yang diisi tercatat di riwayat stok (`stock_movements`).
+
+### Perubahan 2026-11-20: 1 parfum = 1 produk (reset database sekali)
+
+Sebelumnya 1 produk = 1 grup foto (mis. "Kasturi" berisi Kasturi Kijang & Kasturi Putih). Sekarang setiap parfum adalah produk sendiri ("Kasturi Kijang", "Kasturi Putih"). Kode wangian (`code`) tidak berubah, tetapi produknya berubah, jadi database yang pernah di-seed dengan format lama harus **di-reset sekali**. Langkah ini **menghapus semua data, termasuk akun**, jadi hanya untuk database yang belum berisi pesanan asli:
+
+```bash
+go run ./cmd/migrate status       # catat jumlah migrasi yang terpasang
+go run ./cmd/migrate down -yes    # ulangi sampai semua migrasi pending (1x = 1 migrasi)
+go run ./cmd/migrate up
+go run ./seed
+ADMIN_NAME="Owner" ADMIN_EMAIL="owner@example.com" ADMIN_PASSWORD="minimal-8-karakter" go run ./seed -admin
+```
+
+Database baru (belum pernah di-seed) tidak perlu reset.
 
 ## `wangian.csv`
 
-1 baris = 1 wangian (bullet di foto). Baris dengan `group_code` sama = 1 produk (1 halaman). Grup tanpa varian (mis. "1000 Bunga") = 1 baris dengan `varian` = nama grup.
+1 baris = 1 parfum = 1 produk (1 halaman). Urutan baris = urutan produk di website (sekarang A–Z menurut nama).
+
+Seeder sebenarnya masih bisa menggabungkan beberapa baris dengan `group_code` yang sama menjadi 1 produk berisi beberapa wangian. Katalog tidak memakai cara itu lagi, dan test `TestSeedFilesAreConsistent` menjaga agar setiap `group_code` unik.
 
 | Kolom | Isi |
 |---|---|
-| `grade` | `regular` / `exclusive`. Nama sama di grade berbeda = **2 parfum berbeda** (mis. Bacarat Regular 4.000/ml vs Bacarat Exclusive 5.000/ml) |
-| `group_code` | kode produk, mis. `annasui`, `exclusive-3`. Juga jadi alamat halaman (`/products/annasui`) |
-| `group`, `category`, `inspired_by` | nama produk di foto, kategori, teks "Inspired by …" |
+| `grade` | `regular` / `exclusive`. Nama sama di grade berbeda = **2 parfum berbeda** (mis. Bacarat Regular 4.000/ml vs Bacarat Exclusive 5.000/ml), dengan alamat berbeda: `bacarat` dan `bacarat-exclusive` |
+| `group_code` | kode produk, sekaligus alamat halaman, unik: huruf kecil, angka, dan `-` (mis. `kasturi-kijang` → `/produk/kasturi-kijang`). **Jangan diubah** setelah dipakai |
+| `group`, `category`, `inspired_by` | nama produk (mis. "Kasturi Kijang", "Jaguar Blue"), kategori, teks "Inspired by …" (tidak ditampilkan di website) |
 | `note1`, `note2` | 2 label aroma: amber, aromatic, balsamic, citrus, creamy, floral, fresh, fruity, musk, oud, powdery, sweet, woody |
 | `tarif_murni` | tarif **bibit** Rp/ml. Kosong = tidak diubah (wangian baru tanpa tarif tidak dijual) |
 | `tarif_campur` | tarif **parfum** Rp/ml |
-| `ukuran` | kosong = ukuran default (20/30/50). Isi mis. `10;15;30` kalau produk ini hanya dijual di ukuran itu (harus ada di `sizes.csv`). Sama untuk semua baris 1 grup |
-| `aktif` | kosong = aktif; `tidak` = produk draft (tidak tampil). Sama untuk semua baris 1 grup |
-| `code` | kode wangian, unik. **Jangan diubah** setelah dipakai |
-| `varian`, `image` | nama wangian persis seperti di foto, nama file foto |
+| `ukuran` | kosong = ukuran default (20/30/50). Isi mis. `10;15;30` kalau produk ini hanya dijual di ukuran itu (harus ada di `sizes.csv`) |
+| `aktif` | kosong = aktif; `tidak` = produk draft (tidak tampil) |
+| `code` | kode wangian, unik. **Jangan diubah** setelah dipakai (juga kunci `varian_parfum.csv`) |
+| `varian`, `image` | nama wangian persis seperti di foto (mis. "Blue" untuk Jaguar Blue), nama file foto (sementara masih poster grup lama sampai foto per parfum datang) |
 
 ## `sizes.csv`
 
@@ -106,8 +123,8 @@ Biasanya kosong. Isi 1 baris hanya untuk varian yang berbeda dari aturan umum. K
 
 ```csv
 product,varian,scent_code,ml,tipe,harga_khusus,harga_coret,aktif
-Annasui,Dolly Girl,annasui-dolly-girl,30,murni,85000,95000,
-Annasui,Sweet Dream,annasui-sweet-dream,50,campur,,,tidak
+Annasui Dolly Girl,Dolly Girl,annasui-dolly-girl,30,murni,85000,95000,
+Annasui Sweet Dream,Sweet Dream,annasui-sweet-dream,50,campur,,,tidak
 ```
 
 ## `produk_umum.csv`

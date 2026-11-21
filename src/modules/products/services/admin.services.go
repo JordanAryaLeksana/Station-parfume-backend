@@ -1,7 +1,7 @@
 package services
 
 // Endpoint admin katalog. Alur input admin:
-//   1. Buat produk parfum (grup foto) → 2. tambah wangian + tarif per ml (kombinasi
+//   1. Buat produk parfum (1 parfum = 1 produk) → 2. tambah wangiannya + tarif per ml (kombinasi
 //   ukuran × murni/campur dibuat otomatis; harga = tarif × ml + botol) →
 //   3. isi stok produk umum (POST /admin/inventory/adjustments; tercatat di
 //   stock_movements). Harga khusus per varian opsional.

@@ -3,7 +3,7 @@
 //
 //   - categories.csv   : kategori toko
 //   - sizes.csv        : ukuran botol parfum + harga botol (20/30/50 ml default)
-//   - wangian.csv      : produk parfum (1 grup foto) + wangian + tarif per ml
+//   - wangian.csv      : produk parfum (1 baris = 1 parfum = 1 produk) + tarif per ml
 //   - varian_parfum.csv: pengecualian per varian parfum (harga khusus, nonaktif); opsional
 //   - produk_umum.csv  : produk non-parfum (botol spray, souvenir, Al Rehab, ...)
 //
@@ -40,8 +40,9 @@ type SizeRow struct {
 	IsDefault   bool
 }
 
-// ScentRow = satu varian wangian (satu bullet di foto produk). Baris dengan
-// group_code sama = 1 produk parfum.
+// ScentRow = satu parfum (1 wangian). Di katalog sekarang group_code unik per
+// baris, jadi 1 baris = 1 produk; baris dengan group_code sama tetap digabung
+// menjadi 1 produk berisi beberapa wangian.
 type ScentRow struct {
 	Line       int
 	Grade      string

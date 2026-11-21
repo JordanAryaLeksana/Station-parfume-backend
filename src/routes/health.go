@@ -13,8 +13,6 @@ import (
 
 var shuttingDown atomic.Bool
 
-// SetShuttingDown dipanggil main.go saat menerima SIGTERM: /readyz langsung
-// menjawab 503 supaya load balancer berhenti mengirim request baru.
 func SetShuttingDown() { shuttingDown.Store(true) }
 
 type healthBody struct {
