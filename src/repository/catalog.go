@@ -8,17 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ---------------------------------------------------------------------
-// Katalog (milik sendiri, lepas dari Shopee)
-//   Product  = 1 halaman. Perfume = 1 grup foto (mis. "Annasui"); General = produk biasa.
-//   Scent    = varian wangian di produk parfum ("Dolly Girl").
-//   Size     = ukuran botol (20/30/50 ml), bisa ditambah admin.
-//   Variant  = yang dibeli: wangian × ukuran × murni/campur (parfum) atau label (general).
-// Harga parfum = tarif per ml (Scent) × volume (Size) + harga botol (Size);
-// Variant.Price opsional sebagai harga khusus. Lihat catalog.ListPrice.
-// Stok di Variant.Stock / Variant.Reserved (hanya produk track_stock = true).
-// ---------------------------------------------------------------------
-
 const (
 	ProductKindPerfume = "perfume"
 	ProductKindGeneral = "general"
