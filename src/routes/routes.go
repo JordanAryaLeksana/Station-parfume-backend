@@ -16,13 +16,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 type Options struct {
 	CORSOrigins    []string // origin frontend yang boleh memanggil API dari browser
 	TrustedProxies []string // proxy yang boleh menentukan IP klien (X-Forwarded-For)
 	Docs           bool     // pasang Swagger UI di /docs
 }
-
 
 func NewEngine(opts Options) (*gin.Engine, error) {
 	r := gin.New()
@@ -50,7 +48,6 @@ func NewEngine(opts Options) (*gin.Engine, error) {
 	r.NoMethod(func(c *gin.Context) { httperror.MethodNotAllowedError(c, "Method tidak diizinkan untuk endpoint ini") })
 	return r, nil
 }
-
 
 func InitRoutes(router *gin.Engine) {
 	api := router.Group("/api/v1")
