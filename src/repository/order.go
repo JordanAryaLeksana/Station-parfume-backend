@@ -7,7 +7,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 type Cart struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	UserID    uint           `gorm:"not null" json:"user_id"`
@@ -39,14 +38,12 @@ const (
 	OrderRefunded       = "REFUNDED"        // Dana dikembalikan
 )
 
-
 var orderTransitions = map[string][]string{
 	OrderPendingPayment: {OrderPaid, OrderCancelled, OrderExpired},
 	OrderPaid:           {OrderProcessing, OrderRefunded},
 	OrderProcessing:     {OrderShipped, OrderRefunded},
 	OrderShipped:        {OrderCompleted, OrderRefunded},
 }
-
 
 func CanOrderTransition(from, to string) bool {
 	for _, s := range orderTransitions[from] {
@@ -118,7 +115,6 @@ type OrderItem struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-
 const (
 	PaymentProviderDoku = "doku"
 	// PaymentProviderMidtrans & PaymentProviderXendit: gateway lama (sampai 2026-11);
@@ -133,7 +129,6 @@ const (
 	PaymentFailed    = "FAILED"
 	PaymentRefunded  = "REFUNDED"
 )
-
 
 type Payment struct {
 	ID                       uint           `gorm:"primaryKey" json:"id"`
