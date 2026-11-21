@@ -26,7 +26,7 @@
 ## 1. Prinsip desain
 
 1. **Katalog milik sendiri.** Tidak ada kolom `shopee_*`. Struktur parfum diambil dari foto produk (bukan dari listing Shopee yang tidak konsisten).
-2. **1 halaman = 1 grup foto.** Produk "Annasui" berisi wangian Sweet Dream & Dolly Girl. Pembeli memilih **Varian → Ukuran → Tipe (Murni/Campur)**.
+2. **1 halaman = 1 parfum** (sejak 2026-11-20; sebelumnya 1 grup foto). Produk "Kasturi Kijang" berisi 1 wangian, jadi pembeli cukup memilih **Ukuran → Tipe (Murni/Campur)**. Skema tetap mendukung 1 produk berisi beberapa wangian (dulu "Kasturi" berisi Kasturi Kijang & Kasturi Putih); pilihan **Varian** hanya perlu kalau wangiannya lebih dari 1.
 3. **Harga dihitung dari tarif per ml, stok per kombinasi** (wangian × ukuran × tipe). Setiap kombinasi bisa dimatikan.
    ```
    harga = tarif per ml wangian (murni/"bibit" atau campur/"parfum") × volume + harga botol ukuran

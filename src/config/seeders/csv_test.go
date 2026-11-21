@@ -69,10 +69,16 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 		}
 	}
 
-	groups := map[string]map[string]bool{"regular": {}, "exclusive": {}}
+	// 1 baris = 1 parfum = 1 produk: group_code (alamat halaman) tidak boleh dipakai 2 baris.
+	perfumes := map[string]ScentRow{} // group_code → baris
+	grades := map[string]int{}
 	byCode := map[string]ScentRow{}
 	for _, s := range scents {
-		groups[s.Grade][s.GroupCode] = true
+		if prev, ok := perfumes[s.GroupCode]; ok {
+			t.Fatalf("group_code %s dipakai baris %d dan %d (1 baris = 1 produk)", s.GroupCode, prev.Line, s.Line)
+		}
+		perfumes[s.GroupCode] = s
+		grades[s.Grade]++
 		byCode[s.Code] = s
 		if !catNames[Slugify(s.Category)] {
 			t.Fatalf("wangian %s: kategori %q tidak ada di categories.csv", s.Code, s.Category)
@@ -81,9 +87,21 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 			t.Fatalf("wangian aktif %s wajib punya tarif murni & campur", s.Code)
 		}
 	}
-	// Regular 53 grup (81 wangian); Exclusive = 4 foto baru (11 wangian).
-	if len(groups["regular"]) != 53 || len(groups["exclusive"]) != 4 || len(scents) != 92 {
-		t.Fatalf("want 53+4 grup, 92 wangian; got %d+%d, %d", len(groups["regular"]), len(groups["exclusive"]), len(scents))
+	if grades["regular"] != 81 || grades["exclusive"] != 11 || len(scents) != 92 {
+		t.Fatalf("want 81 Regular + 11 Exclusive = 92 parfum; got %d + %d = %d", grades["regular"], grades["exclusive"], len(scents))
+	}
+	// Nama sama di Regular dan Exclusive = 2 parfum, alamatnya dibedakan.
+	for slug, want := range map[string]struct{ grade, name, code string }{
+		"bacarat":                 {"regular", "Bacarat", "bacarat"},
+		"bacarat-exclusive":       {"exclusive", "Bacarat", "exclusive-2-bacarat"},
+		"avril-lavigne-exclusive": {"exclusive", "Avril Lavigne", "exclusive-4-avril-lavigne"},
+		"escada-moonlight":        {"regular", "Escada Moonlight", "escada-moonlight"},
+		"moonlight":               {"exclusive", "Moonlight", "exclusive-3-moonlight"},
+		"kasturi-kijang":          {"regular", "Kasturi Kijang", "kasturi-kasturi-kijang"},
+	} {
+		if p := perfumes[slug]; p.Grade != want.grade || p.Group != want.name || p.Code != want.code {
+			t.Errorf("produk %s = %s %q (wangian %s); want %s %q (wangian %s)", slug, p.Grade, p.Group, p.Code, want.grade, want.name, want.code)
+		}
 	}
 	rate := func(code string) (int64, int64) {
 		s, ok := byCode[code]
@@ -127,6 +145,12 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 	}
 	if len(products) != 16 {
 		t.Fatalf("want 16 produk umum, got %d", len(products))
+	}
+	// products.code dipakai bersama parfum dan produk umum, jadi tidak boleh sama.
+	for code := range perfumes {
+		if products[code] {
+			t.Errorf("kode %s dipakai parfum (wangian.csv) dan produk umum (produk_umum.csv)", code)
+		}
 	}
 }
 
