@@ -12,9 +12,9 @@ harga = tarif per ml wangian × ukuran ml + harga botol ukuran
 Bibit  = Murni   → tarif_murni
 Parfum = Campur  → tarif_campur
 
-Victoria 30 ml Murni  = 3.000 × 30 + 5.000 = Rp95.000
-Victoria 30 ml Campur = 1.500 × 30 + 5.000 = Rp50.000
-Moonlight (Exclusive) 50 ml Murni = 4.000 × 50 + 5.000 = Rp205.000
+Lavender 30 ml Murni  = 3.000 × 30 + 5.000 = Rp95.000
+Lavender 30 ml Campur = 1.500 × 30 + 5.000 = Rp50.000
+Parfum Exclusive tarif 4.000/ml, 50 ml Murni = 4.000 × 50 + 5.000 = Rp205.000
 ```
 
 Harga khusus per varian (promo, ukuran spesial) opsional di `varian_parfum.csv` → mengalahkan rumus.
@@ -27,9 +27,9 @@ Harga khusus per varian (promo, ukuran spesial) opsional di `varian_parfum.csv` 
 | `sizes.csv` | ukuran botol + harga botol + default | ✅ 20 / 30 / 50 ml, botol Rp5.000 (berat kirim belum diisi) |
 | `wangian.csv` | produk parfum (1 baris = 1 parfum = 1 produk) + tarif per ml | ✅ 92 parfum: 81 Regular (73 aktif) + 11 Exclusive, tarif dari daftar harga 2026-11-10 |
 | `varian_parfum.csv` | pengecualian per varian parfum: harga khusus, harga coret, nonaktif | ✅ kosong (tidak wajib diisi) |
-| `produk_umum.csv` | produk non-parfum (botol spray, souvenir, parfum mobil, Al Rehab, …) | ✅ 16 produk, harga dari Shopee; ⚠️ 3 souvenir belum ada harga, **stok masih kosong** (produk umum memakai stok) |
+| `produk_umum.csv` | produk non-parfum (botol spray, souvenir, parfum mobil, …) | ✅ 16 produk, harga dari Shopee; ⚠️ 3 souvenir belum ada harga, **stok masih kosong** (produk umum memakai stok) |
 
-Dunhil (Desire Blue/London/Red), Greentea, Guci Flora, dan Hugo Boss belum ada di daftar harga → disimpan sebagai **draft** (`aktif = tidak`), tidak tampil di website.
+8 parfum belum ada di daftar harga → disimpan sebagai **draft** (`aktif = tidak`), tidak tampil di website.
 
 ## Menjalankan
 
@@ -87,16 +87,60 @@ Seeder sebenarnya masih bisa menggabungkan beberapa baris dengan `group_code` ya
 
 | Kolom | Isi |
 |---|---|
-| `grade` | `regular` / `exclusive`. Nama sama di grade berbeda = **2 parfum berbeda** (mis. Bacarat Regular 4.000/ml vs Bacarat Exclusive 5.000/ml), dengan alamat berbeda: `bacarat` dan `bacarat-exclusive` |
+| `grade` | `regular` / `exclusive`. Nama sama di grade berbeda = **2 parfum berbeda** (mis. tarif Regular 4.000/ml dan Exclusive 5.000/ml), dengan alamat berbeda: `<nama>` dan `<nama>-exclusive` |
 | `group_code` | kode produk, sekaligus alamat halaman, unik: huruf kecil, angka, dan `-` (mis. `kasturi-kijang` → `/produk/kasturi-kijang`). **Jangan diubah** setelah dipakai |
-| `group`, `category`, `inspired_by` | nama produk (mis. "Kasturi Kijang", "Jaguar Blue"), kategori, teks "Inspired by …" (tidak ditampilkan di website) |
+| `group`, `category` | nama produk (mis. "Kasturi Kijang"), kategori |
 | `note1`, `note2` | 2 label aroma: amber, aromatic, balsamic, citrus, creamy, floral, fresh, fruity, musk, oud, powdery, sweet, woody |
 | `tarif_murni` | tarif **bibit** Rp/ml. Kosong = tidak diubah (wangian baru tanpa tarif tidak dijual) |
 | `tarif_campur` | tarif **parfum** Rp/ml |
 | `ukuran` | kosong = ukuran default (20/30/50). Isi mis. `10;15;30` kalau produk ini hanya dijual di ukuran itu (harus ada di `sizes.csv`) |
 | `aktif` | kosong = aktif; `tidak` = produk draft (tidak tampil) |
-| `code` | kode wangian, unik. **Jangan diubah** setelah dipakai (juga kunci `varian_parfum.csv`) |
-| `varian`, `image` | nama wangian persis seperti di foto (mis. "Blue" untuk Jaguar Blue), nama file foto (sementara masih poster grup lama sampai foto per parfum datang) |
+| `code` | kode wangian, unik (juga kunci `varian_parfum.csv`). Jangan diubah langsung; lihat `internal/ganti-nama.csv` |
+| `varian`, `image` | nama wangian (untuk produk 1 wangian sama dengan `group`), nama file foto produk |
+| `untuk` | `pria` / `wanita` / `unisex` (huruf besar/kecil bebas). Kosong = tidak diubah |
+| `cocok_untuk` | momen, dipisah `;`: `harian`, `kantor`, `malam`, `acara`, `santai`, `olahraga`, `ibadah`. Berisi `ibadah` = cocok untuk ibadah. Kosong = tidak diubah |
+| `deskripsi` | teks halaman produk. Kosong = tidak diubah (deskripsi yang diisi admin aman) |
+
+## `internal/inspired_by.csv` — khusus admin, tidak di-commit
+
+Repo ini publik, jadi pasangan produk dengan merek parfum aslinya tidak boleh ada di file yang di-commit. Kolom `inspired_by` tidak lagi ada di `wangian.csv`; seeder menolak `wangian.csv` yang masih memuatnya.
+
+| Kolom | Isi |
+|---|---|
+| `code` | `group_code` produk di `wangian.csv` |
+| `inspired_by` | teks "Inspired by …", maksimal 255 karakter. Hanya terlihat di endpoint admin; tidak dikirim ke website dan tidak ikut pencarian publik |
+
+- Folder `seed/internal/` ada di `.gitignore`. Simpan salinannya di luar repo.
+- File tidak ada: `inspired_by` di database tidak diubah (isian admin aman).
+- `code` yang tidak ada di `wangian.csv` membuat seed gagal, jadi setelah ganti nama `code` di file ini harus ikut diganti.
+
+## `internal/ganti-nama.csv` — ganti nama di tempat, tidak di-commit
+
+Mengganti `group_code`/`code` tanpa membuat produk baru: ID produk (nomor atelier), ID varian, isi tas, dan foto tetap; alamat halaman dan kode varian ikut berganti. Snapshot nama di pesanan lama tidak diubah.
+
+| Kolom | Isi |
+|---|---|
+| `jenis` | `produk` (products.code + slug, juga kode varian produk umum) atau `wangian` (scents.code + kode varian parfum) |
+| `code_lama`, `code_baru` | code sebelum dan sesudah |
+
+- Dijalankan di awal seed, dalam transaksi yang sama, berurutan dari atas.
+- `code_lama` yang tidak ada lagi di database dilewati, jadi file ini boleh menumpuk dan aman dijalankan berulang (juga di database baru).
+- `code_baru` harus ada di CSV katalog (atau jadi `code_lama` di baris berikutnya). Kalau `code_baru` sudah dipakai produk/wangian lain, seed gagal dan semuanya di-rollback.
+
+## Konverter XLSX pemilik (`scripts/tanpa-merek/konversi.py`)
+
+Membaca XLSX nama baru yang sudah diisi pemilik (sheet `Parfum` dan `Produk umum`), lalu menulis `wangian.csv`, `produk_umum.csv`, `varian_parfum.csv`, dan file `internal/` (`ganti-nama.csv`, `inspired_by.csv`, `ganti-foto.csv` untuk rename foto frontend). Hanya Python 3 bawaan, tanpa paket tambahan.
+
+```bash
+python3 scripts/tanpa-merek/konversi.py /path/ke/file-pemilik.xlsx --periksa   # laporan saja
+python3 scripts/tanpa-merek/konversi.py /path/ke/file-pemilik.xlsx             # tulis CSV
+go test ./src/config/seeders/ && go run ./seed -dry-run
+```
+
+- Nama diganti hanya kalau `Setuju?` = Ya/Ganti dan `Nama dipilih` lengkap; sisanya memakai nama lama dan dilaporkan.
+- `Untuk`, `Cocok untuk`, `Ibadah`, dan `Deskripsi final` diterapkan ke semua parfum yang cocok.
+- Ditolak (tidak ada file yang ditulis): nama ganda, code bentrok, nilai Untuk/Cocok untuk yang tidak dikenal, dan nama baru yang masih memuat kata dari nama lama/merek di baris yang sama.
+- File XLSX tetap di luar repo.
 
 ## `sizes.csv`
 
@@ -123,8 +167,8 @@ Biasanya kosong. Isi 1 baris hanya untuk varian yang berbeda dari aturan umum. K
 
 ```csv
 product,varian,scent_code,ml,tipe,harga_khusus,harga_coret,aktif
-Annasui Dolly Girl,Dolly Girl,annasui-dolly-girl,30,murni,85000,95000,
-Annasui Sweet Dream,Sweet Dream,annasui-sweet-dream,50,campur,,,tidak
+Lavender,Lavender,lavender,30,murni,85000,95000,
+Kasturi Kijang,Kasturi Kijang,kasturi-kasturi-kijang,50,campur,,,tidak
 ```
 
 ## `produk_umum.csv`

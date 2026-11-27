@@ -23,32 +23,36 @@ import (
 var validate = validator.New()
 
 type ProductInput struct {
-	Kind          string  `json:"kind" validate:"required,oneof=perfume general"`
-	CategoryID    uint    `json:"category_id" validate:"required"`
-	Name          string  `json:"name" validate:"required,max=255"`
-	Code          string  `json:"code" validate:"omitempty,max=60"` // kosong = dari nama
-	Description   string  `json:"description"`
-	Grade         *string `json:"grade" validate:"omitempty,oneof=regular exclusive"`
-	InspiredBy    *string `json:"inspired_by" validate:"omitempty,max=255"`
-	NotePrimary   *string `json:"note_primary"`
-	NoteSecondary *string `json:"note_secondary"`
-	WeightGram    int     `json:"weight_gram" validate:"gte=0"`
-	TrackStock    *bool   `json:"track_stock"` // kosong: parfum = false (selalu tersedia), produk umum = true
-	Status        string  `json:"status" validate:"omitempty,oneof=draft active archived"`
+	Kind          string   `json:"kind" validate:"required,oneof=perfume general"`
+	CategoryID    uint     `json:"category_id" validate:"required"`
+	Name          string   `json:"name" validate:"required,max=255"`
+	Code          string   `json:"code" validate:"omitempty,max=60"` // kosong = dari nama
+	Description   string   `json:"description"`
+	Grade         *string  `json:"grade" validate:"omitempty,oneof=regular exclusive"`
+	InspiredBy    *string  `json:"inspired_by" validate:"omitempty,max=255"`
+	Audience      *string  `json:"audience"`
+	Occasions     []string `json:"occasions"`
+	NotePrimary   *string  `json:"note_primary"`
+	NoteSecondary *string  `json:"note_secondary"`
+	WeightGram    int      `json:"weight_gram" validate:"gte=0"`
+	TrackStock    *bool    `json:"track_stock"` // kosong: parfum = false (selalu tersedia), produk umum = true
+	Status        string   `json:"status" validate:"omitempty,oneof=draft active archived"`
 }
 
 type ProductPatch struct {
-	CategoryID    *uint   `json:"category_id"`
-	Name          *string `json:"name" validate:"omitempty,max=255"`
-	Description   *string `json:"description"`
-	Grade         *string `json:"grade" validate:"omitempty,oneof=regular exclusive"`
-	InspiredBy    *string `json:"inspired_by" validate:"omitempty,max=255"`
-	NotePrimary   *string `json:"note_primary"`
-	NoteSecondary *string `json:"note_secondary"`
-	WeightGram    *int    `json:"weight_gram" validate:"omitempty,gte=0"`
-	TrackStock    *bool   `json:"track_stock"`
-	Status        *string `json:"status" validate:"omitempty,oneof=draft active archived"`
-	SortOrder     *int    `json:"sort_order"`
+	CategoryID    *uint     `json:"category_id"`
+	Name          *string   `json:"name" validate:"omitempty,max=255"`
+	Description   *string   `json:"description"`
+	Grade         *string   `json:"grade" validate:"omitempty,oneof=regular exclusive"`
+	InspiredBy    *string   `json:"inspired_by" validate:"omitempty,max=255"`
+	Audience      *string   `json:"audience"`
+	Occasions     *[]string `json:"occasions"`
+	NotePrimary   *string   `json:"note_primary"`
+	NoteSecondary *string   `json:"note_secondary"`
+	WeightGram    *int      `json:"weight_gram" validate:"omitempty,gte=0"`
+	TrackStock    *bool     `json:"track_stock"`
+	Status        *string   `json:"status" validate:"omitempty,oneof=draft active archived"`
+	SortOrder     *int      `json:"sort_order"`
 }
 
 // Tarif per ml: murni = "bibit", campur = "parfum".
@@ -68,7 +72,7 @@ type ScentPatch struct {
 	PricePerMLCampur *int64  `json:"price_per_ml_campur" validate:"omitempty,gte=0"`
 }
 
-// RatesInput: ubah tarif semua wangian di 1 produk sekaligus (mis. semua varian Victoria).
+// RatesInput: ubah tarif semua wangian di 1 produk sekaligus.
 type RatesInput struct {
 	PricePerMLMurni  *int64 `json:"price_per_ml_murni" validate:"omitempty,gt=0"`
 	PricePerMLCampur *int64 `json:"price_per_ml_campur" validate:"omitempty,gt=0"`
@@ -150,6 +154,20 @@ type AdminProduct struct {
 }
 
 func validationErr(err error) error { return fmt.Errorf("%w: %v", ErrValidation, err) }
+
+func checkAudience(s *string) error {
+	if v := emptyToNil(s); v != nil && !slices.Contains(repository.Audiences, *v) {
+		return fmt.Errorf("%w: audience %q harus salah satu dari pria, wanita, unisex", ErrValidation, *v)
+	}
+	return nil
+}
+
+func emptyToNil(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
+}
 
 func notFound(what string, id uint, err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -233,13 +251,23 @@ func AdminCreateProduct(userID uint, in *ProductInput) (*AdminProduct, error) {
 	}
 	p := repository.Product{CategoryID: in.CategoryID, Kind: in.Kind, Code: code, Name: in.Name, Slug: code, Description: in.Description,
 		WeightGram: in.WeightGram, TrackStock: trackStock, Status: status}
+	if err := checkAudience(in.Audience); err != nil {
+		return nil, err
+	}
+	occasions, err := repository.NormalizeOccasions(in.Occasions)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
+	}
 	if in.Kind == repository.ProductKindPerfume {
 		if in.Grade == nil || in.NotePrimary == nil || in.NoteSecondary == nil {
 			return nil, fmt.Errorf("%w: produk parfum wajib punya grade, note_primary, note_secondary", ErrValidation)
 		}
 		p.Grade, p.InspiredBy, p.NotePrimary, p.NoteSecondary = in.Grade, in.InspiredBy, in.NotePrimary, in.NoteSecondary
+		p.Audience, p.Occasions = emptyToNil(in.Audience), occasions
+	} else if emptyToNil(in.Audience) != nil || len(occasions) > 0 {
+		return nil, fmt.Errorf("%w: audience dan occasions hanya untuk produk parfum", ErrValidation)
 	}
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
 		var n int64
 		if err := tx.Model(&repository.Product{}).Where("code = ? OR slug = ?", code, code).Count(&n).Error; err != nil {
 			return err
@@ -276,6 +304,17 @@ func AdminUpdateProduct(userID, id uint, in *ProductPatch) (*AdminProduct, error
 	set("description", in.Description, in.Description != nil)
 	set("grade", in.Grade, in.Grade != nil)
 	set("inspired_by", in.InspiredBy, in.InspiredBy != nil)
+	if err := checkAudience(in.Audience); err != nil {
+		return nil, err
+	}
+	set("audience", emptyToNil(in.Audience), in.Audience != nil)
+	if in.Occasions != nil {
+		occasions, err := repository.NormalizeOccasions(*in.Occasions)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrValidation, err)
+		}
+		upd["occasions"] = occasions
+	}
 	set("note_primary", in.NotePrimary, in.NotePrimary != nil)
 	set("note_secondary", in.NoteSecondary, in.NoteSecondary != nil)
 	set("weight_gram", in.WeightGram, in.WeightGram != nil)
@@ -289,6 +328,9 @@ func AdminUpdateProduct(userID, id uint, in *ProductPatch) (*AdminProduct, error
 		var p repository.Product
 		if err := tx.First(&p, id).Error; err != nil {
 			return notFound("product", id, err)
+		}
+		if p.Kind != repository.ProductKindPerfume && (emptyToNil(in.Audience) != nil || (in.Occasions != nil && len(upd["occasions"].(repository.Occasions)) > 0)) {
+			return fmt.Errorf("%w: audience dan occasions hanya untuk produk parfum", ErrValidation)
 		}
 		if err := tx.Model(&p).Updates(upd).Error; err != nil {
 			return fmt.Errorf("%w: %v", ErrValidation, err) // mis. CHECK constraint (label aroma sama)

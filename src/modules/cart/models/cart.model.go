@@ -17,7 +17,7 @@ type CartItemResponseDTO struct {
 	ProductName    string  `json:"product_name"`
 	ProductSlug    string  `json:"product_slug"`
 	Grade          *string `json:"grade,omitempty"`
-	VariantName    string  `json:"variant_name"` // "Dolly Girl, 30 ml, Murni"
+	VariantName    string  `json:"variant_name"` // "Lavender, 30 ml, Murni"
 	VariantCode    string  `json:"variant_code"`
 	ImageURL       *string `json:"image_url,omitempty"`
 	UnitPrice      int64   `json:"unit_price"`                 // harga per unit

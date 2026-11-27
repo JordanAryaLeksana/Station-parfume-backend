@@ -17,6 +17,7 @@ type CatalogData struct {
 	Scents     []ScentRow
 	Variants   []PerfumeVariantRow
 	General    []GeneralRow
+	Renames    []RenameRow
 }
 
 type Counter struct{ Created, Updated int }
@@ -29,6 +30,7 @@ type CatalogReport struct {
 	StockChanged                                  int // varian yang stoknya berubah (tercatat di stock_movements)
 	Archived                                      int // produk/wangian yang tidak ada lagi di CSV (dinonaktifkan)
 	Unpriced                                      int // wangian aktif tanpa tarif + produk umum tanpa harga (tidak tampil)
+	Renamed                                       int
 }
 
 // ErrDryRun dikembalikan SeedCatalog saat dryRun=true; semua perubahan di-rollback.
@@ -41,6 +43,9 @@ var ErrDryRun = errors.New("dry run: semua perubahan di-rollback")
 func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error) {
 	rep := &CatalogReport{}
 	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := applyRenames(tx, d.Renames, rep); err != nil {
+			return err
+		}
 		catIDs, err := upsertCategories(tx, d.Categories, rep)
 		if err != nil {
 			return err
@@ -83,6 +88,62 @@ func SeedCatalog(db *gorm.DB, d CatalogData, dryRun bool) (*CatalogReport, error
 		return nil
 	})
 	return rep, err
+}
+
+func applyRenames(tx *gorm.DB, rows []RenameRow, rep *CatalogReport) error {
+	for _, r := range rows {
+		fail := func(err error) error { return fmt.Errorf("%s baris %d: %w", RenameFile, r.Line, err) }
+		suffix := gorm.Expr("? || substr(code, ?)", r.To, len(r.From)+1)
+		switch r.Kind {
+		case RenameProduct:
+			var p repository.Product
+			found, err := findOne(tx, &p, "code = ?", r.From)
+			if err != nil {
+				return err
+			}
+			if !found {
+				continue
+			}
+			var n int64
+			if err := tx.Model(&repository.Product{}).Where("(code = ? OR slug = ?) AND id <> ?", r.To, r.To, p.ID).Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				return fail(fmt.Errorf("produk %q tidak bisa jadi %q: code/slug baru sudah dipakai produk lain", r.From, r.To))
+			}
+			if err := tx.Model(&p).Updates(map[string]any{"code": r.To, "slug": r.To}).Error; err != nil {
+				return fail(err)
+			}
+			if err := tx.Model(&repository.Variant{}).Where("product_id = ? AND scent_id IS NULL AND (code = ? OR code LIKE ?)", p.ID, r.From, r.From+"-%").
+				Update("code", suffix).Error; err != nil {
+				return fail(err)
+			}
+		case RenameScent:
+			var s repository.Scent
+			found, err := findOne(tx, &s, "code = ?", r.From)
+			if err != nil {
+				return err
+			}
+			if !found {
+				continue
+			}
+			var n int64
+			if err := tx.Model(&repository.Scent{}).Where("code = ? AND id <> ?", r.To, s.ID).Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				return fail(fmt.Errorf("wangian %q tidak bisa jadi %q: code baru sudah dipakai wangian lain", r.From, r.To))
+			}
+			if err := tx.Model(&s).Update("code", r.To).Error; err != nil {
+				return fail(err)
+			}
+			if err := tx.Model(&repository.Variant{}).Where("scent_id = ? AND code LIKE ?", s.ID, r.From+"-%").Update("code", suffix).Error; err != nil {
+				return fail(err)
+			}
+		}
+		rep.Renamed++
+	}
+	return nil
 }
 
 func findOne[T any](tx *gorm.DB, out *T, query string, args ...any) (bool, error) {
@@ -207,15 +268,31 @@ func upsertPerfumes(tx *gorm.DB, rows []ScentRow, catIDs map[string]uint, sizeID
 				if p.Kind != repository.ProductKindPerfume {
 					return nil, fmt.Errorf("wangian.csv baris %d: group_code %s sudah dipakai produk umum", r.Line, r.GroupCode)
 				}
-				err = tx.Model(&p).Updates(map[string]any{"category_id": catID, "name": r.Group, "slug": r.GroupCode,
-					"grade": grade, "inspired_by": strPtr(r.InspiredBy), "note_primary": n1, "note_secondary": n2,
-					"status": status, "sort_order": len(productIDs)}).Error
+				fields := map[string]any{"category_id": catID, "name": r.Group, "slug": r.GroupCode,
+					"grade": grade, "note_primary": n1, "note_secondary": n2,
+					"status": status, "sort_order": len(productIDs)}
+				if r.InspiredBy != nil {
+					fields["inspired_by"] = *r.InspiredBy
+				}
+				if r.Audience != nil {
+					fields["audience"] = *r.Audience
+				}
+				if r.Occasions != nil {
+					fields["occasions"] = r.Occasions
+				}
+				if r.Description != nil {
+					fields["description"] = *r.Description
+				}
+				err = tx.Model(&p).Updates(fields).Error
 				rep.Products.Updated++
 			} else {
 				// Parfum diracik sendiri → stok tidak dihitung (TrackStock false), selalu tersedia.
 				p = repository.Product{CategoryID: catID, Kind: repository.ProductKindPerfume, Code: r.GroupCode, Name: r.Group, Slug: r.GroupCode,
-					Grade: &grade, InspiredBy: strPtr(r.InspiredBy), NotePrimary: &n1, NoteSecondary: &n2,
+					Grade: &grade, InspiredBy: r.InspiredBy, Audience: r.Audience, Occasions: r.Occasions, NotePrimary: &n1, NoteSecondary: &n2,
 					Status: status, SortOrder: len(productIDs)}
+				if r.Description != nil {
+					p.Description = *r.Description
+				}
 				err = tx.Create(&p).Error
 				rep.Products.Created++
 			}

@@ -30,7 +30,7 @@ func TestPaymentsAndRoles(t *testing.T) {
 	check(t, "daftar & detail user", len(call(t, "GET", "/api/v1/users", owner, nil).List()) == 3 && call(t, "GET", fmt.Sprintf("/api/v1/users/%d", buyerID), owner, nil).Status == 200)
 	buyer, _ := login(t, "/api/v1/auth/login", "pembeli@test.local", buyerPassword)
 
-	dg := scalar[uint](t, "select id from variants where code = 'annasui-dolly-girl-30-murni'")
+	dg := scalar[uint](t, "select id from variants where code = 'lavender-30-murni'")
 	bs := scalar[uint](t, "select v.id from variants v join products p on p.id = v.product_id where p.code = 'botol-spray' order by v.id limit 1")
 	call(t, "POST", "/api/v1/admin/inventory/adjustments", owner, map[string]any{"adjustments": []map[string]any{{"variant_id": bs, "mode": "set", "quantity": 5}}})
 	stock := func(col string) int { return scalar[int](t, "select "+col+" from variants where id = ?", bs) }

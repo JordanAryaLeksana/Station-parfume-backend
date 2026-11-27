@@ -1,7 +1,11 @@
 package repository
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +26,67 @@ const (
 	ConcentrationMurni  = "murni"
 	ConcentrationCampur = "campur"
 )
+
+var (
+	Audiences      = []string{"pria", "wanita", "unisex"}
+	OccasionValues = []string{"harian", "kantor", "malam", "acara", "santai", "olahraga", "ibadah"}
+)
+
+type Occasions []string
+
+func (o Occasions) Value() (driver.Value, error) {
+	if o == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal([]string(o))
+	return string(b), err
+}
+
+func (o *Occasions) Scan(v any) error {
+	var b []byte
+	switch x := v.(type) {
+	case nil:
+		*o = Occasions{}
+		return nil
+	case []byte:
+		b = x
+	case string:
+		b = []byte(x)
+	default:
+		return errors.New("occasions: tipe tidak dikenal")
+	}
+	var out []string
+	if err := json.Unmarshal(b, &out); err != nil {
+		return err
+	}
+	*o = Occasions(out)
+	return nil
+}
+
+func (Occasions) GormDataType() string { return "jsonb" }
+
+func (o Occasions) MarshalJSON() ([]byte, error) {
+	if o == nil {
+		return []byte("[]"), nil
+	}
+	return json.Marshal([]string(o))
+}
+
+func NormalizeOccasions(in []string) (Occasions, error) {
+	out := Occasions{}
+	for _, v := range in {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "" || slices.Contains(out, v) {
+			continue
+		}
+		if !slices.Contains(OccasionValues, v) {
+			return nil, fmt.Errorf("cocok untuk %q tidak dikenal (pilihan: %s)", v, strings.Join(OccasionValues, ", "))
+		}
+		out = append(out, v)
+	}
+	slices.SortFunc(out, func(a, b string) int { return slices.Index(OccasionValues, a) - slices.Index(OccasionValues, b) })
+	return out, nil
+}
 
 // Concentrations = tipe parfum yang dijual (tetap: Murni & Campur).
 var Concentrations = []string{ConcentrationMurni, ConcentrationCampur}
@@ -52,6 +117,8 @@ type Product struct {
 	Description   string         `gorm:"not null" json:"description"`
 	Grade         *string        `gorm:"size:20" json:"grade,omitempty"`
 	InspiredBy    *string        `gorm:"size:255" json:"inspired_by,omitempty"`
+	Audience      *string        `gorm:"size:10" json:"audience,omitempty"`
+	Occasions     Occasions      `gorm:"type:jsonb;not null" json:"occasions"`
 	NotePrimary   *string        `gorm:"size:20" json:"note_primary,omitempty"`
 	NoteSecondary *string        `gorm:"size:20" json:"note_secondary,omitempty"`
 	WeightGram    int            `gorm:"not null" json:"weight_gram"`
@@ -147,7 +214,7 @@ type Variant struct {
 // Available: stok yang masih bisa dibeli (Stock − Reserved, minimal 0).
 func (v Variant) Available() int { return max(v.Stock-v.Reserved, 0) }
 
-// DisplayName: teks varian untuk keranjang/order, mis. "Dolly Girl, 30 ml, Murni".
+// DisplayName: teks varian untuk keranjang/order, mis. "Lavender, 30 ml, Murni".
 // Scent dan Size harus sudah di-Preload.
 func (v Variant) DisplayName() string {
 	var parts []string
@@ -188,7 +255,7 @@ func ConcentrationLabel(c string) string {
 }
 
 // VariantCode membuat kode varian otomatis (admin tidak perlu mengetik SKU):
-// parfum  → "<kode wangian>-<ml>-<murni|campur>", mis. "annasui-dolly-girl-30-murni"
+// parfum  → "<kode wangian>-<ml>-<murni|campur>", mis. "lavender-30-murni"
 // general → "<kode produk>[-<slug label>]".
 func VariantCode(productCode, scentCode string, volumeML int, concentration, labelSlug string) string {
 	if scentCode != "" {

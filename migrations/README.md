@@ -8,6 +8,7 @@ File `*.sql` di folder ini di-embed ke binary, jadi tidak perlu install CLI goos
 | `00001_init.sql` | Schema awal sesuai kebutuhan sekarang: 15 tabel, FK, CHECK, partial index. Penjelasan & ERD: [`docs/schema/README.md`](../docs/schema/README.md) |
 | `00002_payments_midtrans.sql` | Gateway pindah ke Midtrans Snap: `payments.provider` boleh `midtrans` (default), `xendit` tetap diizinkan untuk baris uji lama |
 | `00003_payments_doku.sql` | Gateway pindah ke DOKU Checkout: `payments.reference_id` jadi `VARCHAR(64)` (invoice DOKU = nomor pesanan + `P` + nomor percobaan), `provider` boleh `doku` (default); `midtrans`/`xendit` tetap diizinkan untuk baris lama |
+| `00004_audience_occasions.sql` | Parfum mendapat `products.audience` (pria/wanita/unisex) dan `products.occasions` (array JSON momen; berisi `ibadah` = cocok untuk ibadah). Produk umum tidak boleh punya keduanya (CHECK) |
 
 ## Perintah
 

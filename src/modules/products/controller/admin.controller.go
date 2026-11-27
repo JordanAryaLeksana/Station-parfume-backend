@@ -257,7 +257,7 @@ func AdminSetProductSizes(c *gin.Context) {
 	response.OK(c, "Sizes Updated", out)
 }
 
-// AdminAddImage: POST /admin/products/:id/images  {"url":"https://cdn.../annasui.jpg","scent_id":null,"sort_order":0}
+// AdminAddImage: POST /admin/products/:id/images  {"url":"https://cdn.../lavender.jpg","scent_id":null,"sort_order":0}
 func AdminAddImage(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

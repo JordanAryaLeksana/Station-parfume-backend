@@ -1,8 +1,10 @@
 package seeders
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 	"testing"
@@ -38,7 +40,7 @@ func TestParseRupiah(t *testing.T) {
 }
 
 func TestSlugify(t *testing.T) {
-	for in, want := range map[string]string{"D & G": "d-g", "1000 Bunga": "1000-bunga", "J-Lo": "j-lo", " Sulthan ": "sulthan"} {
+	for in, want := range map[string]string{"Teh & Madu": "teh-madu", "1000 Bunga": "1000-bunga", "Al-Fatih": "al-fatih", " Sulthan ": "sulthan"} {
 		if got := Slugify(in); got != want {
 			t.Errorf("Slugify(%q) = %q; want %q", in, got, want)
 		}
@@ -49,8 +51,22 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 	cats := loadFile(t, "categories.csv", LoadCategories)
 	sizes := loadFile(t, "sizes.csv", LoadSizes)
 	scents := loadFile(t, "wangian.csv", LoadScents)
+	if _, err := os.Stat("../../../seed/" + InspiredByFile); err == nil {
+		if err := ApplyInspiredBy(scents, loadFile(t, InspiredByFile, LoadInspiredBy)); err != nil {
+			t.Fatal(err)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
 	variants := loadFile(t, "varian_parfum.csv", LoadPerfumeVariants)
 	general := loadFile(t, "produk_umum.csv", LoadGeneralProducts)
+	if _, err := os.Stat("../../../seed/" + RenameFile); err == nil {
+		if err := CheckRenames(loadFile(t, RenameFile, LoadRenames), scents, general); err != nil {
+			t.Fatal(err)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
 
 	catNames := map[string]bool{}
 	for _, c := range cats {
@@ -90,18 +106,8 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 	if grades["regular"] != 81 || grades["exclusive"] != 11 || len(scents) != 92 {
 		t.Fatalf("want 81 Regular + 11 Exclusive = 92 parfum; got %d + %d = %d", grades["regular"], grades["exclusive"], len(scents))
 	}
-	// Nama sama di Regular dan Exclusive = 2 parfum, alamatnya dibedakan.
-	for slug, want := range map[string]struct{ grade, name, code string }{
-		"bacarat":                 {"regular", "Bacarat", "bacarat"},
-		"bacarat-exclusive":       {"exclusive", "Bacarat", "exclusive-2-bacarat"},
-		"avril-lavigne-exclusive": {"exclusive", "Avril Lavigne", "exclusive-4-avril-lavigne"},
-		"escada-moonlight":        {"regular", "Escada Moonlight", "escada-moonlight"},
-		"moonlight":               {"exclusive", "Moonlight", "exclusive-3-moonlight"},
-		"kasturi-kijang":          {"regular", "Kasturi Kijang", "kasturi-kasturi-kijang"},
-	} {
-		if p := perfumes[slug]; p.Grade != want.grade || p.Group != want.name || p.Code != want.code {
-			t.Errorf("produk %s = %s %q (wangian %s); want %s %q (wangian %s)", slug, p.Grade, p.Group, p.Code, want.grade, want.name, want.code)
-		}
+	if p := perfumes["kasturi-kijang"]; p.Grade != "regular" || p.Group != "Kasturi Kijang" || p.Code != "kasturi-kasturi-kijang" {
+		t.Errorf("kasturi-kijang salah: %+v", p)
 	}
 	rate := func(code string) (int64, int64) {
 		s, ok := byCode[code]
@@ -111,24 +117,24 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 		return *s.RateMurni, *s.RateCampur
 	}
 	for code, want := range map[string][2]int64{
-		"victoria-romanwish":     {3000, 1500}, // Regular standar
-		"bacarat":                {4000, 1500}, // Regular bibit 4.000
-		"sulthan":                {4000, 1500},
-		"exclusive-2-bacarat":    {5000, 3000}, // Exclusive ≠ Regular walau nama sama
-		"exclusive-3-moonlight":  {4000, 2000}, // Moonlight beda tarif dari grupnya
-		"exclusive-3-opus-black": {5000, 3000},
+		"lavender": {3000, 1500},
+		"sulthan":  {4000, 1500},
 	} {
 		if m, c := rate(code); m != want[0] || c != want[1] {
 			t.Errorf("tarif %s = %d/%d; want %d/%d", code, m, c, want[0], want[1])
 		}
 	}
-	if s := byCode["exclusive-1-scandal-secret"]; s.Name != "Scandal Secret" || s.Note1 != "sweet" || s.Note2 != "fresh" {
-		t.Fatalf("Scandal Secret salah: %+v", s)
+	if s := byCode["malaikat-subuh"]; s.Name != "Malaikat Subuh" || s.Note1 != "musk" || s.Note2 != "oud" {
+		t.Fatalf("Malaikat Subuh salah: %+v", s)
 	}
-	for _, code := range []string{"dunhil-desire-blue", "greentea", "guci-flora", "hugo-boss-boss-energi"} {
-		if byCode[code].Active {
-			t.Errorf("%s harus nonaktif (belum ada di daftar harga)", code)
+	inactive := 0
+	for _, s := range scents {
+		if !s.Active {
+			inactive++
 		}
+	}
+	if inactive != 8 || byCode["greentea"].Active {
+		t.Errorf("want 8 parfum nonaktif (belum ada di daftar harga, termasuk greentea); got %d", inactive)
 	}
 
 	// varian_parfum.csv = pengecualian saja; template kosong (harga dari rumus, stok parfum tidak dihitung).
@@ -155,28 +161,28 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 }
 
 func TestLoadScentsRejectsBadData(t *testing.T) {
-	const h = "grade,group_code,group,category,inspired_by,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
-	ok := "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,,,annasui-dolly-girl,Dolly Girl,a.jpeg\n"
+	const h = "grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
+	ok := "regular,contoh,Contoh,Parfum,sweet,fruity,3000,1500,,,contoh-satu,Satu,a.jpeg\n"
 	cases := map[string]string{
-		"grade salah":        "premium,a,A,K,,sweet,fruity,3000,1500,,,a,A,x\n",
-		"note tidak dikenal": "regular,a,A,K,,sweet,spicy,3000,1500,,,a,A,x\n",
-		"note sama":          "regular,a,A,K,,sweet,sweet,3000,1500,,,a,A,x\n",
-		"kategori kosong":    "regular,a,A,,,sweet,fruity,3000,1500,,,a,A,x\n",
-		"tarif desimal":      "regular,a,A,K,,sweet,fruity,3000.5,1500,,,a,A,x\n",
-		"ukuran salah":       "regular,a,A,K,,sweet,fruity,3000,1500,sepuluh,,a,A,x\n",
-		"aktif salah":        "regular,a,A,K,,sweet,fruity,3000,1500,,mungkin,a,A,x\n",
-		"code tidak valid":   "regular,a,A,K,,sweet,fruity,3000,1500,,,A B,A,x\n",
-		"code dobel":         ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,,,annasui-dolly-girl,Sweet Dream,a.jpeg\n",
-		"varian dobel":       ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,,,annasui-x,dolly girl,a.jpeg\n",
-		"data grup beda":     ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,woody,3000,1500,,,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
-		"ukuran grup beda":   ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,10;15,,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
+		"grade salah":        "premium,a,A,K,sweet,fruity,3000,1500,,,a,A,x\n",
+		"note tidak dikenal": "regular,a,A,K,sweet,spicy,3000,1500,,,a,A,x\n",
+		"note sama":          "regular,a,A,K,sweet,sweet,3000,1500,,,a,A,x\n",
+		"kategori kosong":    "regular,a,A,,sweet,fruity,3000,1500,,,a,A,x\n",
+		"tarif desimal":      "regular,a,A,K,sweet,fruity,3000.5,1500,,,a,A,x\n",
+		"ukuran salah":       "regular,a,A,K,sweet,fruity,3000,1500,sepuluh,,a,A,x\n",
+		"aktif salah":        "regular,a,A,K,sweet,fruity,3000,1500,,mungkin,a,A,x\n",
+		"code tidak valid":   "regular,a,A,K,sweet,fruity,3000,1500,,,A B,A,x\n",
+		"code dobel":         ok + "regular,contoh,Contoh,Parfum,sweet,fruity,3000,1500,,,contoh-satu,Dua,a.jpeg\n",
+		"varian dobel":       ok + "regular,contoh,Contoh,Parfum,sweet,fruity,3000,1500,,,contoh-x,satu,a.jpeg\n",
+		"data grup beda":     ok + "regular,contoh,Contoh,Parfum,sweet,woody,3000,1500,,,contoh-dua,Dua,a.jpeg\n",
+		"ukuran grup beda":   ok + "regular,contoh,Contoh,Parfum,sweet,fruity,3000,1500,10;15,,contoh-dua,Dua,a.jpeg\n",
 	}
 	for name, body := range cases {
 		if _, err := LoadScents(strings.NewReader(h + body)); err == nil {
 			t.Errorf("%s: harus error", name)
 		}
 	}
-	rows, err := LoadScents(strings.NewReader(h + "regular,mini,Mini,Parfum,,sweet,fruity,Rp3.000,1500,30;10 15,tidak,mini,Mini,x\n"))
+	rows, err := LoadScents(strings.NewReader(h + "regular,mini,Mini,Parfum,sweet,fruity,Rp3.000,1500,30;10 15,tidak,mini,Mini,x\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,12 +191,110 @@ func TestLoadScentsRejectsBadData(t *testing.T) {
 	}
 }
 
+func TestInspiredByStaysInternal(t *testing.T) {
+	const h = "grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
+	const legacy = "grade,group_code,group,category,inspired_by,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
+	if _, err := LoadScents(strings.NewReader(legacy + "regular,a,A,K,,sweet,fruity,3000,1500,,,a,A,x\n")); err == nil ||
+		!strings.Contains(err.Error(), InspiredByFile) {
+		t.Fatalf("kolom inspired_by di wangian.csv harus ditolak: %v", err)
+	}
+
+	scents, err := LoadScents(strings.NewReader(h +
+		"regular,alpha,Alpha,K,sweet,fruity,3000,1500,,,alpha,Alpha,x\n" +
+		"regular,beta,Beta,K,sweet,fruity,3000,1500,,,beta,Beta,x\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	brands, err := LoadInspiredBy(strings.NewReader("# internal\ncode,inspired_by\nalpha,Merek Uji\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyInspiredBy(scents, brands); err != nil {
+		t.Fatal(err)
+	}
+	if scents[0].InspiredBy == nil || *scents[0].InspiredBy != "Merek Uji" || scents[1].InspiredBy != nil {
+		t.Fatalf("inspired_by salah dipasang: %v, %v", scents[0].InspiredBy, scents[1].InspiredBy)
+	}
+	if err := ApplyInspiredBy(scents, []InspiredByRow{{Line: 2, Code: "gamma", InspiredBy: "X"}}); err == nil {
+		t.Fatal("code yang tidak ada di wangian.csv harus error")
+	}
+
+	for name, body := range map[string]string{
+		"code tidak valid": "A B,Merek\n",
+		"kosong":           "alpha,\n",
+		"dobel":            "alpha,Merek\nalpha,Lain\n",
+		"terlalu panjang":  "alpha," + strings.Repeat("x", 256) + "\n",
+	} {
+		if _, err := LoadInspiredBy(strings.NewReader("code,inspired_by\n" + body)); err == nil {
+			t.Errorf("%s: harus error", name)
+		}
+	}
+}
+
+func TestLoadScentsAudienceOccasions(t *testing.T) {
+	const h = "grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image,untuk,cocok_untuk,deskripsi\n"
+	rows, err := LoadScents(strings.NewReader(h +
+		"regular,alpha,Alpha,K,sweet,fruity,3000,1500,,,alpha,Alpha,x,Wanita,Ibadah; harian;harian,Lembut dan manis.\n" +
+		"regular,beta,Beta,K,sweet,fruity,3000,1500,,,beta,Beta,x,,,\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := rows[0], rows[1]
+	if a.Audience == nil || *a.Audience != "wanita" || fmt.Sprint(a.Occasions) != "[harian ibadah]" || a.Description == nil || *a.Description != "Lembut dan manis." {
+		t.Fatalf("parse salah: %v %v %v", a.Audience, a.Occasions, a.Description)
+	}
+	if b.Audience != nil || b.Occasions != nil || b.Description != nil {
+		t.Fatalf("kolom kosong harus berarti tidak diubah: %+v", b)
+	}
+	for name, body := range map[string]string{
+		"untuk tidak dikenal": "regular,a,A,K,sweet,fruity,3000,1500,,,a,A,x,anak,,\n",
+		"cocok tidak dikenal": "regular,a,A,K,sweet,fruity,3000,1500,,,a,A,x,,kencan,\n",
+		"grup beda untuk":     "regular,a,A,K,sweet,fruity,3000,1500,,,a,A,x,pria,,\nregular,a,A,K,sweet,fruity,3000,1500,,,a2,B,x,wanita,,\n",
+	} {
+		if _, err := LoadScents(strings.NewReader(h + body)); err == nil {
+			t.Errorf("%s: harus error", name)
+		}
+	}
+}
+
+func TestRenames(t *testing.T) {
+	rows, err := LoadRenames(strings.NewReader("# internal\njenis,code_lama,code_baru\nproduk,lama,baru\nwangian,lama,baru\nproduk,baru,akhir\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 || rows[0].Kind != RenameProduct || rows[1].Kind != RenameScent {
+		t.Fatalf("parse salah: %+v", rows)
+	}
+	for name, body := range map[string]string{
+		"jenis salah":      "varian,a,b\n",
+		"code sama":        "produk,a,a\n",
+		"code tidak valid": "produk,A B,b\n",
+		"lama dobel":       "produk,a,b\nproduk,a,c\n",
+		"baru dobel":       "produk,a,c\nproduk,b,c\n",
+	} {
+		if _, err := LoadRenames(strings.NewReader("jenis,code_lama,code_baru\n" + body)); err == nil {
+			t.Errorf("%s: harus error", name)
+		}
+	}
+
+	scents := []ScentRow{{GroupCode: "akhir", Code: "baru"}}
+	if err := CheckRenames(rows, scents, nil); err != nil {
+		t.Fatalf("rantai lama → baru → akhir harus lolos: %v", err)
+	}
+	if err := CheckRenames(rows[:1], []ScentRow{{GroupCode: "lain", Code: "lain"}}, nil); err == nil {
+		t.Fatal("code_baru yang tidak ada di CSV harus error")
+	}
+	if err := CheckRenames([]RenameRow{{Line: 2, Kind: RenameProduct, From: "x", To: "botol"}}, nil, []GeneralRow{{ProductCode: "botol"}}); err != nil {
+		t.Fatalf("ganti nama produk umum harus lolos: %v", err)
+	}
+}
+
 func TestLoadPerfumeVariants(t *testing.T) {
 	const h = "product,varian,scent_code,ml,tipe,stok,harga_khusus,harga_coret,aktif\n"
 	rows, err := LoadPerfumeVariants(strings.NewReader(h +
-		"Annasui,Dolly Girl,annasui-dolly-girl,30,bibit,12,,,\n" +
-		"Annasui,Dolly Girl,annasui-dolly-girl,30 ml,Parfum,,40000,50000,\n" +
-		"Annasui,Dolly Girl,annasui-dolly-girl,50,murni,,,,tidak\n"))
+		"Contoh,Satu,contoh-satu,30,bibit,12,,,\n" +
+		"Contoh,Satu,contoh-satu,30 ml,Parfum,,40000,50000,\n" +
+		"Contoh,Satu,contoh-satu,50,murni,,,,tidak\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

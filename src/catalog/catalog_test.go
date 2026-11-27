@@ -16,7 +16,7 @@ func perfume(rateMurni, rateCampur int64, ml int, bottle int64, conc string) *re
 }
 
 func TestListPrice(t *testing.T) {
-	// Victoria 30 ml: murni 3.000 × 30 + 5.000 = 95.000; campur 1.500 × 30 + 5.000 = 50.000.
+	// Parfum Regular 30 ml: murni 3.000 × 30 + 5.000 = 95.000; campur 1.500 × 30 + 5.000 = 50.000.
 	p, ok := ListPrice(perfume(3000, 1500, 30, 5000, "murni"))
 	if !ok || p.Total != 95000 || *p.PerML != 3000 || *p.BottlePrice != 5000 {
 		t.Fatalf("murni: %+v %v", p, ok)
@@ -24,9 +24,9 @@ func TestListPrice(t *testing.T) {
 	if p, _ := ListPrice(perfume(3000, 1500, 30, 5000, "campur")); p.Total != 50000 {
 		t.Fatalf("campur: %d", p.Total)
 	}
-	// Exclusive Moonlight 50 ml murni: 4.000 × 50 + 5.000.
+	// Parfum Exclusive 50 ml murni: 4.000 × 50 + 5.000.
 	if p, _ := ListPrice(perfume(4000, 2000, 50, 5000, "murni")); p.Total != 205000 {
-		t.Fatalf("moonlight: %d", p.Total)
+		t.Fatalf("exclusive 50 ml: %d", p.Total)
 	}
 	// Harga khusus mengalahkan rumus.
 	v := perfume(3000, 1500, 30, 5000, "murni")

@@ -26,7 +26,7 @@ type ProductFilter struct {
 	Kind     string // perfume | general
 	Grade    string // regular | exclusive
 	Note     string // label aroma, cocok dengan label pertama atau kedua
-	Query    string // cari di nama produk, nama wangian, inspired by
+	Query    string // cari di nama produk dan nama wangian
 }
 
 func (f ProductFilter) validate() error {
@@ -78,9 +78,9 @@ func GetAllProducts(f ProductFilter) ([]models.ProductCard, error) {
 	}
 	if s := strings.TrimSpace(f.Query); s != "" {
 		like := "%" + strings.ToLower(s) + "%"
-		q = q.Where("lower(products.name) LIKE ? OR lower(products.inspired_by) LIKE ? OR EXISTS ("+
+		q = q.Where("lower(products.name) LIKE ? OR EXISTS ("+
 			"SELECT 1 FROM scents s WHERE s.product_id = products.id AND s.is_active AND s.deleted_at IS NULL AND lower(s.name) LIKE ?)",
-			like, like, like)
+			like, like)
 	}
 	var products []repository.Product
 	if err := q.Order("products.sort_order, products.id").Find(&products).Error; err != nil {
@@ -97,7 +97,7 @@ func GetAllProducts(f ProductFilter) ([]models.ProductCard, error) {
 	return out, nil
 }
 
-// GetProduct: idOrSlug boleh angka (id) atau slug ("annasui").
+// GetProduct: idOrSlug boleh angka (id) atau slug ("lavender").
 func GetProduct(idOrSlug string) (*models.ProductDetail, error) {
 	q := productQuery()
 	if id, err := strconv.ParseUint(idOrSlug, 10, 64); err == nil {
@@ -168,8 +168,14 @@ func sellable(p repository.Product) []repository.Variant {
 }
 
 func toCard(p repository.Product) models.ProductCard {
-	c := models.ProductCard{ID: p.ID, Kind: p.Kind, Name: p.Name, Slug: p.Slug, Grade: p.Grade, InspiredBy: p.InspiredBy,
+	c := models.ProductCard{ID: p.ID, Kind: p.Kind, Name: p.Name, Slug: p.Slug, Grade: p.Grade,
 		NotePrimary: p.NotePrimary, NoteSecondary: p.NoteSecondary, Category: p.Category}
+	if p.Kind == repository.ProductKindPerfume {
+		c.Audience = p.Audience
+		if len(p.Occasions) > 0 {
+			c.Occasions = []string(p.Occasions)
+		}
+	}
 	if len(p.Images) > 0 {
 		c.ImageURL = &p.Images[0].URL
 	}

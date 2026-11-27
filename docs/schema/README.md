@@ -30,8 +30,8 @@
 3. **Harga dihitung dari tarif per ml, stok per kombinasi** (wangian × ukuran × tipe). Setiap kombinasi bisa dimatikan.
    ```
    harga = tarif per ml wangian (murni/"bibit" atau campur/"parfum") × volume + harga botol ukuran
-   Victoria 30 ml murni  = 3.000 × 30 + 5.000 = Rp95.000
-   Victoria 30 ml campur = 1.500 × 30 + 5.000 = Rp50.000
+   Lavender 30 ml murni  = 3.000 × 30 + 5.000 = Rp95.000
+   Lavender 30 ml campur = 1.500 × 30 + 5.000 = Rp50.000
    ```
    `variants.price` = harga khusus opsional yang mengalahkan rumus (promo, ukuran spesial).
 4. **Mudah untuk admin.** Tambah wangian + tarifnya → semua kombinasi ukuran × tipe dibuat otomatis dan langsung berharga. Tarif satu grup diubah sekaligus. Kode varian (SKU) dibuat otomatis, admin tidak pernah mengetiknya.
@@ -81,9 +81,11 @@ erDiagram
         varchar kind "perfume|general"
         bool track_stock "parfum: false"
         varchar code "unik, stabil"
-        varchar name "Annasui"
+        varchar name "Lavender"
         varchar grade "regular|exclusive"
-        varchar inspired_by
+        varchar inspired_by "hanya admin"
+        varchar audience "pria|wanita|unisex"
+        jsonb occasions "harian, kantor, ..., ibadah"
         varchar note_primary "13 label (CHECK)"
         varchar note_secondary
         varchar status "draft|active|archived"
@@ -91,8 +93,8 @@ erDiagram
     scents {
         bigint id PK
         bigint product_id FK
-        varchar code "annasui-dolly-girl"
-        varchar name "Dolly Girl"
+        varchar code "lavender"
+        varchar name "Lavender"
         bigint price_per_ml_murni "tarif bibit"
         bigint price_per_ml_campur "tarif parfum"
     }
@@ -141,8 +143,8 @@ erDiagram
 ## 3. Keputusan penting
 
 1. **`products.kind`.** Parfum wajib punya grade + 2 label aroma (CHECK); produk umum tidak boleh punya. Varian parfum wajib `scent + size + concentration`; varian umum ketiganya NULL dan boleh punya `label` (CHECK `variants_shape_chk`). FK komposit `(scent_id, product_id)` menjamin wangian milik produk yang sama.
-2. **Regular dan Exclusive bernama sama = 2 parfum berbeda** (mis. Moonlight Escada vs Moonlight Exclusive). Karena itu kunci wangian adalah `code`, bukan nama.
-3. **Harga parfum dihitung** (`catalog.ListPrice`): `variants.price` kalau diisi (harga khusus), kalau tidak `tarif wangian × volume + harga botol`. Tarif disimpan **per wangian** karena 1 foto bisa berisi tarif berbeda (Moonlight 4.000/2.000 vs Opus Black 5.000/3.000); admin bisa mengubah tarif 1 produk sekaligus. Wangian tanpa tarif tidak dijual. Produk umum memakai `variants.price` (wajib kalau aktif, CHECK).
+2. **Regular dan Exclusive bernama sama = 2 parfum berbeda** (mis. produk Regular dan Exclusive dengan nama yang sama). Karena itu kunci wangian adalah `code`, bukan nama.
+3. **Harga parfum dihitung** (`catalog.ListPrice`): `variants.price` kalau diisi (harga khusus), kalau tidak `tarif wangian × volume + harga botol`. Tarif disimpan **per wangian** karena 1 foto bisa berisi tarif berbeda (mis. 4.000/2.000 dan 5.000/3.000 di poster yang sama); admin bisa mengubah tarif 1 produk sekaligus. Wangian tanpa tarif tidak dijual. Produk umum memakai `variants.price` (wajib kalau aktif, CHECK).
 4. **Ukuran = tabel.** `is_default` = dijual untuk semua parfum (20/30/50 ml). Parfum tertentu bisa punya daftar sendiri di `product_sizes` (mis. hanya 10/15/30 ml); daftar ini menggantikan ukuran default untuk produk itu. 1 ukuran = 1 jenis botol, jadi harga botol ada di `sizes`. **Tipe = Murni ("bibit") / Campur ("parfum")** tetap (CHECK).
 5. **Stok hanya untuk produk `track_stock = true`** (produk umum), langsung di `variants.stock` (1 toko). Parfum diracik sendiri → selalu tersedia (`available: null` di API). Untuk produk yang dihitung: **reserve → potong.** Checkout menambah `reserved` (stok tersedia = `stock − reserved`). Saat order `PAID`, `stock` dan `reserved` dikurangi dan dicatat `sale` di `stock_movements`. `CANCELLED`/`EXPIRED` sebelum bayar hanya melepas `reserved`. Order tidak dibayar dalam 24 jam otomatis `EXPIRED` (`ExpireOverdueOrders`, dijalankan tiap 5 menit dari `main.go`). Baris varian dikunci urut `variant_id` → checkout bersamaan tidak deadlock.
 6. **Pengiriman manual dari toko:** ongkir ditanggung toko (`shipping_fee = 0`). Admin mengubah status order (`PUT /orders/:id/status`) `PAID → PROCESSING → SHIPPED → COMPLETED`; `shipped_at` terisi saat `SHIPPED`. Kurir & nomor resi belum disimpan (MVP berikutnya).
