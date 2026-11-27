@@ -1,8 +1,10 @@
 package seeders
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 	"testing"
@@ -49,6 +51,13 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 	cats := loadFile(t, "categories.csv", LoadCategories)
 	sizes := loadFile(t, "sizes.csv", LoadSizes)
 	scents := loadFile(t, "wangian.csv", LoadScents)
+	if _, err := os.Stat("../../../seed/" + InspiredByFile); err == nil {
+		if err := ApplyInspiredBy(scents, loadFile(t, InspiredByFile, LoadInspiredBy)); err != nil {
+			t.Fatal(err)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
 	variants := loadFile(t, "varian_parfum.csv", LoadPerfumeVariants)
 	general := loadFile(t, "produk_umum.csv", LoadGeneralProducts)
 
@@ -155,33 +164,73 @@ func TestSeedFilesAreConsistent(t *testing.T) {
 }
 
 func TestLoadScentsRejectsBadData(t *testing.T) {
-	const h = "grade,group_code,group,category,inspired_by,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
-	ok := "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,,,annasui-dolly-girl,Dolly Girl,a.jpeg\n"
+	const h = "grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
+	ok := "regular,annasui,Annasui,Parfum,sweet,fruity,3000,1500,,,annasui-dolly-girl,Dolly Girl,a.jpeg\n"
 	cases := map[string]string{
-		"grade salah":        "premium,a,A,K,,sweet,fruity,3000,1500,,,a,A,x\n",
-		"note tidak dikenal": "regular,a,A,K,,sweet,spicy,3000,1500,,,a,A,x\n",
-		"note sama":          "regular,a,A,K,,sweet,sweet,3000,1500,,,a,A,x\n",
-		"kategori kosong":    "regular,a,A,,,sweet,fruity,3000,1500,,,a,A,x\n",
-		"tarif desimal":      "regular,a,A,K,,sweet,fruity,3000.5,1500,,,a,A,x\n",
-		"ukuran salah":       "regular,a,A,K,,sweet,fruity,3000,1500,sepuluh,,a,A,x\n",
-		"aktif salah":        "regular,a,A,K,,sweet,fruity,3000,1500,,mungkin,a,A,x\n",
-		"code tidak valid":   "regular,a,A,K,,sweet,fruity,3000,1500,,,A B,A,x\n",
-		"code dobel":         ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,,,annasui-dolly-girl,Sweet Dream,a.jpeg\n",
-		"varian dobel":       ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,,,annasui-x,dolly girl,a.jpeg\n",
-		"data grup beda":     ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,woody,3000,1500,,,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
-		"ukuran grup beda":   ok + "regular,annasui,Annasui,Parfum,Anna sui,sweet,fruity,3000,1500,10;15,,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
+		"grade salah":        "premium,a,A,K,sweet,fruity,3000,1500,,,a,A,x\n",
+		"note tidak dikenal": "regular,a,A,K,sweet,spicy,3000,1500,,,a,A,x\n",
+		"note sama":          "regular,a,A,K,sweet,sweet,3000,1500,,,a,A,x\n",
+		"kategori kosong":    "regular,a,A,,sweet,fruity,3000,1500,,,a,A,x\n",
+		"tarif desimal":      "regular,a,A,K,sweet,fruity,3000.5,1500,,,a,A,x\n",
+		"ukuran salah":       "regular,a,A,K,sweet,fruity,3000,1500,sepuluh,,a,A,x\n",
+		"aktif salah":        "regular,a,A,K,sweet,fruity,3000,1500,,mungkin,a,A,x\n",
+		"code tidak valid":   "regular,a,A,K,sweet,fruity,3000,1500,,,A B,A,x\n",
+		"code dobel":         ok + "regular,annasui,Annasui,Parfum,sweet,fruity,3000,1500,,,annasui-dolly-girl,Sweet Dream,a.jpeg\n",
+		"varian dobel":       ok + "regular,annasui,Annasui,Parfum,sweet,fruity,3000,1500,,,annasui-x,dolly girl,a.jpeg\n",
+		"data grup beda":     ok + "regular,annasui,Annasui,Parfum,sweet,woody,3000,1500,,,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
+		"ukuran grup beda":   ok + "regular,annasui,Annasui,Parfum,sweet,fruity,3000,1500,10;15,,annasui-sweet-dream,Sweet Dream,a.jpeg\n",
 	}
 	for name, body := range cases {
 		if _, err := LoadScents(strings.NewReader(h + body)); err == nil {
 			t.Errorf("%s: harus error", name)
 		}
 	}
-	rows, err := LoadScents(strings.NewReader(h + "regular,mini,Mini,Parfum,,sweet,fruity,Rp3.000,1500,30;10 15,tidak,mini,Mini,x\n"))
+	rows, err := LoadScents(strings.NewReader(h + "regular,mini,Mini,Parfum,sweet,fruity,Rp3.000,1500,30;10 15,tidak,mini,Mini,x\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r := rows[0]; *r.RateMurni != 3000 || *r.RateCampur != 1500 || fmt.Sprint(r.Sizes) != "[10 15 30]" || r.Active {
 		t.Fatalf("parse salah: %+v", r)
+	}
+}
+
+func TestInspiredByStaysInternal(t *testing.T) {
+	const h = "grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
+	const legacy = "grade,group_code,group,category,inspired_by,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image\n"
+	if _, err := LoadScents(strings.NewReader(legacy + "regular,a,A,K,,sweet,fruity,3000,1500,,,a,A,x\n")); err == nil ||
+		!strings.Contains(err.Error(), InspiredByFile) {
+		t.Fatalf("kolom inspired_by di wangian.csv harus ditolak: %v", err)
+	}
+
+	scents, err := LoadScents(strings.NewReader(h +
+		"regular,alpha,Alpha,K,sweet,fruity,3000,1500,,,alpha,Alpha,x\n" +
+		"regular,beta,Beta,K,sweet,fruity,3000,1500,,,beta,Beta,x\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	brands, err := LoadInspiredBy(strings.NewReader("# internal\ncode,inspired_by\nalpha,Merek Uji\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyInspiredBy(scents, brands); err != nil {
+		t.Fatal(err)
+	}
+	if scents[0].InspiredBy == nil || *scents[0].InspiredBy != "Merek Uji" || scents[1].InspiredBy != nil {
+		t.Fatalf("inspired_by salah dipasang: %v, %v", scents[0].InspiredBy, scents[1].InspiredBy)
+	}
+	if err := ApplyInspiredBy(scents, []InspiredByRow{{Line: 2, Code: "gamma", InspiredBy: "X"}}); err == nil {
+		t.Fatal("code yang tidak ada di wangian.csv harus error")
+	}
+
+	for name, body := range map[string]string{
+		"code tidak valid": "A B,Merek\n",
+		"kosong":           "alpha,\n",
+		"dobel":            "alpha,Merek\nalpha,Lain\n",
+		"terlalu panjang":  "alpha," + strings.Repeat("x", 256) + "\n",
+	} {
+		if _, err := LoadInspiredBy(strings.NewReader("code,inspired_by\n" + body)); err == nil {
+			t.Errorf("%s: harus error", name)
+		}
 	}
 }
 

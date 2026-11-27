@@ -95,14 +95,24 @@ func main() {
 	if data.Scents, err = load(*dir, "wangian.csv", seeders.LoadScents); err != nil {
 		log.Fatal(err)
 	}
+	brands, err := load(*dir, seeders.InspiredByFile, seeders.LoadInspiredBy)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if brands == nil {
+		fmt.Println("inspired_by di database tidak diubah")
+	}
+	if err := seeders.ApplyInspiredBy(data.Scents, brands); err != nil {
+		log.Fatal(err)
+	}
 	if data.Variants, err = load(*dir, "varian_parfum.csv", seeders.LoadPerfumeVariants); err != nil {
 		log.Fatal(err)
 	}
 	if data.General, err = load(*dir, "produk_umum.csv", seeders.LoadGeneralProducts); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("CSV OK: %d kategori, %d ukuran, %d wangian, %d pengecualian varian parfum, %d baris produk umum\n",
-		len(data.Categories), len(data.Sizes), len(data.Scents), len(data.Variants), len(data.General))
+	fmt.Printf("CSV OK: %d kategori, %d ukuran, %d wangian, %d inspired_by internal, %d pengecualian varian parfum, %d baris produk umum\n",
+		len(data.Categories), len(data.Sizes), len(data.Scents), len(brands), len(data.Variants), len(data.General))
 
 	rep, err := seeders.SeedCatalog(db, data, *dryRun)
 	if rep != nil {

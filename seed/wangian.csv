@@ -7,96 +7,96 @@
 # isi mis. "10;15;30" untuk ukuran khusus produk itu. aktif "tidak" = produk disimpan sebagai draft.
 # image = nama file foto; sementara masih poster grup lama sampai foto per parfum datang.
 # group_code/code = kunci stabil; jangan diubah setelah dipakai (code juga kunci varian_parfum.csv).
-grade,group_code,group,category,inspired_by,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image
-regular,1000-bunga,1000 Bunga,Parfum & Wewangian,,floral,woody,4000,1500,,,1000-bunga,1000 Bunga,1000 bunga.jpeg
-regular,2000-bunga,2000 Bunga,Parfum & Wewangian,,floral,woody,4000,1500,,,2000-bunga,2000 Bunga,2000 bunga.jpeg
-regular,aigner-black,Aigner Black,Parfum & Wewangian,Aigner,musk,woody,3000,1500,,,aigner-black,Black,aigner: blue motion & black.jpeg
-regular,aigner-blue-in-motion,Aigner Blue In Motion,Parfum & Wewangian,Aigner,musk,woody,3000,1500,,,aigner-blue-in-motion,Blue In Motion,aigner: blue motion & black.jpeg
-regular,angelina-jolie,Angelina Jolie,Parfum & Wewangian,Angelina Jolie,sweet,woody,3000,1500,,,angelina-jolie,Angelina Jolie,angeline jolie.jpeg
-regular,annasui-dolly-girl,Annasui Dolly Girl,Parfum & Wewangian,Anna sui,sweet,fruity,3000,1500,,,annasui-dolly-girl,Dolly Girl,annasui: sweet dream & dolly girl.jpeg
-regular,annasui-sweet-dream,Annasui Sweet Dream,Parfum & Wewangian,Anna sui,sweet,fruity,3000,1500,,,annasui-sweet-dream,Sweet Dream,annasui: sweet dream & dolly girl.jpeg
-exclusive,aquakiss,Aquakiss,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-1-aquakiss,Aquakiss,exclusive-baru-1.jpg
-regular,avril-lavigne,Avril Lavigne,Parfum & Wewangian,Avril Lavigne,sweet,floral,3000,1500,,,avril-lavigne,Avril Lavigne,avril-lavigne.jpeg
-exclusive,avril-lavigne-exclusive,Avril Lavigne,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-4-avril-lavigne,Avril Lavigne,exclusive-baru-4.jpg
-regular,bacarat,Bacarat,Parfum & Wewangian,Masion Francis KP,amber,woody,4000,1500,,,bacarat,Bacarat,Bacarat.jpeg
-exclusive,bacarat-exclusive,Bacarat,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-2-bacarat,Bacarat,exclusive-baru-2.jpg
-regular,black-opium,Black Opium,Parfum & Wewangian,Yves Saint Laurent,woody,sweet,3000,1500,,,black-opium,Black Opium,Black Opium.jpeg
-regular,burberies-london-women,Burberies London Women,Parfum & Wewangian,Burberry,woody,sweet,3000,1500,,,burberies-burberies-london-women,Burberies London Women,Burberies: London women & sport.jpeg
-regular,burberies-sport,Burberies Sport,Parfum & Wewangian,Burberry,woody,sweet,3000,1500,,,burberies-burberies-sport,Burberies Sport,Burberies: London women & sport.jpeg
-regular,bvlgari-aqua,Bvlgari Aqua,Parfum & Wewangian,Bvlgari,citrus,aromatic,3000,1500,,,bvlgari-aqua,Aqua,bvlgari: aqua & extream & omnia crystal.jpeg
-regular,bvlgari-extream,Bvlgari Extream,Parfum & Wewangian,Bvlgari,citrus,aromatic,3000,1500,,,bvlgari-extream,Extream,bvlgari: aqua & extream & omnia crystal.jpeg
-regular,bvlgari-omnia-crystal,Bvlgari Omnia Crystal,Parfum & Wewangian,Bvlgari,citrus,aromatic,3000,1500,,,bvlgari-omnia-crystal,Omnia Crystal,bvlgari: aqua & extream & omnia crystal.jpeg
-exclusive,c2-premiere-man,C2 Premiere Man,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-4-c2-premiere-man,C2 Premiere Man,exclusive-baru-4.jpg
-regular,cuddle,Cuddle,Parfum & Wewangian,,fresh,powdery,3000,1500,,,cuddle,Cuddle,Cuddle.jpeg
-regular,d-g-light-blue,D & G Light Blue,Parfum & Wewangian,Dolce & Gabbana,fruity,citrus,3000,1500,,,d-g-light-blue,Light Blue,D & G: Paris & Light Blue.jpeg
-regular,d-g-paris,D & G Paris,Parfum & Wewangian,Dolce & Gabbana,fruity,citrus,3000,1500,,,d-g-paris,Paris,D & G: Paris & Light Blue.jpeg
-regular,dancing-lady,Dancing Lady,Parfum & Wewangian,,fresh,sweet,3000,1500,,,dancing-lady,Dancing Lady,Dancing Lady.jpeg
-regular,davidoff-cool-water-man,Davidoff Cool Water Man,Parfum & Wewangian,Davidoff,citrus,aromatic,3000,1500,,,davidoff-cool-water-man,Cool Water Man,davidoff: cool water man & cool water women.jpeg
-regular,davidoff-cool-water-women,Davidoff Cool Water Women,Parfum & Wewangian,Davidoff,citrus,aromatic,3000,1500,,,davidoff-cool-water-women,Cool Water Women,davidoff: cool water man & cool water women.jpeg
-regular,dior-sauvage,Dior Sauvage,Parfum & Wewangian,Dior Sauvage,musk,woody,3000,1500,,,dior-sauvage,Dior Sauvage,dior-sauvage.jpeg
-exclusive,dorsava,Dorsava,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-1-dorsava,Dorsava,exclusive-baru-1.jpg
-exclusive,dunhil-blue,Dunhil Blue,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-2-dunhil-blue,Dunhil Blue,exclusive-baru-2.jpg
-regular,dunhil-desire-blue,Dunhil Desire Blue,Parfum & Wewangian,Dunhil desire blue,amber,woody,,,,tidak,dunhil-desire-blue,Desire Blue,"dunhil: desire blue, london, red.jpeg"
-regular,dunhil-london,Dunhil London,Parfum & Wewangian,Dunhil desire blue,amber,woody,,,,tidak,dunhil-london,London,"dunhil: desire blue, london, red.jpeg"
-regular,dunhil-red,Dunhil Red,Parfum & Wewangian,Dunhil desire blue,amber,woody,,,,tidak,dunhil-red,Red,"dunhil: desire blue, london, red.jpeg"
-regular,escada-candy,Escada Candy,Parfum & Wewangian,Escada Moon Sparkle,fruity,floral,3000,1500,,,escada-candy,Candy,escada: moonlight & sexy grafity & cherry & candy.jpeg
-regular,escada-cherry,Escada Cherry,Parfum & Wewangian,Escada Moon Sparkle,fruity,floral,3000,1500,,,escada-cherry,Cherry,escada: moonlight & sexy grafity & cherry & candy.jpeg
-regular,escada-moonlight,Escada Moonlight,Parfum & Wewangian,Escada Moon Sparkle,fruity,floral,3000,1500,,,escada-moonlight,Moonlight,escada: moonlight & sexy grafity & cherry & candy.jpeg
-regular,escada-sexy-grafity,Escada Sexy Grafity,Parfum & Wewangian,Escada Moon Sparkle,fruity,floral,3000,1500,,,escada-sexy-grafity,Sexy Grafity,escada: moonlight & sexy grafity & cherry & candy.jpeg
-regular,giorgio-armani-my-way,Giorgio Armani My Way,Parfum & Wewangian,Giorgio Armani,sweet,fresh,3000,1500,,,giorgio-armani-my-way,Armani My Way,giorgio.jpeg
-regular,giorgio-armani-si,Giorgio Armani Si,Parfum & Wewangian,Giorgio Armani,sweet,fresh,3000,1500,,,giorgio-armani-si,Armani Si,giorgio.jpeg
-exclusive,greekgodnes,Greekgodnes,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-3-greekgodnes,Greekgodnes,exclusive-baru-3.jpg
-regular,greentea,Greentea,Parfum & Wewangian,,woody,fresh,,,,tidak,greentea,Greentea,green tea.jpeg
-regular,guci-flora,Guci Flora,Parfum & Wewangian,Gucci Flora,floral,musk,,,,tidak,guci-flora,Guci Flora,guci flora.jpeg
-regular,harajuku-love,Harajuku Love,Parfum & Wewangian,,aromatic,balsamic,3000,1500,,,harajuku-love,Harajuku Love,harajuku-love.jpeg
-regular,hugo-boss-energi,Hugo Boss Energi,Parfum & Wewangian,Hugo Boss,powdery,musk,,,,tidak,hugo-boss-boss-energi,Boss Energi,hugo boss: boss energi & boss orange & xx women.jpeg
-regular,hugo-boss-orange,Hugo Boss Orange,Parfum & Wewangian,Hugo Boss,powdery,musk,,,,tidak,hugo-boss-boss-orange,Boss Orange,hugo boss: boss energi & boss orange & xx women.jpeg
-regular,hugo-boss-xx-women,Hugo Boss XX Women,Parfum & Wewangian,Hugo Boss,powdery,musk,,,,tidak,hugo-boss-xx-women,XX Women,hugo boss: boss energi & boss orange & xx women.jpeg
-regular,incanto-charming,Incanto Charming,Parfum & Wewangian,Salvatore Ferragamo,woody,musk,3000,1500,,,incanto-charming,Charming,Incanto: shine salvador & charming .jpeg
-regular,incanto-shine-salvador,Incanto Shine Salvador,Parfum & Wewangian,Salvatore Ferragamo,woody,musk,3000,1500,,,incanto-shine-salvador,Shine Salvador,Incanto: shine salvador & charming .jpeg
-regular,j-lo-c,J-lo C,Parfum & Wewangian,Jennifer lopez,aromatic,woody,3000,1500,,,j-lo-j-lo-c,J-lo C,J-lo: j-lo still & j-lo c.jpeg
-regular,j-lo-still,J-lo Still,Parfum & Wewangian,Jennifer lopez,aromatic,woody,3000,1500,,,j-lo-j-lo-still,J-lo Still,J-lo: j-lo still & j-lo c.jpeg
-regular,jaguar-blue,Jaguar Blue,Parfum & Wewangian,Jaguar,woody,musk,3000,1500,,,jaguar-blue,Blue,Jaguar: Blue & Vision.jpeg
-regular,jaguar-vision,Jaguar Vision,Parfum & Wewangian,Jaguar,woody,musk,3000,1500,,,jaguar-vision,Vision,Jaguar: Blue & Vision.jpeg
-regular,jessica-love-sarah,Jessica Love Sarah,Parfum & Wewangian,Lovely Sarah Jessica,musk,woody,3000,1500,,,jessica-love-sarah,Love Sarah,jessica: love sarah & parker.jpeg
-regular,jessica-parker,Jessica Parker,Parfum & Wewangian,Lovely Sarah Jessica,musk,woody,3000,1500,,,jessica-parker,Parker,jessica: love sarah & parker.jpeg
-regular,joyrose,Joyrose,Parfum & Wewangian,Joyrose Grey,aromatic,musk,3000,1500,,,joyrose,Joyrose,joyrose.jpeg
-regular,kasturi-kijang,Kasturi Kijang,Parfum & Wewangian,,oud,woody,4000,1500,,,kasturi-kasturi-kijang,Kasturi Kijang,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg
-regular,kasturi-putih,Kasturi Putih,Parfum & Wewangian,,oud,woody,4000,1500,,,kasturi-kasturi-putih,Kasturi Putih,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg
-regular,kenzo-bali,Kenzo Bali,Parfum & Wewangian,Kenzo Homme,aromatic,powdery,3000,1500,,,kenzo-bali,Bali,kenzo: bali & power.jpeg
-regular,kenzo-power,Kenzo Power,Parfum & Wewangian,Kenzo Homme,aromatic,powdery,3000,1500,,,kenzo-power,Power,kenzo: bali & power.jpeg
-regular,lavender,Lavender,Parfum & Wewangian,,floral,fresh,3000,1500,,,lavender,Lavender,lavender.jpeg
-regular,lovely,Lovely,Parfum & Wewangian,,balsamic,fresh,4000,1500,,,lovely,Lovely,lovely.jpeg
-regular,maher-zein,Maher Zein,Parfum & Wewangian,,woody,musk,3000,1500,,,maher-zein,Maher Zein,maher zein.jpeg
-regular,malaikat-subuh,Malaikat Subuh,Parfum & Wewangian,,musk,oud,4000,1500,,,malaikat-subuh,Malaikat Subuh,malaikat subuh.jpeg
-regular,manchester-city,Manchester City,Parfum & Wewangian,,aromatic,musk,3000,1500,,,manchester-city,Manchester City,manchester city.jpeg
-regular,mawar-keraton,Mawar Keraton,Parfum & Wewangian,,floral,woody,4000,1500,,,mawar-keraton,Mawar Keraton,mawar keraton.jpeg
-regular,melati-keraton,Melati Keraton,Parfum & Wewangian,,floral,woody,4000,1500,,,melati-keraton,Melati Keraton,melati keraton.jpeg
-regular,midnight-fantasy,Midnight Fantasy,Parfum & Wewangian,,sweet,musk,3000,1500,,,midnight-fantasy,Midnight Fantasy,midnight fantasy.jpeg
-regular,miss-dior-blooming,Miss Dior Blooming,Parfum & Wewangian,Miss Dior,sweet,fresh,3000,1500,,,miss-dior-blooming,Miss Dior Blooming,miss dior blooming.jpeg
-exclusive,moonlight,Moonlight,Parfum & Wewangian,,sweet,fresh,4000,2000,,,exclusive-3-moonlight,Moonlight,exclusive-baru-3.jpg
-exclusive,mykonos-monaco-royal,Mykonos Monaco Royal,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-2-mykonos-monaco-royal,Mykonos Monaco Royal,exclusive-baru-2.jpg
-regular,olla-ramlan,Olla Ramlan,Parfum & Wewangian,,aromatic,powdery,3000,1500,,,olla-ramlan,Olla Ramlan,olla ramlan.jpeg
-regular,one-direction,One Direction,Parfum & Wewangian,One direction,aromatic,powdery,3000,1500,,,one-direction,One Direction,one direction.jpeg
-exclusive,opus-black,Opus Black,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-3-opus-black,Opus Black,exclusive-baru-3.jpg
-regular,paris-hilton-heiris,Paris Hilton Heiris,Parfum & Wewangian,Paris Hilton,sweet,aromatic,3000,1500,,,paris-hilton-heiris,Heiris,paris hilton: heiris & shireen & women.jpeg
-regular,paris-hilton-shireen,Paris Hilton Shireen,Parfum & Wewangian,Paris Hilton,sweet,aromatic,3000,1500,,,paris-hilton-shireen,Shireen,paris hilton: heiris & shireen & women.jpeg
-regular,paris-hilton-women,Paris Hilton Women,Parfum & Wewangian,Paris Hilton,sweet,aromatic,3000,1500,,,paris-hilton-women,Women,paris hilton: heiris & shireen & women.jpeg
-regular,pink-chiffon,Pink Chiffon,Parfum & Wewangian,,powdery,sweet,3000,1500,,,pink-chiffon,Pink Chiffon,pink-chiffon.jpeg
-regular,sabaya,Sabaya,Parfum & Wewangian,,sweet,woody,4000,1500,,,sabaya,Sabaya,sabaya.jpeg
-exclusive,scandal-secret,Scandal Secret,Parfum & Wewangian,,sweet,fresh,5000,3000,,,exclusive-1-scandal-secret,Scandal Secret,exclusive-baru-1.jpg
-regular,selena-gomes,Selena Gomes,Parfum & Wewangian,Selena Gomez,sweet,fresh,3000,1500,,,selena-gomes,Selena Gomes,selena-gomes.jpeg
-regular,silver,Silver,Parfum & Wewangian,,oud,musk,4000,1500,,,silver,Silver,silver.jpeg
-regular,so-sexy,So Sexy,Parfum & Wewangian,,floral,fresh,3000,1500,,,so-sexy,So Sexy,so sexy.jpeg
-regular,soft,Soft,Parfum & Wewangian,,amber,oud,4000,1500,,,soft,Soft,soft.jpeg
-regular,strawberry,Strawberry,Parfum & Wewangian,,fruity,sweet,3000,1500,,,strawberry,Strawberry,strawberry.jpeg
-regular,sulthan,Sulthan,Parfum & Wewangian,,oud,woody,4000,1500,,,sulthan,Sulthan,sulthan.jpeg
-regular,taylor-swift,Taylor Swift,Parfum & Wewangian,Taylor swift,sweet,aromatic,3000,1500,,,taylor-swift,Taylor Swift,taylor-swift.jpeg
-regular,vanilla-coconut,Vanilla Coconut,Parfum & Wewangian,,creamy,sweet,3000,1500,,,vanilla-coconut,Coconut,vanilla: coconut & vanilla ice & popcorn.jpeg
-regular,vanilla-ice,Vanilla Ice,Parfum & Wewangian,,creamy,sweet,3000,1500,,,vanilla-vanilla-ice,Vanilla Ice,vanilla: coconut & vanilla ice & popcorn.jpeg
-regular,vanilla-popcorn,Vanilla Popcorn,Parfum & Wewangian,,creamy,sweet,3000,1500,,,vanilla-popcorn,Popcorn,vanilla: coconut & vanilla ice & popcorn.jpeg
-regular,victoria-romanwish,Victoria Romanwish,Parfum & Wewangian,Victoria Screet,fresh,fruity,3000,1500,,,victoria-romanwish,Romanwish,Victoria.jpeg
-regular,victoria-scandalouse,Victoria Scandalouse,Parfum & Wewangian,Victoria Screet,fresh,fruity,3000,1500,,,victoria-scandalouse,Scandalouse,Victoria.jpeg
-regular,victoria-screetwish,Victoria Screetwish,Parfum & Wewangian,Victoria Screet,fresh,fruity,3000,1500,,,victoria-screetwish,Screetwish,Victoria.jpeg
-regular,zara-gardenia,Zara Gardenia,Parfum & Wewangian,Zara,floral,citrus,3000,1500,,,zara-gardenia,Gardenia,zara: wonde rose & gardenia.jpeg
-regular,zara-wonde-rose,Zara Wonde rose,Parfum & Wewangian,Zara,floral,citrus,3000,1500,,,zara-wonde-rose,Wonde rose,zara: wonde rose & gardenia.jpeg
+grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image
+regular,1000-bunga,1000 Bunga,Parfum & Wewangian,floral,woody,4000,1500,,,1000-bunga,1000 Bunga,1000 bunga.jpeg
+regular,2000-bunga,2000 Bunga,Parfum & Wewangian,floral,woody,4000,1500,,,2000-bunga,2000 Bunga,2000 bunga.jpeg
+regular,aigner-black,Aigner Black,Parfum & Wewangian,musk,woody,3000,1500,,,aigner-black,Black,aigner: blue motion & black.jpeg
+regular,aigner-blue-in-motion,Aigner Blue In Motion,Parfum & Wewangian,musk,woody,3000,1500,,,aigner-blue-in-motion,Blue In Motion,aigner: blue motion & black.jpeg
+regular,angelina-jolie,Angelina Jolie,Parfum & Wewangian,sweet,woody,3000,1500,,,angelina-jolie,Angelina Jolie,angeline jolie.jpeg
+regular,annasui-dolly-girl,Annasui Dolly Girl,Parfum & Wewangian,sweet,fruity,3000,1500,,,annasui-dolly-girl,Dolly Girl,annasui: sweet dream & dolly girl.jpeg
+regular,annasui-sweet-dream,Annasui Sweet Dream,Parfum & Wewangian,sweet,fruity,3000,1500,,,annasui-sweet-dream,Sweet Dream,annasui: sweet dream & dolly girl.jpeg
+exclusive,aquakiss,Aquakiss,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-1-aquakiss,Aquakiss,exclusive-baru-1.jpg
+regular,avril-lavigne,Avril Lavigne,Parfum & Wewangian,sweet,floral,3000,1500,,,avril-lavigne,Avril Lavigne,avril-lavigne.jpeg
+exclusive,avril-lavigne-exclusive,Avril Lavigne,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-4-avril-lavigne,Avril Lavigne,exclusive-baru-4.jpg
+regular,bacarat,Bacarat,Parfum & Wewangian,amber,woody,4000,1500,,,bacarat,Bacarat,Bacarat.jpeg
+exclusive,bacarat-exclusive,Bacarat,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-bacarat,Bacarat,exclusive-baru-2.jpg
+regular,black-opium,Black Opium,Parfum & Wewangian,woody,sweet,3000,1500,,,black-opium,Black Opium,Black Opium.jpeg
+regular,burberies-london-women,Burberies London Women,Parfum & Wewangian,woody,sweet,3000,1500,,,burberies-burberies-london-women,Burberies London Women,Burberies: London women & sport.jpeg
+regular,burberies-sport,Burberies Sport,Parfum & Wewangian,woody,sweet,3000,1500,,,burberies-burberies-sport,Burberies Sport,Burberies: London women & sport.jpeg
+regular,bvlgari-aqua,Bvlgari Aqua,Parfum & Wewangian,citrus,aromatic,3000,1500,,,bvlgari-aqua,Aqua,bvlgari: aqua & extream & omnia crystal.jpeg
+regular,bvlgari-extream,Bvlgari Extream,Parfum & Wewangian,citrus,aromatic,3000,1500,,,bvlgari-extream,Extream,bvlgari: aqua & extream & omnia crystal.jpeg
+regular,bvlgari-omnia-crystal,Bvlgari Omnia Crystal,Parfum & Wewangian,citrus,aromatic,3000,1500,,,bvlgari-omnia-crystal,Omnia Crystal,bvlgari: aqua & extream & omnia crystal.jpeg
+exclusive,c2-premiere-man,C2 Premiere Man,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-4-c2-premiere-man,C2 Premiere Man,exclusive-baru-4.jpg
+regular,cuddle,Cuddle,Parfum & Wewangian,fresh,powdery,3000,1500,,,cuddle,Cuddle,Cuddle.jpeg
+regular,d-g-light-blue,D & G Light Blue,Parfum & Wewangian,fruity,citrus,3000,1500,,,d-g-light-blue,Light Blue,D & G: Paris & Light Blue.jpeg
+regular,d-g-paris,D & G Paris,Parfum & Wewangian,fruity,citrus,3000,1500,,,d-g-paris,Paris,D & G: Paris & Light Blue.jpeg
+regular,dancing-lady,Dancing Lady,Parfum & Wewangian,fresh,sweet,3000,1500,,,dancing-lady,Dancing Lady,Dancing Lady.jpeg
+regular,davidoff-cool-water-man,Davidoff Cool Water Man,Parfum & Wewangian,citrus,aromatic,3000,1500,,,davidoff-cool-water-man,Cool Water Man,davidoff: cool water man & cool water women.jpeg
+regular,davidoff-cool-water-women,Davidoff Cool Water Women,Parfum & Wewangian,citrus,aromatic,3000,1500,,,davidoff-cool-water-women,Cool Water Women,davidoff: cool water man & cool water women.jpeg
+regular,dior-sauvage,Dior Sauvage,Parfum & Wewangian,musk,woody,3000,1500,,,dior-sauvage,Dior Sauvage,dior-sauvage.jpeg
+exclusive,dorsava,Dorsava,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-1-dorsava,Dorsava,exclusive-baru-1.jpg
+exclusive,dunhil-blue,Dunhil Blue,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-dunhil-blue,Dunhil Blue,exclusive-baru-2.jpg
+regular,dunhil-desire-blue,Dunhil Desire Blue,Parfum & Wewangian,amber,woody,,,,tidak,dunhil-desire-blue,Desire Blue,"dunhil: desire blue, london, red.jpeg"
+regular,dunhil-london,Dunhil London,Parfum & Wewangian,amber,woody,,,,tidak,dunhil-london,London,"dunhil: desire blue, london, red.jpeg"
+regular,dunhil-red,Dunhil Red,Parfum & Wewangian,amber,woody,,,,tidak,dunhil-red,Red,"dunhil: desire blue, london, red.jpeg"
+regular,escada-candy,Escada Candy,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-candy,Candy,escada: moonlight & sexy grafity & cherry & candy.jpeg
+regular,escada-cherry,Escada Cherry,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-cherry,Cherry,escada: moonlight & sexy grafity & cherry & candy.jpeg
+regular,escada-moonlight,Escada Moonlight,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-moonlight,Moonlight,escada: moonlight & sexy grafity & cherry & candy.jpeg
+regular,escada-sexy-grafity,Escada Sexy Grafity,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-sexy-grafity,Sexy Grafity,escada: moonlight & sexy grafity & cherry & candy.jpeg
+regular,giorgio-armani-my-way,Giorgio Armani My Way,Parfum & Wewangian,sweet,fresh,3000,1500,,,giorgio-armani-my-way,Armani My Way,giorgio.jpeg
+regular,giorgio-armani-si,Giorgio Armani Si,Parfum & Wewangian,sweet,fresh,3000,1500,,,giorgio-armani-si,Armani Si,giorgio.jpeg
+exclusive,greekgodnes,Greekgodnes,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-3-greekgodnes,Greekgodnes,exclusive-baru-3.jpg
+regular,greentea,Greentea,Parfum & Wewangian,woody,fresh,,,,tidak,greentea,Greentea,green tea.jpeg
+regular,guci-flora,Guci Flora,Parfum & Wewangian,floral,musk,,,,tidak,guci-flora,Guci Flora,guci flora.jpeg
+regular,harajuku-love,Harajuku Love,Parfum & Wewangian,aromatic,balsamic,3000,1500,,,harajuku-love,Harajuku Love,harajuku-love.jpeg
+regular,hugo-boss-energi,Hugo Boss Energi,Parfum & Wewangian,powdery,musk,,,,tidak,hugo-boss-boss-energi,Boss Energi,hugo boss: boss energi & boss orange & xx women.jpeg
+regular,hugo-boss-orange,Hugo Boss Orange,Parfum & Wewangian,powdery,musk,,,,tidak,hugo-boss-boss-orange,Boss Orange,hugo boss: boss energi & boss orange & xx women.jpeg
+regular,hugo-boss-xx-women,Hugo Boss XX Women,Parfum & Wewangian,powdery,musk,,,,tidak,hugo-boss-xx-women,XX Women,hugo boss: boss energi & boss orange & xx women.jpeg
+regular,incanto-charming,Incanto Charming,Parfum & Wewangian,woody,musk,3000,1500,,,incanto-charming,Charming,Incanto: shine salvador & charming .jpeg
+regular,incanto-shine-salvador,Incanto Shine Salvador,Parfum & Wewangian,woody,musk,3000,1500,,,incanto-shine-salvador,Shine Salvador,Incanto: shine salvador & charming .jpeg
+regular,j-lo-c,J-lo C,Parfum & Wewangian,aromatic,woody,3000,1500,,,j-lo-j-lo-c,J-lo C,J-lo: j-lo still & j-lo c.jpeg
+regular,j-lo-still,J-lo Still,Parfum & Wewangian,aromatic,woody,3000,1500,,,j-lo-j-lo-still,J-lo Still,J-lo: j-lo still & j-lo c.jpeg
+regular,jaguar-blue,Jaguar Blue,Parfum & Wewangian,woody,musk,3000,1500,,,jaguar-blue,Blue,Jaguar: Blue & Vision.jpeg
+regular,jaguar-vision,Jaguar Vision,Parfum & Wewangian,woody,musk,3000,1500,,,jaguar-vision,Vision,Jaguar: Blue & Vision.jpeg
+regular,jessica-love-sarah,Jessica Love Sarah,Parfum & Wewangian,musk,woody,3000,1500,,,jessica-love-sarah,Love Sarah,jessica: love sarah & parker.jpeg
+regular,jessica-parker,Jessica Parker,Parfum & Wewangian,musk,woody,3000,1500,,,jessica-parker,Parker,jessica: love sarah & parker.jpeg
+regular,joyrose,Joyrose,Parfum & Wewangian,aromatic,musk,3000,1500,,,joyrose,Joyrose,joyrose.jpeg
+regular,kasturi-kijang,Kasturi Kijang,Parfum & Wewangian,oud,woody,4000,1500,,,kasturi-kasturi-kijang,Kasturi Kijang,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg
+regular,kasturi-putih,Kasturi Putih,Parfum & Wewangian,oud,woody,4000,1500,,,kasturi-kasturi-putih,Kasturi Putih,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg
+regular,kenzo-bali,Kenzo Bali,Parfum & Wewangian,aromatic,powdery,3000,1500,,,kenzo-bali,Bali,kenzo: bali & power.jpeg
+regular,kenzo-power,Kenzo Power,Parfum & Wewangian,aromatic,powdery,3000,1500,,,kenzo-power,Power,kenzo: bali & power.jpeg
+regular,lavender,Lavender,Parfum & Wewangian,floral,fresh,3000,1500,,,lavender,Lavender,lavender.jpeg
+regular,lovely,Lovely,Parfum & Wewangian,balsamic,fresh,4000,1500,,,lovely,Lovely,lovely.jpeg
+regular,maher-zein,Maher Zein,Parfum & Wewangian,woody,musk,3000,1500,,,maher-zein,Maher Zein,maher zein.jpeg
+regular,malaikat-subuh,Malaikat Subuh,Parfum & Wewangian,musk,oud,4000,1500,,,malaikat-subuh,Malaikat Subuh,malaikat subuh.jpeg
+regular,manchester-city,Manchester City,Parfum & Wewangian,aromatic,musk,3000,1500,,,manchester-city,Manchester City,manchester city.jpeg
+regular,mawar-keraton,Mawar Keraton,Parfum & Wewangian,floral,woody,4000,1500,,,mawar-keraton,Mawar Keraton,mawar keraton.jpeg
+regular,melati-keraton,Melati Keraton,Parfum & Wewangian,floral,woody,4000,1500,,,melati-keraton,Melati Keraton,melati keraton.jpeg
+regular,midnight-fantasy,Midnight Fantasy,Parfum & Wewangian,sweet,musk,3000,1500,,,midnight-fantasy,Midnight Fantasy,midnight fantasy.jpeg
+regular,miss-dior-blooming,Miss Dior Blooming,Parfum & Wewangian,sweet,fresh,3000,1500,,,miss-dior-blooming,Miss Dior Blooming,miss dior blooming.jpeg
+exclusive,moonlight,Moonlight,Parfum & Wewangian,sweet,fresh,4000,2000,,,exclusive-3-moonlight,Moonlight,exclusive-baru-3.jpg
+exclusive,mykonos-monaco-royal,Mykonos Monaco Royal,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-mykonos-monaco-royal,Mykonos Monaco Royal,exclusive-baru-2.jpg
+regular,olla-ramlan,Olla Ramlan,Parfum & Wewangian,aromatic,powdery,3000,1500,,,olla-ramlan,Olla Ramlan,olla ramlan.jpeg
+regular,one-direction,One Direction,Parfum & Wewangian,aromatic,powdery,3000,1500,,,one-direction,One Direction,one direction.jpeg
+exclusive,opus-black,Opus Black,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-3-opus-black,Opus Black,exclusive-baru-3.jpg
+regular,paris-hilton-heiris,Paris Hilton Heiris,Parfum & Wewangian,sweet,aromatic,3000,1500,,,paris-hilton-heiris,Heiris,paris hilton: heiris & shireen & women.jpeg
+regular,paris-hilton-shireen,Paris Hilton Shireen,Parfum & Wewangian,sweet,aromatic,3000,1500,,,paris-hilton-shireen,Shireen,paris hilton: heiris & shireen & women.jpeg
+regular,paris-hilton-women,Paris Hilton Women,Parfum & Wewangian,sweet,aromatic,3000,1500,,,paris-hilton-women,Women,paris hilton: heiris & shireen & women.jpeg
+regular,pink-chiffon,Pink Chiffon,Parfum & Wewangian,powdery,sweet,3000,1500,,,pink-chiffon,Pink Chiffon,pink-chiffon.jpeg
+regular,sabaya,Sabaya,Parfum & Wewangian,sweet,woody,4000,1500,,,sabaya,Sabaya,sabaya.jpeg
+exclusive,scandal-secret,Scandal Secret,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-1-scandal-secret,Scandal Secret,exclusive-baru-1.jpg
+regular,selena-gomes,Selena Gomes,Parfum & Wewangian,sweet,fresh,3000,1500,,,selena-gomes,Selena Gomes,selena-gomes.jpeg
+regular,silver,Silver,Parfum & Wewangian,oud,musk,4000,1500,,,silver,Silver,silver.jpeg
+regular,so-sexy,So Sexy,Parfum & Wewangian,floral,fresh,3000,1500,,,so-sexy,So Sexy,so sexy.jpeg
+regular,soft,Soft,Parfum & Wewangian,amber,oud,4000,1500,,,soft,Soft,soft.jpeg
+regular,strawberry,Strawberry,Parfum & Wewangian,fruity,sweet,3000,1500,,,strawberry,Strawberry,strawberry.jpeg
+regular,sulthan,Sulthan,Parfum & Wewangian,oud,woody,4000,1500,,,sulthan,Sulthan,sulthan.jpeg
+regular,taylor-swift,Taylor Swift,Parfum & Wewangian,sweet,aromatic,3000,1500,,,taylor-swift,Taylor Swift,taylor-swift.jpeg
+regular,vanilla-coconut,Vanilla Coconut,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-coconut,Coconut,vanilla: coconut & vanilla ice & popcorn.jpeg
+regular,vanilla-ice,Vanilla Ice,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-vanilla-ice,Vanilla Ice,vanilla: coconut & vanilla ice & popcorn.jpeg
+regular,vanilla-popcorn,Vanilla Popcorn,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-popcorn,Popcorn,vanilla: coconut & vanilla ice & popcorn.jpeg
+regular,victoria-romanwish,Victoria Romanwish,Parfum & Wewangian,fresh,fruity,3000,1500,,,victoria-romanwish,Romanwish,Victoria.jpeg
+regular,victoria-scandalouse,Victoria Scandalouse,Parfum & Wewangian,fresh,fruity,3000,1500,,,victoria-scandalouse,Scandalouse,Victoria.jpeg
+regular,victoria-screetwish,Victoria Screetwish,Parfum & Wewangian,fresh,fruity,3000,1500,,,victoria-screetwish,Screetwish,Victoria.jpeg
+regular,zara-gardenia,Zara Gardenia,Parfum & Wewangian,floral,citrus,3000,1500,,,zara-gardenia,Gardenia,zara: wonde rose & gardenia.jpeg
+regular,zara-wonde-rose,Zara Wonde rose,Parfum & Wewangian,floral,citrus,3000,1500,,,zara-wonde-rose,Wonde rose,zara: wonde rose & gardenia.jpeg

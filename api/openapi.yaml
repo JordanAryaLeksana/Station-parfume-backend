@@ -1298,7 +1298,7 @@ paths:
       - name: q
         in: query
         required: false
-        description: Cari di nama produk, wangian, inspired by
+        description: Cari di nama produk dan nama wangian
         schema:
           type: string
       responses:
@@ -2752,6 +2752,7 @@ components:
           - exclusive
         inspired_by:
           type: string
+          description: Selalu kosong di endpoint publik (merek hanya untuk admin), jadi key ini tidak pernah muncul.
         note_primary:
           type: string
         note_secondary:
@@ -2824,6 +2825,7 @@ components:
           - exclusive
         inspired_by:
           type: string
+          description: Selalu kosong di endpoint publik (merek hanya untuk admin), jadi key ini tidak pernah muncul.
         note_primary:
           type: string
         note_secondary:

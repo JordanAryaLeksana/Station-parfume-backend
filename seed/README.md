@@ -89,7 +89,7 @@ Seeder sebenarnya masih bisa menggabungkan beberapa baris dengan `group_code` ya
 |---|---|
 | `grade` | `regular` / `exclusive`. Nama sama di grade berbeda = **2 parfum berbeda** (mis. Bacarat Regular 4.000/ml vs Bacarat Exclusive 5.000/ml), dengan alamat berbeda: `bacarat` dan `bacarat-exclusive` |
 | `group_code` | kode produk, sekaligus alamat halaman, unik: huruf kecil, angka, dan `-` (mis. `kasturi-kijang` → `/produk/kasturi-kijang`). **Jangan diubah** setelah dipakai |
-| `group`, `category`, `inspired_by` | nama produk (mis. "Kasturi Kijang", "Jaguar Blue"), kategori, teks "Inspired by …" (tidak ditampilkan di website) |
+| `group`, `category` | nama produk (mis. "Kasturi Kijang"), kategori |
 | `note1`, `note2` | 2 label aroma: amber, aromatic, balsamic, citrus, creamy, floral, fresh, fruity, musk, oud, powdery, sweet, woody |
 | `tarif_murni` | tarif **bibit** Rp/ml. Kosong = tidak diubah (wangian baru tanpa tarif tidak dijual) |
 | `tarif_campur` | tarif **parfum** Rp/ml |
@@ -97,6 +97,19 @@ Seeder sebenarnya masih bisa menggabungkan beberapa baris dengan `group_code` ya
 | `aktif` | kosong = aktif; `tidak` = produk draft (tidak tampil) |
 | `code` | kode wangian, unik. **Jangan diubah** setelah dipakai (juga kunci `varian_parfum.csv`) |
 | `varian`, `image` | nama wangian persis seperti di foto (mis. "Blue" untuk Jaguar Blue), nama file foto (sementara masih poster grup lama sampai foto per parfum datang) |
+
+## `internal/inspired_by.csv` — khusus admin, tidak di-commit
+
+Repo ini publik, jadi pasangan produk dengan merek parfum aslinya tidak boleh ada di file yang di-commit. Kolom `inspired_by` tidak lagi ada di `wangian.csv`; seeder menolak `wangian.csv` yang masih memuatnya.
+
+| Kolom | Isi |
+|---|---|
+| `code` | `group_code` produk di `wangian.csv` |
+| `inspired_by` | teks "Inspired by …", maksimal 255 karakter. Hanya terlihat di endpoint admin; tidak dikirim ke website dan tidak ikut pencarian publik |
+
+- Folder `seed/internal/` ada di `.gitignore`. Simpan salinannya di luar repo.
+- File tidak ada: `inspired_by` di database tidak diubah (isian admin aman).
+- `code` yang tidak ada di `wangian.csv` membuat seed gagal, jadi setelah ganti nama `code` di file ini harus ikut diganti.
 
 ## `sizes.csv`
 

@@ -41,16 +41,29 @@ func TestCatalogAndCheckout(t *testing.T) {
 	check(t, "ukuran default 20/30/50 ml, botol Rp5.000", r.Status == 200 && len(r.List()) == 3 &&
 		num(r.List()[1].(map[string]any)["bottle_price"]) == 5000, j(r.List()))
 	r = call(t, "GET", "/api/v1/products?kind=perfume&q=annasui", "", nil)
-	card := findVariant(r.List(), func(m map[string]any) bool { return m["slug"] == "annasui" })
-	check(t, "kartu Annasui: harga 20 ml campur s/d 50 ml murni (rumus tarif × ml + botol)", card != nil &&
+	card := findVariant(r.List(), func(m map[string]any) bool { return m["slug"] == "annasui-dolly-girl" })
+	check(t, "kartu Annasui Dolly Girl: harga 20 ml campur s/d 50 ml murni (rumus tarif × ml + botol)", card != nil &&
 		num(card["price_min"]) == 1500*20+5000 && num(card["price_max"]) == 3000*50+5000 && card["in_stock"] == true, j(card))
 	check(t, "filter note tidak dikenal → 400", call(t, "GET", "/api/v1/products?note=tidak-ada", "", nil).Status == 400)
-	r = call(t, "GET", "/api/v1/products/annasui", "", nil)
+	r = call(t, "GET", "/api/v1/products/annasui-dolly-girl", "", nil)
 	dg := findVariant(r.Data()["variants"].([]any), func(m map[string]any) bool { return m["code"] == "annasui-dolly-girl-30-murni" })
-	check(t, "detail Annasui: 12 varian, Dolly Girl 30 ml murni = Rp95.000, stok tidak dihitung",
-		r.Status == 200 && len(r.Data()["variants"].([]any)) == 12 && dg != nil && num(dg["price"]) == 95000 &&
+	check(t, "detail Annasui Dolly Girl: 6 varian (3 ukuran × 2 tipe), Dolly Girl 30 ml murni = Rp95.000, stok tidak dihitung",
+		r.Status == 200 && len(r.Data()["variants"].([]any)) == 6 && dg != nil && num(dg["price"]) == 95000 &&
 			dg["available"] == nil && dg["in_stock"] == true, r.Status)
 	check(t, "produk tidak ada → 404", call(t, "GET", "/api/v1/products/tidak-ada", "", nil).Status == 404)
+
+	annasuiPath := fmt.Sprintf("/api/v1/admin/products/%v", card["id"])
+	r = call(t, "PATCH", annasuiPath, owner, map[string]any{"inspired_by": "Merek Rahasia Uji"})
+	check(t, "admin mengisi inspired_by", r.Status == 200 && r.Data()["inspired_by"] == "Merek Rahasia Uji", r.Status, string(r.Raw))
+	r = call(t, "GET", annasuiPath, owner, nil)
+	check(t, "admin tetap melihat inspired_by", r.Status == 200 && r.Data()["inspired_by"] == "Merek Rahasia Uji", r.Status)
+	r = call(t, "GET", "/api/v1/products/annasui-dolly-girl", "", nil)
+	_, leaked := r.Data()["inspired_by"]
+	check(t, "detail publik tanpa inspired_by", r.Status == 200 && !leaked && !strings.Contains(string(r.Raw), "Merek Rahasia"), string(r.Raw))
+	r = call(t, "GET", "/api/v1/products?kind=perfume", "", nil)
+	check(t, "daftar publik tanpa inspired_by", r.Status == 200 && len(r.List()) > 0 && !strings.Contains(string(r.Raw), "inspired_by"), r.Status)
+	r = call(t, "GET", "/api/v1/products?q=rahasia", "", nil)
+	check(t, "cari nama merek → 0 hasil", r.Status == 200 && len(r.List()) == 0, j(r.List()))
 
 	// ---------------- admin: produk parfum baru
 	check(t, "input produk tidak valid → 400", call(t, "POST", "/api/v1/admin/products", owner, map[string]any{"kind": "x", "category_id": catID, "name": "X"}).Status == 400)

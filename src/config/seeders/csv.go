@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"backend/src/repository"
 	"backend/src/utils/slug"
@@ -49,7 +50,7 @@ type ScentRow struct {
 	GroupCode  string // = products.code
 	Group      string // = products.name
 	Category   string
-	InspiredBy string
+	InspiredBy *string
 	Note1      string
 	Note2      string
 	Code       string // = scents.code
@@ -216,10 +217,13 @@ func LoadScents(r io.Reader) ([]ScentRow, error) {
 	groups := map[string]ScentRow{} // group_code → baris pertama grup itu
 	for i, m := range rows {
 		s := ScentRow{Line: lines[i], Grade: strings.ToLower(m["grade"]), GroupCode: m["group_code"], Group: m["group"],
-			Category: m["category"], InspiredBy: m["inspired_by"], Note1: strings.ToLower(m["note1"]), Note2: strings.ToLower(m["note2"]),
+			Category: m["category"], Note1: strings.ToLower(m["note1"]), Note2: strings.ToLower(m["note2"]),
 			Code: m["code"], Name: m["varian"], Image: m["image"], Active: true}
 		fail := func(format string, a ...any) error {
 			return fmt.Errorf("wangian.csv baris %d: %s", s.Line, fmt.Sprintf(format, a...))
+		}
+		if _, ok := m["inspired_by"]; ok {
+			return nil, fail("kolom inspired_by tidak boleh ada di wangian.csv; isi di %s", InspiredByFile)
 		}
 		if s.RateMurni, err = optRupiah(m["tarif_murni"]); err != nil {
 			return nil, fail("tarif_murni %q: %v", m["tarif_murni"], err)
@@ -259,9 +263,9 @@ func LoadScents(r io.Reader) ([]ScentRow, error) {
 		}
 		names[key] = s.Line
 		if g, ok := groups[s.GroupCode]; ok {
-			if g.Grade != s.Grade || g.Group != s.Group || g.Category != s.Category || g.InspiredBy != s.InspiredBy ||
+			if g.Grade != s.Grade || g.Group != s.Group || g.Category != s.Category ||
 				g.Note1 != s.Note1 || g.Note2 != s.Note2 || g.Image != s.Image || g.Active != s.Active || !slices.Equal(g.Sizes, s.Sizes) {
-				return nil, fail("data grup %s beda dengan baris %d (grade, group, category, inspired_by, note, image, ukuran, aktif harus sama)", s.GroupCode, g.Line)
+				return nil, fail("data grup %s beda dengan baris %d (grade, group, category, note, image, ukuran, aktif harus sama)", s.GroupCode, g.Line)
 			}
 		} else {
 			groups[s.GroupCode] = s
@@ -269,6 +273,61 @@ func LoadScents(r io.Reader) ([]ScentRow, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+const InspiredByFile = "internal/inspired_by.csv"
+
+type InspiredByRow struct {
+	Line       int
+	Code       string
+	InspiredBy string
+}
+
+func LoadInspiredBy(r io.Reader) ([]InspiredByRow, error) {
+	rows, lines, err := readCSV(r, []string{"code", "inspired_by"})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", InspiredByFile, err)
+	}
+	var out []InspiredByRow
+	seen := map[string]int{}
+	for i, m := range rows {
+		b := InspiredByRow{Line: lines[i], Code: m["code"], InspiredBy: m["inspired_by"]}
+		fail := func(format string, a ...any) error {
+			return fmt.Errorf("%s baris %d: %s", InspiredByFile, b.Line, fmt.Sprintf(format, a...))
+		}
+		if !codeRe.MatchString(b.Code) {
+			return nil, fail("code %q tidak valid", b.Code)
+		}
+		if b.InspiredBy == "" || utf8.RuneCountInString(b.InspiredBy) > 255 {
+			return nil, fail("inspired_by wajib diisi, maksimal 255 karakter")
+		}
+		if prev, ok := seen[b.Code]; ok {
+			return nil, fail("code %q sudah ada di baris %d", b.Code, prev)
+		}
+		seen[b.Code] = b.Line
+		out = append(out, b)
+	}
+	return out, nil
+}
+
+func ApplyInspiredBy(scents []ScentRow, brands []InspiredByRow) error {
+	byCode := map[string]string{}
+	for _, b := range brands {
+		byCode[b.Code] = b.InspiredBy
+	}
+	used := map[string]bool{}
+	for i := range scents {
+		if v, ok := byCode[scents[i].GroupCode]; ok {
+			scents[i].InspiredBy = &v
+			used[scents[i].GroupCode] = true
+		}
+	}
+	for _, b := range brands {
+		if !used[b.Code] {
+			return fmt.Errorf("%s baris %d: code %q tidak ada di group_code wangian.csv", InspiredByFile, b.Line, b.Code)
+		}
+	}
+	return nil
 }
 
 // LoadPerfumeVariants membaca varian_parfum.csv. Kolom product/varian hanya untuk

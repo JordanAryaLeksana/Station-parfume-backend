@@ -207,14 +207,18 @@ func upsertPerfumes(tx *gorm.DB, rows []ScentRow, catIDs map[string]uint, sizeID
 				if p.Kind != repository.ProductKindPerfume {
 					return nil, fmt.Errorf("wangian.csv baris %d: group_code %s sudah dipakai produk umum", r.Line, r.GroupCode)
 				}
-				err = tx.Model(&p).Updates(map[string]any{"category_id": catID, "name": r.Group, "slug": r.GroupCode,
-					"grade": grade, "inspired_by": strPtr(r.InspiredBy), "note_primary": n1, "note_secondary": n2,
-					"status": status, "sort_order": len(productIDs)}).Error
+				fields := map[string]any{"category_id": catID, "name": r.Group, "slug": r.GroupCode,
+					"grade": grade, "note_primary": n1, "note_secondary": n2,
+					"status": status, "sort_order": len(productIDs)}
+				if r.InspiredBy != nil {
+					fields["inspired_by"] = *r.InspiredBy
+				}
+				err = tx.Model(&p).Updates(fields).Error
 				rep.Products.Updated++
 			} else {
 				// Parfum diracik sendiri → stok tidak dihitung (TrackStock false), selalu tersedia.
 				p = repository.Product{CategoryID: catID, Kind: repository.ProductKindPerfume, Code: r.GroupCode, Name: r.Group, Slug: r.GroupCode,
-					Grade: &grade, InspiredBy: strPtr(r.InspiredBy), NotePrimary: &n1, NoteSecondary: &n2,
+					Grade: &grade, InspiredBy: r.InspiredBy, NotePrimary: &n1, NoteSecondary: &n2,
 					Status: status, SortOrder: len(productIDs)}
 				err = tx.Create(&p).Error
 				rep.Products.Created++

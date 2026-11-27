@@ -41,3 +41,6 @@ docker-compose.yml
 # Deploy production (env berisi secret & hasil backup DB)
 .env.prod
 deploy/backups/
+
+# Data internal seed (peta merek, peta ganti nama): jangan pernah di-commit
+seed/internal/

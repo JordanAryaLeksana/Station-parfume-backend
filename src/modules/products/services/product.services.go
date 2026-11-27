@@ -78,9 +78,9 @@ func GetAllProducts(f ProductFilter) ([]models.ProductCard, error) {
 	}
 	if s := strings.TrimSpace(f.Query); s != "" {
 		like := "%" + strings.ToLower(s) + "%"
-		q = q.Where("lower(products.name) LIKE ? OR lower(products.inspired_by) LIKE ? OR EXISTS ("+
+		q = q.Where("lower(products.name) LIKE ? OR EXISTS ("+
 			"SELECT 1 FROM scents s WHERE s.product_id = products.id AND s.is_active AND s.deleted_at IS NULL AND lower(s.name) LIKE ?)",
-			like, like, like)
+			like, like)
 	}
 	var products []repository.Product
 	if err := q.Order("products.sort_order, products.id").Find(&products).Error; err != nil {
@@ -168,7 +168,7 @@ func sellable(p repository.Product) []repository.Variant {
 }
 
 func toCard(p repository.Product) models.ProductCard {
-	c := models.ProductCard{ID: p.ID, Kind: p.Kind, Name: p.Name, Slug: p.Slug, Grade: p.Grade, InspiredBy: p.InspiredBy,
+	c := models.ProductCard{ID: p.ID, Kind: p.Kind, Name: p.Name, Slug: p.Slug, Grade: p.Grade,
 		NotePrimary: p.NotePrimary, NoteSecondary: p.NoteSecondary, Category: p.Category}
 	if len(p.Images) > 0 {
 		c.ImageURL = &p.Images[0].URL
