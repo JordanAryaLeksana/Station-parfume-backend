@@ -5,7 +5,7 @@
 //   - sizes.csv        : ukuran botol parfum + harga botol (20/30/50 ml default)
 //   - wangian.csv      : produk parfum (1 baris = 1 parfum = 1 produk) + tarif per ml
 //   - varian_parfum.csv: pengecualian per varian parfum (harga khusus, nonaktif); opsional
-//   - produk_umum.csv  : produk non-parfum (botol spray, souvenir, Al Rehab, ...)
+//   - produk_umum.csv  : produk non-parfum (botol spray, souvenir, parfum mobil, ...)
 //
 // Harga parfum TIDAK diketik per varian: tarif per ml × volume + harga botol.
 //
@@ -45,21 +45,24 @@ type SizeRow struct {
 // baris, jadi 1 baris = 1 produk; baris dengan group_code sama tetap digabung
 // menjadi 1 produk berisi beberapa wangian.
 type ScentRow struct {
-	Line       int
-	Grade      string
-	GroupCode  string // = products.code
-	Group      string // = products.name
-	Category   string
-	InspiredBy *string
-	Note1      string
-	Note2      string
-	Code       string // = scents.code
-	Name       string
-	Image      string // nama file foto (belum di-upload)
-	RateMurni  *int64 // tarif "bibit" Rp/ml (nil = belum ada → tidak dijual)
-	RateCampur *int64 // tarif "parfum" Rp/ml
-	Sizes      []int  // ukuran khusus produk (ml); kosong = ukuran default
-	Active     bool   // false = produk disimpan sebagai draft (tidak tampil)
+	Line        int
+	Grade       string
+	GroupCode   string // = products.code
+	Group       string // = products.name
+	Category    string
+	InspiredBy  *string
+	Audience    *string
+	Occasions   repository.Occasions
+	Description *string
+	Note1       string
+	Note2       string
+	Code        string // = scents.code
+	Name        string
+	Image       string // nama file foto (belum di-upload)
+	RateMurni   *int64 // tarif "bibit" Rp/ml (nil = belum ada → tidak dijual)
+	RateCampur  *int64 // tarif "parfum" Rp/ml
+	Sizes       []int  // ukuran khusus produk (ml); kosong = ukuran default
+	Active      bool   // false = produk disimpan sebagai draft (tidak tampil)
 }
 
 // PerfumeVariantRow = pengecualian 1 varian parfum: harga khusus, nonaktif, (stok kalau
@@ -225,6 +228,20 @@ func LoadScents(r io.Reader) ([]ScentRow, error) {
 		if _, ok := m["inspired_by"]; ok {
 			return nil, fail("kolom inspired_by tidak boleh ada di wangian.csv; isi di %s", InspiredByFile)
 		}
+		if v := strings.ToLower(m["untuk"]); v != "" {
+			if !slices.Contains(repository.Audiences, v) {
+				return nil, fail("untuk %q harus salah satu dari: %s", m["untuk"], strings.Join(repository.Audiences, ", "))
+			}
+			s.Audience = &v
+		}
+		if v := m["cocok_untuk"]; v != "" {
+			if s.Occasions, err = repository.NormalizeOccasions(strings.FieldsFunc(v, func(r rune) bool { return r == ';' || r == ',' })); err != nil {
+				return nil, fail("cocok_untuk: %v", err)
+			}
+		}
+		if v := m["deskripsi"]; v != "" {
+			s.Description = &v
+		}
 		if s.RateMurni, err = optRupiah(m["tarif_murni"]); err != nil {
 			return nil, fail("tarif_murni %q: %v", m["tarif_murni"], err)
 		}
@@ -263,9 +280,10 @@ func LoadScents(r io.Reader) ([]ScentRow, error) {
 		}
 		names[key] = s.Line
 		if g, ok := groups[s.GroupCode]; ok {
-			if g.Grade != s.Grade || g.Group != s.Group || g.Category != s.Category ||
+			if g.Grade != s.Grade || g.Group != s.Group || g.Category != s.Category || !sameStr(g.Audience, s.Audience) ||
+				!slices.Equal(g.Occasions, s.Occasions) || !sameStr(g.Description, s.Description) ||
 				g.Note1 != s.Note1 || g.Note2 != s.Note2 || g.Image != s.Image || g.Active != s.Active || !slices.Equal(g.Sizes, s.Sizes) {
-				return nil, fail("data grup %s beda dengan baris %d (grade, group, category, note, image, ukuran, aktif harus sama)", s.GroupCode, g.Line)
+				return nil, fail("data grup %s beda dengan baris %d (grade, group, category, untuk, cocok_untuk, deskripsi, note, image, ukuran, aktif harus sama)", s.GroupCode, g.Line)
 			}
 		} else {
 			groups[s.GroupCode] = s
@@ -273,6 +291,10 @@ func LoadScents(r io.Reader) ([]ScentRow, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+func sameStr(a, b *string) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
 const InspiredByFile = "internal/inspired_by.csv"
@@ -325,6 +347,71 @@ func ApplyInspiredBy(scents []ScentRow, brands []InspiredByRow) error {
 	for _, b := range brands {
 		if !used[b.Code] {
 			return fmt.Errorf("%s baris %d: code %q tidak ada di group_code wangian.csv", InspiredByFile, b.Line, b.Code)
+		}
+	}
+	return nil
+}
+
+const RenameFile = "internal/ganti-nama.csv"
+
+const (
+	RenameProduct = "produk"
+	RenameScent   = "wangian"
+)
+
+type RenameRow struct {
+	Line int
+	Kind string
+	From string
+	To   string
+}
+
+func LoadRenames(r io.Reader) ([]RenameRow, error) {
+	rows, lines, err := readCSV(r, []string{"jenis", "code_lama", "code_baru"})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", RenameFile, err)
+	}
+	var out []RenameRow
+	from, to := map[string]int{}, map[string]int{}
+	for i, m := range rows {
+		x := RenameRow{Line: lines[i], Kind: strings.ToLower(m["jenis"]), From: m["code_lama"], To: m["code_baru"]}
+		fail := func(format string, a ...any) error {
+			return fmt.Errorf("%s baris %d: %s", RenameFile, x.Line, fmt.Sprintf(format, a...))
+		}
+		if x.Kind != RenameProduct && x.Kind != RenameScent {
+			return nil, fail("jenis %q harus %s atau %s", m["jenis"], RenameProduct, RenameScent)
+		}
+		if !codeRe.MatchString(x.From) || !codeRe.MatchString(x.To) || x.From == x.To {
+			return nil, fail("code_lama/code_baru tidak valid atau sama (%q → %q)", x.From, x.To)
+		}
+		if prev, ok := from[x.Kind+x.From]; ok {
+			return nil, fail("code_lama %q sudah diganti di baris %d", x.From, prev)
+		}
+		if prev, ok := to[x.Kind+x.To]; ok {
+			return nil, fail("code_baru %q sudah dipakai di baris %d", x.To, prev)
+		}
+		from[x.Kind+x.From], to[x.Kind+x.To] = x.Line, x.Line
+		out = append(out, x)
+	}
+	return out, nil
+}
+
+func CheckRenames(renames []RenameRow, scents []ScentRow, general []GeneralRow) error {
+	present := map[string]bool{}
+	for _, s := range scents {
+		present[RenameProduct+s.GroupCode] = true
+		present[RenameScent+s.Code] = true
+	}
+	for _, g := range general {
+		present[RenameProduct+g.ProductCode] = true
+	}
+	for i, x := range renames {
+		ok := present[x.Kind+x.To]
+		for _, later := range renames[i+1:] {
+			ok = ok || (later.Kind == x.Kind && later.From == x.To)
+		}
+		if !ok {
+			return fmt.Errorf("%s baris %d: code_baru %q tidak ada di CSV katalog (%s)", RenameFile, x.Line, x.To, x.Kind)
 		}
 	}
 	return nil

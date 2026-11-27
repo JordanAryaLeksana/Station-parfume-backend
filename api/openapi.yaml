@@ -1323,7 +1323,7 @@ paths:
       - name: id
         in: path
         required: true
-        description: ID angka atau slug (mis. `annasui`)
+        description: ID angka atau slug (mis. `lavender`)
         schema:
           type: string
       responses:
@@ -1716,6 +1716,26 @@ components:
           - exclusive
         inspired_by:
           type: string
+        audience:
+          type: string
+          description: Untuk siapa (hanya parfum)
+          enum:
+          - pria
+          - wanita
+          - unisex
+        occasions:
+          type: array
+          description: Cocok untuk (hanya parfum); berisi 'ibadah' berarti cocok untuk ibadah
+          items:
+            type: string
+            enum:
+            - harian
+            - kantor
+            - malam
+            - acara
+            - santai
+            - olahraga
+            - ibadah
         note_primary:
           type: string
         note_secondary:
@@ -1936,7 +1956,7 @@ components:
           type: string
         variant_name:
           type: string
-          example: Dolly Girl, 30 ml, Murni
+          example: Lavender, 30 ml, Murni
         variant_code:
           type: string
         image_url:
@@ -2674,6 +2694,26 @@ components:
           - exclusive
         inspired_by:
           type: string
+        audience:
+          type: string
+          description: Untuk siapa (hanya parfum)
+          enum:
+          - pria
+          - wanita
+          - unisex
+        occasions:
+          type: array
+          description: Cocok untuk (hanya parfum); berisi 'ibadah' berarti cocok untuk ibadah
+          items:
+            type: string
+            enum:
+            - harian
+            - kantor
+            - malam
+            - acara
+            - santai
+            - olahraga
+            - ibadah
         note_primary:
           type: string
         note_secondary:
@@ -2741,10 +2781,10 @@ components:
           - general
         name:
           type: string
-          example: Annasui
+          example: Lavender
         slug:
           type: string
-          example: annasui
+          example: lavender
         grade:
           type: string
           enum:
@@ -2753,6 +2793,26 @@ components:
         inspired_by:
           type: string
           description: Selalu kosong di endpoint publik (merek hanya untuk admin), jadi key ini tidak pernah muncul.
+        audience:
+          type: string
+          description: Untuk siapa (hanya parfum)
+          enum:
+          - pria
+          - wanita
+          - unisex
+        occasions:
+          type: array
+          description: Cocok untuk (hanya parfum); berisi 'ibadah' berarti cocok untuk ibadah
+          items:
+            type: string
+            enum:
+            - harian
+            - kantor
+            - malam
+            - acara
+            - santai
+            - olahraga
+            - ibadah
         note_primary:
           type: string
         note_secondary:
@@ -2814,10 +2874,10 @@ components:
           - general
         name:
           type: string
-          example: Annasui
+          example: Lavender
         slug:
           type: string
-          example: annasui
+          example: lavender
         grade:
           type: string
           enum:
@@ -2826,6 +2886,26 @@ components:
         inspired_by:
           type: string
           description: Selalu kosong di endpoint publik (merek hanya untuk admin), jadi key ini tidak pernah muncul.
+        audience:
+          type: string
+          description: Untuk siapa (hanya parfum)
+          enum:
+          - pria
+          - wanita
+          - unisex
+        occasions:
+          type: array
+          description: Cocok untuk (hanya parfum); berisi 'ibadah' berarti cocok untuk ibadah
+          items:
+            type: string
+            enum:
+            - harian
+            - kantor
+            - malam
+            - acara
+            - santai
+            - olahraga
+            - ibadah
         note_primary:
           type: string
         note_secondary:
@@ -2958,6 +3038,19 @@ components:
           - exclusive
         inspired_by:
           type: string
+        audience:
+          type: string
+          description: Untuk siapa (hanya parfum); string kosong = dikosongkan
+          enum:
+          - pria
+          - wanita
+          - unisex
+          - ''
+        occasions:
+          type: array
+          description: Cocok untuk (hanya parfum); berisi 'ibadah' berarti cocok untuk ibadah. Huruf besar/kecil bebas, duplikat dibuang
+          items:
+            type: string
         note_primary:
           type: string
           enum:
@@ -3037,6 +3130,19 @@ components:
           - exclusive
         inspired_by:
           type: string
+        audience:
+          type: string
+          description: Untuk siapa (hanya parfum); string kosong = dikosongkan
+          enum:
+          - pria
+          - wanita
+          - unisex
+          - ''
+        occasions:
+          type: array
+          description: Cocok untuk (hanya parfum); berisi 'ibadah' berarti cocok untuk ibadah. Huruf besar/kecil bebas, duplikat dibuang
+          items:
+            type: string
         note_primary:
           type: string
           enum:
@@ -3170,10 +3276,10 @@ components:
           format: int64
         code:
           type: string
-          example: annasui-dolly-girl
+          example: lavender
         name:
           type: string
-          example: Dolly Girl
+          example: Lavender
         price_per_ml_murni:
           type: integer
           format: int64
@@ -3726,7 +3832,7 @@ components:
           description: Produk umum
         name:
           type: string
-          example: Dolly Girl, 30 ml, Murni
+          example: Lavender, 30 ml, Murni
         code:
           type: string
         price:

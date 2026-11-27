@@ -139,6 +139,19 @@ func resetData(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake.reset()
+	if _, err := seeders.SeedCatalog(config.DB, seedData(t), false); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ADMIN_NAME", "Owner")
+	t.Setenv("ADMIN_EMAIL", ownerEmail)
+	t.Setenv("ADMIN_PASSWORD", ownerPassword)
+	if _, err := seeders.SeedAdmin(config.DB); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedData(t *testing.T) seeders.CatalogData {
+	t.Helper()
 	dir := filepath.Join("..", "..", "seed")
 	var data seeders.CatalogData
 	var err error
@@ -156,15 +169,7 @@ func resetData(t *testing.T) {
 	load("sizes.csv", func(r io.Reader) error { data.Sizes, err = seeders.LoadSizes(r); return err })
 	load("wangian.csv", func(r io.Reader) error { data.Scents, err = seeders.LoadScents(r); return err })
 	load("produk_umum.csv", func(r io.Reader) error { data.General, err = seeders.LoadGeneralProducts(r); return err })
-	if _, err := seeders.SeedCatalog(config.DB, data, false); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("ADMIN_NAME", "Owner")
-	t.Setenv("ADMIN_EMAIL", ownerEmail)
-	t.Setenv("ADMIN_PASSWORD", ownerPassword)
-	if _, err := seeders.SeedAdmin(config.DB); err != nil {
-		t.Fatal(err)
-	}
+	return data
 }
 
 // ------------------------------------------------------------------ klien HTTP

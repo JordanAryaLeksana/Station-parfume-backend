@@ -29,15 +29,15 @@ func TestBuildCheckoutRequest(t *testing.T) {
 	exp := now.Add(90 * time.Minute)
 	order := &repository.Order{OrderNo: "SP261116A1B2C3D4", Total: 190000}
 	pay := &repository.Payment{ReferenceID: "SP261116A1B2C3D4P01", Amount: 190000, ExpiresAt: &exp}
-	vn := "Dolly Girl, 30 ml, Murni"
-	items := []repository.OrderItem{{ProductName: "Parfum A", VariantName: &vn, VariantCode: "parfum-a-dolly-girl-30-murni", UnitPrice: 95000, Quantity: 2, Subtotal: 190000}}
+	vn := "Lavender, 30 ml, Murni"
+	items := []repository.OrderItem{{ProductName: "Parfum A", VariantName: &vn, VariantCode: "parfum-a-lavender-30-murni", UnitPrice: 95000, Quantity: 2, Subtotal: 190000}}
 	cust := &doku.Customer{Name: "Budi", Email: "budi@test.local"}
 	req := buildCheckoutRequest(order, pay, items, cust, now)
 	o := req.Order
 	if o.InvoiceNumber != "SP261116A1B2C3D4P01" || o.Amount != 190000 || o.Currency != "IDR" || !o.AutoRedirect || req.Customer != cust {
 		t.Fatalf("field wajib salah: %+v", req)
 	}
-	if len(o.LineItems) != 1 || o.LineItems[0].Name != "Parfum A - Dolly Girl, 30 ml, Murni" || o.LineItems[0].Price != 95000 ||
+	if len(o.LineItems) != 1 || o.LineItems[0].Name != "Parfum A - Lavender, 30 ml, Murni" || o.LineItems[0].Price != 95000 ||
 		o.LineItems[0].Quantity != 2 || len(o.LineItems[0].ID) > 64 {
 		t.Fatalf("items salah: %+v", o.LineItems)
 	}

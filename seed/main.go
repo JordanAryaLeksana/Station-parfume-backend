@@ -111,14 +111,20 @@ func main() {
 	if data.General, err = load(*dir, "produk_umum.csv", seeders.LoadGeneralProducts); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("CSV OK: %d kategori, %d ukuran, %d wangian, %d inspired_by internal, %d pengecualian varian parfum, %d baris produk umum\n",
-		len(data.Categories), len(data.Sizes), len(data.Scents), len(brands), len(data.Variants), len(data.General))
+	if data.Renames, err = load(*dir, seeders.RenameFile, seeders.LoadRenames); err != nil {
+		log.Fatal(err)
+	}
+	if err := seeders.CheckRenames(data.Renames, data.Scents, data.General); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("CSV OK: %d kategori, %d ukuran, %d wangian, %d inspired_by internal, %d pengecualian varian parfum, %d baris produk umum, %d ganti nama\n",
+		len(data.Categories), len(data.Sizes), len(data.Scents), len(brands), len(data.Variants), len(data.General), len(data.Renames))
 
 	rep, err := seeders.SeedCatalog(db, data, *dryRun)
 	if rep != nil {
-		fmt.Printf("kategori : %v\nukuran   : %v\nproduk   : %v\nwangian  : %v\nvarian   : %v\n"+
+		fmt.Printf("ganti nama: %d\nkategori : %v\nukuran   : %v\nproduk   : %v\nwangian  : %v\nvarian   : %v\n"+
 			"harga khusus/status diterapkan: %d baris, stok berubah: %d varian, dinonaktifkan: %d\n",
-			rep.Categories, rep.Sizes, rep.Products, rep.Scents, rep.Variants, rep.PricesApplied, rep.StockChanged, rep.Archived)
+			rep.Renamed, rep.Categories, rep.Sizes, rep.Products, rep.Scents, rep.Variants, rep.PricesApplied, rep.StockChanged, rep.Archived)
 		if rep.Unpriced > 0 {
 			fmt.Printf("PERINGATAN: %d wangian/produk belum punya tarif atau harga (tidak tampil di website).\n", rep.Unpriced)
 		}

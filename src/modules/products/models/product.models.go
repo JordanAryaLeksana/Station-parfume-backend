@@ -10,6 +10,8 @@ type ProductCard struct {
 	Slug          string               `json:"slug"`
 	Grade         *string              `json:"grade,omitempty"`
 	InspiredBy    *string              `json:"inspired_by,omitempty"`
+	Audience      *string              `json:"audience,omitempty"`
+	Occasions     []string             `json:"occasions,omitempty"`
 	NotePrimary   *string              `json:"note_primary,omitempty"`
 	NoteSecondary *string              `json:"note_secondary,omitempty"`
 	Category      *repository.Category `json:"category,omitempty"`
@@ -27,7 +29,7 @@ type VariantView struct {
 	SizeID         *uint   `json:"size_id,omitempty"`
 	Concentration  *string `json:"concentration,omitempty"`
 	Label          *string `json:"label,omitempty"`
-	Name           string  `json:"name"` // "Dolly Girl, 30 ml, Murni"
+	Name           string  `json:"name"` // "Lavender, 30 ml, Murni"
 	Code           string  `json:"code"`
 	Price          int64   `json:"price"`
 	CompareAtPrice *int64  `json:"compare_at_price,omitempty"`
