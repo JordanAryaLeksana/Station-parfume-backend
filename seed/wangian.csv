@@ -9,95 +9,95 @@
 # group_code/code = kunci stabil (code juga kunci varian_parfum.csv); kalau harus diganti, daftarkan di internal/ganti-nama.csv (lihat README).
 # untuk = pria/wanita/unisex; cocok_untuk = harian;kantor;malam;acara;santai;olahraga;ibadah (pisah ;); deskripsi = teks halaman produk. Kosong = tidak diubah.
 grade,group_code,group,category,note1,note2,tarif_murni,tarif_campur,ukuran,aktif,code,varian,image,untuk,cocok_untuk,deskripsi
-regular,1000-bunga,1000 Bunga,Parfum & Wewangian,floral,woody,4000,1500,,,1000-bunga,1000 Bunga,1000 bunga.jpeg,,,
-regular,2000-bunga,2000 Bunga,Parfum & Wewangian,floral,woody,4000,1500,,,2000-bunga,2000 Bunga,2000 bunga.jpeg,,,
-regular,aigner-black,Aigner Black,Parfum & Wewangian,musk,woody,3000,1500,,,aigner-black,Black,aigner: blue motion & black.jpeg,,,
-regular,aigner-blue-in-motion,Aigner Blue In Motion,Parfum & Wewangian,musk,woody,3000,1500,,,aigner-blue-in-motion,Blue In Motion,aigner: blue motion & black.jpeg,,,
-regular,angelina-jolie,Angelina Jolie,Parfum & Wewangian,sweet,woody,3000,1500,,,angelina-jolie,Angelina Jolie,angeline jolie.jpeg,,,
-regular,annasui-dolly-girl,Annasui Dolly Girl,Parfum & Wewangian,sweet,fruity,3000,1500,,,annasui-dolly-girl,Dolly Girl,annasui: sweet dream & dolly girl.jpeg,,,
-regular,annasui-sweet-dream,Annasui Sweet Dream,Parfum & Wewangian,sweet,fruity,3000,1500,,,annasui-sweet-dream,Sweet Dream,annasui: sweet dream & dolly girl.jpeg,,,
-exclusive,aquakiss,Aquakiss,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-1-aquakiss,Aquakiss,exclusive-baru-1.jpg,,,
-regular,avril-lavigne,Avril Lavigne,Parfum & Wewangian,sweet,floral,3000,1500,,,avril-lavigne,Avril Lavigne,avril-lavigne.jpeg,,,
-exclusive,avril-lavigne-exclusive,Avril Lavigne,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-4-avril-lavigne,Avril Lavigne,exclusive-baru-4.jpg,,,
-regular,bacarat,Bacarat,Parfum & Wewangian,amber,woody,4000,1500,,,bacarat,Bacarat,Bacarat.jpeg,,,
-exclusive,bacarat-exclusive,Bacarat,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-bacarat,Bacarat,exclusive-baru-2.jpg,,,
-regular,black-opium,Black Opium,Parfum & Wewangian,woody,sweet,3000,1500,,,black-opium,Black Opium,Black Opium.jpeg,,,
-regular,burberies-london-women,Burberies London Women,Parfum & Wewangian,woody,sweet,3000,1500,,,burberies-burberies-london-women,Burberies London Women,Burberies: London women & sport.jpeg,,,
-regular,burberies-sport,Burberies Sport,Parfum & Wewangian,woody,sweet,3000,1500,,,burberies-burberies-sport,Burberies Sport,Burberies: London women & sport.jpeg,,,
-regular,bvlgari-aqua,Bvlgari Aqua,Parfum & Wewangian,citrus,aromatic,3000,1500,,,bvlgari-aqua,Aqua,bvlgari: aqua & extream & omnia crystal.jpeg,,,
-regular,bvlgari-extream,Bvlgari Extream,Parfum & Wewangian,citrus,aromatic,3000,1500,,,bvlgari-extream,Extream,bvlgari: aqua & extream & omnia crystal.jpeg,,,
-regular,bvlgari-omnia-crystal,Bvlgari Omnia Crystal,Parfum & Wewangian,citrus,aromatic,3000,1500,,,bvlgari-omnia-crystal,Omnia Crystal,bvlgari: aqua & extream & omnia crystal.jpeg,,,
-exclusive,c2-premiere-man,C2 Premiere Man,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-4-c2-premiere-man,C2 Premiere Man,exclusive-baru-4.jpg,,,
-regular,cuddle,Cuddle,Parfum & Wewangian,fresh,powdery,3000,1500,,,cuddle,Cuddle,Cuddle.jpeg,,,
-regular,d-g-light-blue,D & G Light Blue,Parfum & Wewangian,fruity,citrus,3000,1500,,,d-g-light-blue,Light Blue,D & G: Paris & Light Blue.jpeg,,,
-regular,d-g-paris,D & G Paris,Parfum & Wewangian,fruity,citrus,3000,1500,,,d-g-paris,Paris,D & G: Paris & Light Blue.jpeg,,,
-regular,dancing-lady,Dancing Lady,Parfum & Wewangian,fresh,sweet,3000,1500,,,dancing-lady,Dancing Lady,Dancing Lady.jpeg,,,
-regular,davidoff-cool-water-man,Davidoff Cool Water Man,Parfum & Wewangian,citrus,aromatic,3000,1500,,,davidoff-cool-water-man,Cool Water Man,davidoff: cool water man & cool water women.jpeg,,,
-regular,davidoff-cool-water-women,Davidoff Cool Water Women,Parfum & Wewangian,citrus,aromatic,3000,1500,,,davidoff-cool-water-women,Cool Water Women,davidoff: cool water man & cool water women.jpeg,,,
-regular,dior-sauvage,Dior Sauvage,Parfum & Wewangian,musk,woody,3000,1500,,,dior-sauvage,Dior Sauvage,dior-sauvage.jpeg,,,
-exclusive,dorsava,Dorsava,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-1-dorsava,Dorsava,exclusive-baru-1.jpg,,,
-exclusive,dunhil-blue,Dunhil Blue,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-dunhil-blue,Dunhil Blue,exclusive-baru-2.jpg,,,
+regular,1000-bunga,1000 Bunga,Parfum & Wewangian,floral,woody,4000,1500,,,1000-bunga,1000 Bunga,1000 bunga.jpeg,wanita,harian;acara,"Rangkaian bunga yang ramai: melati, mawar, dan kenanga di atas dasar kayu lembut. Anggun dan hangat, cocok untuk harian dan acara keluarga."
+regular,2000-bunga,2000 Bunga,Parfum & Wewangian,floral,woody,4000,1500,,,2000-bunga,2000 Bunga,2000 bunga.jpeg,wanita,malam;acara,"Lebih penuh dan pekat dari 1000 Bunga: bunga-bunga putih dengan sentuhan kayu. Wanginya tahan lama, pas untuk acara."
+exclusive,abu-lada,Abu Lada,Parfum & Wewangian,sweet,fresh,5000,3000,,,abu-lada,Abu Lada,abu-lada.jpg,unisex,harian,Manis yang segar dan lembut. Ringan untuk sehari-hari.
+regular,abu-pinus,Abu Pinus,Parfum & Wewangian,musk,woody,3000,1500,,,abu-pinus,Abu Pinus,abu-pinus.jpg,pria,harian;kantor;malam;ibadah,"Kasturi dan kayu yang bersih, dibuka jeruk yang segar. Maskulin dan rapi, cocok untuk kantor dan sehari-hari."
+regular,biru-lada,Biru Lada,Parfum & Wewangian,musk,woody,3000,1500,,,biru-lada,Biru Lada,biru-lada.jpg,pria,harian;kantor;malam;acara,"Bergamot yang segar dan lada, lalu ambar dan kayu yang kering. Maskulin, tegas, dan tahan lama."
+regular,biru-mint,Biru Mint,Parfum & Wewangian,citrus,aromatic,3000,1500,,,biru-mint,Biru Mint,biru-mint.jpg,pria,harian;santai;olahraga;ibadah,"Segar dan dingin: daun mint, lavender, dan nuansa laut, lalu kayu cendana. Klasik untuk pria yang aktif."
+regular,biru-nanas,Biru Nanas,Parfum & Wewangian,citrus,aromatic,3000,1500,,,biru-nanas,Biru Nanas,biru-nanas.jpg,wanita,harian;kantor;santai;ibadah,"Segar dan berair: melon, nanas, dan bunga teratai, dengan kasturi yang lembut. Ringan dan bersih."
+exclusive,c2-premiere-man,C2 Premiere Man,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-4-c2-premiere-man,C2 Premiere Man,exclusive-baru-4.jpg,pria,harian,Segar dengan sentuhan manis yang rapi. Ringan untuk dipakai sehari-hari.
+regular,coklat-hazelnut,Coklat Hazelnut,Parfum & Wewangian,aromatic,musk,3000,1500,,,coklat-hazelnut,Coklat Hazelnut,coklat-hazelnut.jpg,unisex,harian;ibadah,Mawar dengan herbal segar di atas kasturi. Bersih dan tenang.
+regular,coklat-kayu,Coklat Kayu,Parfum & Wewangian,woody,musk,3000,1500,,,coklat-kayu,Coklat Kayu,coklat-kayu.jpg,pria,harian;acara;ibadah,"Kayu dan kasturi yang hangat dan tenang, dengan sentuhan rempah. Cocok untuk ibadah dan acara keluarga."
+regular,coklat-kopi,Coklat Kopi,Parfum & Wewangian,woody,sweet,3000,1500,,,coklat-kopi,Coklat Kopi,coklat-kopi.jpg,wanita,malam;acara,"Kopi yang manis bertemu vanila dan bunga putih. Hangat, menggoda, dan tahan lama untuk malam hari."
+regular,coklat-praline,Coklat Praline,Parfum & Wewangian,fresh,fruity,3000,1500,,,coklat-praline,Coklat Praline,coklat-praline.jpg,wanita,malam;acara;santai,
+regular,cuddle,Cuddle,Parfum & Wewangian,fresh,powdery,3000,1500,,,cuddle,Cuddle,Cuddle.jpeg,unisex,harian;ibadah,"Bersih dan lembut seperti bedak dan kain yang baru dicuci. Menenangkan, nyaman dipakai seharian."
+regular,d-g-paris,D & G Paris,Parfum & Wewangian,fruity,citrus,3000,1500,,,d-g-paris,Paris,D & G: Paris & Light Blue.jpeg,wanita,harian;ibadah,Buah segar dan jeruk dengan sentuhan bunga. Ringan dan ceria untuk siang hari.
+regular,dancing-lady,Dancing Lady,Parfum & Wewangian,fresh,sweet,3000,1500,,,dancing-lady,Dancing Lady,Dancing Lady.jpeg,wanita,harian;santai,Segar dan manis seperti anggrek yang baru mekar. Ceria dan ringan.
 regular,dunhil-desire-blue,Dunhil Desire Blue,Parfum & Wewangian,amber,woody,,,,tidak,dunhil-desire-blue,Desire Blue,"dunhil: desire blue, london, red.jpeg",,,
 regular,dunhil-london,Dunhil London,Parfum & Wewangian,amber,woody,,,,tidak,dunhil-london,London,"dunhil: desire blue, london, red.jpeg",,,
 regular,dunhil-red,Dunhil Red,Parfum & Wewangian,amber,woody,,,,tidak,dunhil-red,Red,"dunhil: desire blue, london, red.jpeg",,,
-regular,escada-candy,Escada Candy,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-candy,Candy,escada: moonlight & sexy grafity & cherry & candy.jpeg,,,
-regular,escada-cherry,Escada Cherry,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-cherry,Cherry,escada: moonlight & sexy grafity & cherry & candy.jpeg,,,
-regular,escada-moonlight,Escada Moonlight,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-moonlight,Moonlight,escada: moonlight & sexy grafity & cherry & candy.jpeg,,,
-regular,escada-sexy-grafity,Escada Sexy Grafity,Parfum & Wewangian,fruity,floral,3000,1500,,,escada-sexy-grafity,Sexy Grafity,escada: moonlight & sexy grafity & cherry & candy.jpeg,,,
-regular,giorgio-armani-my-way,Giorgio Armani My Way,Parfum & Wewangian,sweet,fresh,3000,1500,,,giorgio-armani-my-way,Armani My Way,giorgio.jpeg,,,
-regular,giorgio-armani-si,Giorgio Armani Si,Parfum & Wewangian,sweet,fresh,3000,1500,,,giorgio-armani-si,Armani Si,giorgio.jpeg,,,
-exclusive,greekgodnes,Greekgodnes,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-3-greekgodnes,Greekgodnes,exclusive-baru-3.jpg,,,
+exclusive,emas-almond,Emas Almond,Parfum & Wewangian,sweet,fresh,5000,3000,,,emas-almond,Emas Almond,emas-almond.jpg,unisex,malam;acara,"Ambar manis yang lebih segar, dengan sentuhan kayu dan kuma-kuma. Mewah tapi tetap ringan."
+regular,emas-ambar,Emas Ambar,Parfum & Wewangian,balsamic,fresh,4000,1500,,,emas-ambar,Emas Ambar,emas-ambar.jpg,wanita,harian;kantor;malam;ibadah,Lavender dan bergamot di atas resin yang hangat. Lembut dan menenangkan.
+regular,emas-kasturi,Emas Kasturi,Parfum & Wewangian,musk,woody,3000,1500,,,emas-kasturi,Emas Kasturi,emas-kasturi.jpg,wanita,harian;kantor;santai;ibadah,Kasturi hangat dengan bunga lembut dan kayu. Nyaman dan menenangkan.
+regular,emas-saffron,Emas Saffron,Parfum & Wewangian,amber,woody,4000,1500,,,emas-saffron,Emas Saffron,emas-saffron.jpg,unisex,kantor;malam;acara,"Manis-hangat yang bersinar: kuma-kuma (saffron) dan melati, lalu ambar dan kayu cedar. Wangi khas yang meninggalkan jejak."
+exclusive,greekgodnes,Greekgodnes,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-3-greekgodnes,Greekgodnes,exclusive-baru-3.jpg,wanita,acara,Manis dan segar yang anggun. Ringan tapi berkesan.
 regular,greentea,Greentea,Parfum & Wewangian,woody,fresh,,,,tidak,greentea,Greentea,green tea.jpeg,,,
 regular,guci-flora,Guci Flora,Parfum & Wewangian,floral,musk,,,,tidak,guci-flora,Guci Flora,guci flora.jpeg,,,
-regular,harajuku-love,Harajuku Love,Parfum & Wewangian,aromatic,balsamic,3000,1500,,,harajuku-love,Harajuku Love,harajuku-love.jpeg,,,
+regular,hijau-bergamot,Hijau Bergamot,Parfum & Wewangian,floral,fresh,3000,1500,,,hijau-bergamot,Hijau Bergamot,hijau-bergamot.jpg,wanita,malam,"Bunga jeruk dan mimosa yang segar, dengan kasturi lembut. Feminin dan memikat."
+regular,hijau-blackcurrant,Hijau Blackcurrant,Parfum & Wewangian,fresh,fruity,3000,1500,,,hijau-blackcurrant,Hijau Blackcurrant,hijau-blackcurrant.jpg,wanita,harian,Buah segar yang manis dengan bunga putih. Ringan untuk sehari-hari.
+regular,hijau-kemangi,Hijau Kemangi,Parfum & Wewangian,woody,musk,3000,1500,,,hijau-kemangi,Hijau Kemangi,hijau-kemangi.jpg,pria,harian;kantor;olahraga;ibadah,
+regular,hijau-lemon,Hijau Lemon,Parfum & Wewangian,aromatic,musk,3000,1500,,,hijau-lemon,Hijau Lemon,hijau-lemon.jpg,pria,harian;santai;olahraga;ibadah,Segar sporty dengan herbal dan kasturi. Energik untuk aktivitas dan olahraga.
+regular,hijau-melon,Hijau Melon,Parfum & Wewangian,sweet,fruity,3000,1500,,,hijau-melon,Hijau Melon,hijau-melon.jpg,wanita,harian;santai,
+regular,hijau-rumput-laut,Hijau Rumput Laut,Parfum & Wewangian,citrus,aromatic,3000,1500,,,hijau-rumput-laut,Hijau Rumput Laut,hijau-rumput-laut.jpg,pria,harian;kantor;santai;olahraga;ibadah,"Segar seperti angin laut. Jeruk mandarin dan daun hijau di awal, lalu rumput laut dan kayu ringan. Bersih dan maskulin, enak untuk siang hari dan setelah olahraga."
+regular,hijau-timun,Hijau Timun,Parfum & Wewangian,fresh,fruity,3000,1500,,,hijau-timun,Hijau Timun,hijau-timun.jpg,wanita,harian;kantor;olahraga,"Buah segar dan bunga yang romantis, ringan dan manis."
 regular,hugo-boss-energi,Hugo Boss Energi,Parfum & Wewangian,powdery,musk,,,,tidak,hugo-boss-boss-energi,Boss Energi,hugo boss: boss energi & boss orange & xx women.jpeg,,,
 regular,hugo-boss-orange,Hugo Boss Orange,Parfum & Wewangian,powdery,musk,,,,tidak,hugo-boss-boss-orange,Boss Orange,hugo boss: boss energi & boss orange & xx women.jpeg,,,
 regular,hugo-boss-xx-women,Hugo Boss XX Women,Parfum & Wewangian,powdery,musk,,,,tidak,hugo-boss-xx-women,XX Women,hugo boss: boss energi & boss orange & xx women.jpeg,,,
-regular,incanto-charming,Incanto Charming,Parfum & Wewangian,woody,musk,3000,1500,,,incanto-charming,Charming,Incanto: shine salvador & charming .jpeg,,,
-regular,incanto-shine-salvador,Incanto Shine Salvador,Parfum & Wewangian,woody,musk,3000,1500,,,incanto-shine-salvador,Shine Salvador,Incanto: shine salvador & charming .jpeg,,,
-regular,j-lo-c,J-lo C,Parfum & Wewangian,aromatic,woody,3000,1500,,,j-lo-j-lo-c,J-lo C,J-lo: j-lo still & j-lo c.jpeg,,,
-regular,j-lo-still,J-lo Still,Parfum & Wewangian,aromatic,woody,3000,1500,,,j-lo-j-lo-still,J-lo Still,J-lo: j-lo still & j-lo c.jpeg,,,
-regular,jaguar-blue,Jaguar Blue,Parfum & Wewangian,woody,musk,3000,1500,,,jaguar-blue,Blue,Jaguar: Blue & Vision.jpeg,,,
-regular,jaguar-vision,Jaguar Vision,Parfum & Wewangian,woody,musk,3000,1500,,,jaguar-vision,Vision,Jaguar: Blue & Vision.jpeg,,,
-regular,jessica-love-sarah,Jessica Love Sarah,Parfum & Wewangian,musk,woody,3000,1500,,,jessica-love-sarah,Love Sarah,jessica: love sarah & parker.jpeg,,,
-regular,jessica-parker,Jessica Parker,Parfum & Wewangian,musk,woody,3000,1500,,,jessica-parker,Parker,jessica: love sarah & parker.jpeg,,,
-regular,joyrose,Joyrose,Parfum & Wewangian,aromatic,musk,3000,1500,,,joyrose,Joyrose,joyrose.jpeg,,,
-regular,kasturi-kijang,Kasturi Kijang,Parfum & Wewangian,oud,woody,4000,1500,,,kasturi-kasturi-kijang,Kasturi Kijang,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg,,,
-regular,kasturi-putih,Kasturi Putih,Parfum & Wewangian,oud,woody,4000,1500,,,kasturi-kasturi-putih,Kasturi Putih,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg,,,
-regular,kenzo-bali,Kenzo Bali,Parfum & Wewangian,aromatic,powdery,3000,1500,,,kenzo-bali,Bali,kenzo: bali & power.jpeg,,,
-regular,kenzo-power,Kenzo Power,Parfum & Wewangian,aromatic,powdery,3000,1500,,,kenzo-power,Power,kenzo: bali & power.jpeg,,,
-regular,lavender,Lavender,Parfum & Wewangian,floral,fresh,3000,1500,,,lavender,Lavender,lavender.jpeg,,,
-regular,lovely,Lovely,Parfum & Wewangian,balsamic,fresh,4000,1500,,,lovely,Lovely,lovely.jpeg,,,
-regular,maher-zein,Maher Zein,Parfum & Wewangian,woody,musk,3000,1500,,,maher-zein,Maher Zein,maher zein.jpeg,,,
-regular,malaikat-subuh,Malaikat Subuh,Parfum & Wewangian,musk,oud,4000,1500,,,malaikat-subuh,Malaikat Subuh,malaikat subuh.jpeg,,,
-regular,manchester-city,Manchester City,Parfum & Wewangian,aromatic,musk,3000,1500,,,manchester-city,Manchester City,manchester city.jpeg,,,
-regular,mawar-keraton,Mawar Keraton,Parfum & Wewangian,floral,woody,4000,1500,,,mawar-keraton,Mawar Keraton,mawar keraton.jpeg,,,
-regular,melati-keraton,Melati Keraton,Parfum & Wewangian,floral,woody,4000,1500,,,melati-keraton,Melati Keraton,melati keraton.jpeg,,,
-regular,midnight-fantasy,Midnight Fantasy,Parfum & Wewangian,sweet,musk,3000,1500,,,midnight-fantasy,Midnight Fantasy,midnight fantasy.jpeg,,,
-regular,miss-dior-blooming,Miss Dior Blooming,Parfum & Wewangian,sweet,fresh,3000,1500,,,miss-dior-blooming,Miss Dior Blooming,miss dior blooming.jpeg,,,
-exclusive,moonlight,Moonlight,Parfum & Wewangian,sweet,fresh,4000,2000,,,exclusive-3-moonlight,Moonlight,exclusive-baru-3.jpg,,,
-exclusive,mykonos-monaco-royal,Mykonos Monaco Royal,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-mykonos-monaco-royal,Mykonos Monaco Royal,exclusive-baru-2.jpg,,,
-regular,olla-ramlan,Olla Ramlan,Parfum & Wewangian,aromatic,powdery,3000,1500,,,olla-ramlan,Olla Ramlan,olla ramlan.jpeg,,,
-regular,one-direction,One Direction,Parfum & Wewangian,aromatic,powdery,3000,1500,,,one-direction,One Direction,one direction.jpeg,,,
-exclusive,opus-black,Opus Black,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-3-opus-black,Opus Black,exclusive-baru-3.jpg,,,
-regular,paris-hilton-heiris,Paris Hilton Heiris,Parfum & Wewangian,sweet,aromatic,3000,1500,,,paris-hilton-heiris,Heiris,paris hilton: heiris & shireen & women.jpeg,,,
-regular,paris-hilton-shireen,Paris Hilton Shireen,Parfum & Wewangian,sweet,aromatic,3000,1500,,,paris-hilton-shireen,Shireen,paris hilton: heiris & shireen & women.jpeg,,,
-regular,paris-hilton-women,Paris Hilton Women,Parfum & Wewangian,sweet,aromatic,3000,1500,,,paris-hilton-women,Women,paris hilton: heiris & shireen & women.jpeg,,,
-regular,pink-chiffon,Pink Chiffon,Parfum & Wewangian,powdery,sweet,3000,1500,,,pink-chiffon,Pink Chiffon,pink-chiffon.jpeg,,,
-regular,sabaya,Sabaya,Parfum & Wewangian,sweet,woody,4000,1500,,,sabaya,Sabaya,sabaya.jpeg,,,
-exclusive,scandal-secret,Scandal Secret,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-1-scandal-secret,Scandal Secret,exclusive-baru-1.jpg,,,
-regular,selena-gomes,Selena Gomes,Parfum & Wewangian,sweet,fresh,3000,1500,,,selena-gomes,Selena Gomes,selena-gomes.jpeg,,,
-regular,silver,Silver,Parfum & Wewangian,oud,musk,4000,1500,,,silver,Silver,silver.jpeg,,,
-regular,so-sexy,So Sexy,Parfum & Wewangian,floral,fresh,3000,1500,,,so-sexy,So Sexy,so sexy.jpeg,,,
-regular,soft,Soft,Parfum & Wewangian,amber,oud,4000,1500,,,soft,Soft,soft.jpeg,,,
-regular,strawberry,Strawberry,Parfum & Wewangian,fruity,sweet,3000,1500,,,strawberry,Strawberry,strawberry.jpeg,,,
-regular,sulthan,Sulthan,Parfum & Wewangian,oud,woody,4000,1500,,,sulthan,Sulthan,sulthan.jpeg,,,
-regular,taylor-swift,Taylor Swift,Parfum & Wewangian,sweet,aromatic,3000,1500,,,taylor-swift,Taylor Swift,taylor-swift.jpeg,,,
-regular,vanilla-coconut,Vanilla Coconut,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-coconut,Coconut,vanilla: coconut & vanilla ice & popcorn.jpeg,,,
-regular,vanilla-ice,Vanilla Ice,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-vanilla-ice,Vanilla Ice,vanilla: coconut & vanilla ice & popcorn.jpeg,,,
-regular,vanilla-popcorn,Vanilla Popcorn,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-popcorn,Popcorn,vanilla: coconut & vanilla ice & popcorn.jpeg,,,
-regular,victoria-romanwish,Victoria Romanwish,Parfum & Wewangian,fresh,fruity,3000,1500,,,victoria-romanwish,Romanwish,Victoria.jpeg,,,
-regular,victoria-scandalouse,Victoria Scandalouse,Parfum & Wewangian,fresh,fruity,3000,1500,,,victoria-scandalouse,Scandalouse,Victoria.jpeg,,,
-regular,victoria-screetwish,Victoria Screetwish,Parfum & Wewangian,fresh,fruity,3000,1500,,,victoria-screetwish,Screetwish,Victoria.jpeg,,,
-regular,zara-gardenia,Zara Gardenia,Parfum & Wewangian,floral,citrus,3000,1500,,,zara-gardenia,Gardenia,zara: wonde rose & gardenia.jpeg,,,
-regular,zara-wonde-rose,Zara Wonde rose,Parfum & Wewangian,floral,citrus,3000,1500,,,zara-wonde-rose,Wonde rose,zara: wonde rose & gardenia.jpeg,,,
+regular,j-lo-c,J-lo C,Parfum & Wewangian,aromatic,woody,3000,1500,,,j-lo-j-lo-c,J-lo C,J-lo: j-lo still & j-lo c.jpeg,wanita,harian;kantor;ibadah,Herbal segar di atas kayu yang hangat. Rapi dan dewasa untuk kantor.
+regular,jingga-aprikot,Jingga Aprikot,Parfum & Wewangian,sweet,aromatic,3000,1500,,,jingga-aprikot,Jingga Aprikot,jingga-aprikot.jpg,wanita,harian;santai,Manis bunga dan buah dengan sentuhan herbal. Ringan dan ramah.
+exclusive,jingga-leci,Jingga Leci,Parfum & Wewangian,sweet,fresh,5000,3000,,,jingga-leci,Jingga Leci,jingga-leci.jpg,pria,harian;kantor;santai;ibadah,
+regular,jingga-mandarin,Jingga Mandarin,Parfum & Wewangian,sweet,fruity,3000,1500,,,jingga-mandarin,Jingga Mandarin,jingga-mandarin.jpg,wanita,harian;kantor;santai,Buah segar dan bunga putih yang manis lembut. Riang dan ringan untuk sehari-hari.
+regular,jingga-markisa,Jingga Markisa,Parfum & Wewangian,aromatic,powdery,3000,1500,,,jingga-markisa,Jingga Markisa,jingga-markisa.jpg,wanita,harian;santai;ibadah,Herbal segar dan nuansa laut dengan sentuhan bedak yang lembut. Bersih dan santai.
+regular,jingga-melon,Jingga Melon,Parfum & Wewangian,sweet,aromatic,3000,1500,,,jingga-melon,Jingga Melon,jingga-melon.jpg,wanita,harian;kantor;santai,"Apel dan melon yang segar dengan bunga mimosa, lalu kayu cendana. Manis dan segar."
+regular,jingga-nanas,Jingga Nanas,Parfum & Wewangian,woody,musk,3000,1500,,,jingga-nanas,Jingga Nanas,jingga-nanas.jpg,wanita,harian;santai,"Nanas dan markisa yang segar dengan bunga peony, lalu kasturi lembut. Cerah dan riang."
+regular,kasturi-kijang,Kasturi Kijang,Parfum & Wewangian,oud,woody,4000,1500,,,kasturi-kasturi-kijang,Kasturi Kijang,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg,unisex,harian;acara;ibadah,"Kasturi yang dalam dengan gaharu dan kayu hangat. Wangi tradisional yang tenang, pekat, dan tahan lama."
+regular,kasturi-putih,Kasturi Putih,Parfum & Wewangian,oud,woody,4000,1500,,,kasturi-kasturi-putih,Kasturi Putih,Kasturi: Kasturi Kijang & Kasturi Putih.jpeg,unisex,harian;kantor;ibadah,"Kasturi putih yang bersih dan lembut, dengan sentuhan kayu. Lebih ringan dari Kasturi Kijang."
+regular,kuning-bergamot,Kuning Bergamot,Parfum & Wewangian,citrus,aromatic,3000,1500,,,kuning-bergamot,Kuning Bergamot,kuning-bergamot.jpg,pria,harian;kantor;ibadah,"Segar yang lebih tegas. Jeruk bali dan bergamot, lalu teh dan akar wangi yang agak kering. Rapi dan dewasa, cocok untuk kantor."
+regular,kuning-jahe,Kuning Jahe,Parfum & Wewangian,woody,sweet,3000,1500,,,kuning-jahe,Kuning Jahe,kuning-jahe.jpg,pria,harian;santai;olahraga;ibadah,"Segar sporty dengan jahe dan nuansa air, lalu kayu yang hangat dan sedikit manis. Energik untuk aktivitas."
+regular,kuning-kapulaga,Kuning Kapulaga,Parfum & Wewangian,woody,musk,3000,1500,,,kuning-kapulaga,Kuning Kapulaga,kuning-kapulaga.jpg,pria,harian;kantor;santai,"Rempah segar dan kayu yang maskulin, dengan kasturi di akhir. Tegas dan berkelas."
+regular,kuning-lemon,Kuning Lemon,Parfum & Wewangian,fruity,citrus,3000,1500,,,kuning-lemon,Kuning Lemon,kuning-lemon.jpg,wanita,harian;kantor;santai;ibadah,"Lemon segar dan apel hijau, lalu bunga putih dan kayu cedar yang ringan. Cerah seperti liburan di pantai."
+regular,kuning-mandarin,Kuning Mandarin,Parfum & Wewangian,musk,woody,3000,1500,,,kuning-mandarin,Kuning Mandarin,kuning-mandarin.jpg,pria,harian;kantor;santai;ibadah,"Segar seperti udara pantai: jeruk dan nuansa air, lalu kasturi dan kayu ringan. Sporty dan bersih untuk siang hari."
+regular,kuning-markisa,Kuning Markisa,Parfum & Wewangian,woody,musk,3000,1500,,,kuning-markisa,Kuning Markisa,kuning-markisa.jpg,wanita,harian;kantor;santai;ibadah,
+regular,kuning-persik,Kuning Persik,Parfum & Wewangian,floral,citrus,3000,1500,,,kuning-persik,Kuning Persik,kuning-persik.jpg,wanita,harian;kantor;santai,"Mawar segar dengan jeruk dan blackcurrant, lalu kasturi lembut. Manis dan ceria."
+regular,lavender,Lavender,Parfum & Wewangian,floral,fresh,3000,1500,,,lavender,Lavender,lavender.jpeg,unisex,harian;kantor;santai;ibadah,"Lavender segar yang menenangkan, bersih seperti habis mandi."
+regular,malaikat-subuh,Malaikat Subuh,Parfum & Wewangian,musk,oud,4000,1500,,,malaikat-subuh,Malaikat Subuh,malaikat subuh.jpeg,unisex,harian;ibadah,"Kasturi lembut dengan sentuhan gaharu. Tenang dan menenangkan, seperti udara subuh."
+regular,mawar-keraton,Mawar Keraton,Parfum & Wewangian,floral,woody,4000,1500,,,mawar-keraton,Mawar Keraton,mawar keraton.jpeg,wanita,harian;acara;ibadah,Mawar yang penuh di atas dasar kayu yang hangat. Romantis tanpa terasa berat.
+regular,melati-keraton,Melati Keraton,Parfum & Wewangian,floral,woody,4000,1500,,,melati-keraton,Melati Keraton,melati keraton.jpeg,wanita,harian;acara;ibadah,"Melati yang lembut di atas dasar kayu. Anggun, bersih, dan mudah dipakai."
+regular,merah-apel,Merah Apel,Parfum & Wewangian,sweet,floral,3000,1500,,,merah-apel,Merah Apel,merah-apel.jpg,wanita,malam;santai,"Bunga dan buah merah yang manis dan playful. Ceria dan berani, cocok untuk jalan-jalan dan malam santai."
+regular,merah-beri,Merah Beri,Parfum & Wewangian,fruity,floral,3000,1500,,,merah-beri,Merah Beri,merah-beri.jpg,wanita,harian;kantor;santai,"Stroberi dan raspberry dengan bunga lembut, manis seperti kembang gula. Ceria untuk sore dan malam."
+regular,merah-jeruk-bali,Merah Jeruk Bali,Parfum & Wewangian,aromatic,powdery,3000,1500,,,merah-jeruk-bali,Merah Jeruk Bali,merah-jeruk-bali.jpg,wanita,harian;kantor;santai,"Jeruk bali merah dan buah beri, lalu bunga dan bedak lembut. Ceria dan muda."
+regular,merah-muda-apel,Merah Muda Apel,Parfum & Wewangian,fruity,floral,3000,1500,,,merah-muda-apel,Merah Muda Apel,merah-muda-apel.jpg,wanita,harian;malam;santai,"Manis seperti apel karamel, dengan bunga yang ceria. Playful dan menyenangkan."
+regular,merah-muda-lili,Merah Muda Lili,Parfum & Wewangian,aromatic,powdery,3000,1500,,,merah-muda-lili,Merah Muda Lili,merah-muda-lili.jpg,wanita,harian;ibadah,Herbal lembut dengan sentuhan bedak yang bersih. Anggun dan menenangkan.
+regular,merah-muda-marshmallow,Merah Muda Marshmallow,Parfum & Wewangian,fruity,floral,3000,1500,,,merah-muda-marshmallow,Merah Muda Marshmallow,merah-muda-marshmallow.jpg,wanita,harian;santai,Ceri yang juicy dengan marshmallow dan bunga. Manis dan riang.
+regular,merah-muda-peoni,Merah Muda Peoni,Parfum & Wewangian,sweet,fresh,3000,1500,,,merah-muda-peoni,Merah Muda Peoni,merah-muda-peoni.jpg,wanita,harian;kantor;acara,"Mawar dan peony yang segar seperti rangkaian bunga baru, dengan kasturi putih. Lembut dan romantis."
+regular,merah-muda-persik,Merah Muda Persik,Parfum & Wewangian,sweet,aromatic,3000,1500,,,merah-muda-persik,Merah Muda Persik,merah-muda-persik.jpg,wanita,harian;acara;santai,
+regular,merah-muda-raspberry,Merah Muda Raspberry,Parfum & Wewangian,sweet,fresh,3000,1500,,,merah-muda-raspberry,Merah Muda Raspberry,merah-muda-raspberry.jpg,wanita,harian;santai,Buah segar dan bunga yang manis ringan. Muda dan ceria.
+exclusive,merah-praline,Merah Praline,Parfum & Wewangian,sweet,fresh,5000,3000,,,merah-praline,Merah Praline,merah-praline.jpg,wanita,kantor;malam;acara,"Madu dan bunga putih yang manis, dengan sentuhan segar. Percaya diri dan berani."
+regular,merah-raspberry,Merah Raspberry,Parfum & Wewangian,fruity,floral,3000,1500,,,merah-raspberry,Merah Raspberry,merah-raspberry.jpg,wanita,harian;santai,"Jeruk dan buah beri yang cerah dengan bunga putih. Segar, berani, dan penuh warna."
+exclusive,merah-teratai,Merah Teratai,Parfum & Wewangian,sweet,fresh,5000,3000,,,merah-teratai,Merah Teratai,merah-teratai.jpg,wanita,harian;santai,"Manis yang segar dan ringan, dengan bunga dan buah yang ceria. Enak dipakai siang hari."
+exclusive,moonlight,Moonlight,Parfum & Wewangian,sweet,fresh,4000,2000,,,exclusive-3-moonlight,Moonlight,exclusive-baru-3.jpg,wanita,malam;santai,"Manis dan segar yang lembut, seperti udara malam yang sejuk."
+exclusive,mykonos-monaco-royal,Mykonos Monaco Royal,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-2-mykonos-monaco-royal,Mykonos Monaco Royal,exclusive-baru-2.jpg,unisex,harian;kantor;santai,"Manis yang segar, ringan dan bersih."
+exclusive,opus-black,Opus Black,Parfum & Wewangian,sweet,fresh,5000,3000,,,exclusive-3-opus-black,Opus Black,exclusive-baru-3.jpg,unisex,malam;acara;santai,"Manis dan segar yang pekat, untuk malam hari."
+regular,putih-bedak,Putih Bedak,Parfum & Wewangian,aromatic,powdery,3000,1500,,,putih-bedak,Putih Bedak,putih-bedak.jpg,pria,harian;kantor;santai;ibadah,"Bedak lembut dengan bunga iris dan vanila. Bersih, hangat, dan tidak menyengat."
+exclusive,putih-freesia,Putih Freesia,Parfum & Wewangian,sweet,fresh,5000,3000,,,putih-freesia,Putih Freesia,putih-freesia.jpg,wanita,harian;santai;olahraga;ibadah,"Segar seperti udara setelah hujan, dengan bunga freesia dan sentuhan manis. Bersih, ringan, dan lembut."
+regular,putih-kemuning,Putih Kemuning,Parfum & Wewangian,floral,citrus,3000,1500,,,putih-kemuning,Putih Kemuning,putih-kemuning.jpg,wanita,kantor;malam;acara;ibadah,Bunga putih yang lembut dengan sentuhan jeruk segar. Bersih dan feminin.
+regular,putih-melati,Putih Melati,Parfum & Wewangian,woody,sweet,3000,1500,,,putih-melati,Putih Melati,putih-melati.jpg,wanita,harian;kantor;acara,"Bunga-bunga hangat seperti mawar dan melati, dengan kayu dan manis yang lembut. Klasik dan feminin."
+regular,putih-peoni,Putih Peoni,Parfum & Wewangian,aromatic,balsamic,3000,1500,,,putih-peoni,Putih Peoni,putih-peoni.jpg,wanita,harian;santai,Manis buah dan bunga di atas resin yang hangat. Lucu dan ceria.
+regular,putih-pir,Putih Pir,Parfum & Wewangian,powdery,sweet,3000,1500,,,putih-pir,Putih Pir,putih-pir.jpg,wanita,harian;kantor;santai;ibadah,
+regular,putih-sedap-malam,Putih Sedap Malam,Parfum & Wewangian,sweet,fresh,3000,1500,,,putih-sedap-malam,Putih Sedap Malam,putih-sedap-malam.jpg,wanita,harian;kantor;acara,"Bunga jeruk dan sedap malam yang lembut, dengan vanila dan kasturi putih. Feminin dan elegan."
+regular,putih-teh,Putih Teh,Parfum & Wewangian,aromatic,woody,3000,1500,,,putih-teh,Putih Teh,putih-teh.jpg,wanita,harian;kantor;santai;ibadah,
+regular,putih-teratai,Putih Teratai,Parfum & Wewangian,citrus,aromatic,3000,1500,,,putih-teratai,Putih Teratai,putih-teratai.jpg,wanita,harian;kantor;santai;ibadah,"Bening dan lembut. Pir segar dan bambu, lalu bunga teratai dan kayu tipis. Ringan dan feminin untuk sehari-hari."
+regular,sabaya,Sabaya,Parfum & Wewangian,sweet,woody,4000,1500,,,sabaya,Sabaya,sabaya.jpeg,wanita,harian;kantor;ibadah,Manis yang hangat di atas dasar kayu. Lembut dan akrab untuk dipakai sehari-hari.
+regular,silver,Silver,Parfum & Wewangian,oud,musk,4000,1500,,,silver,Silver,silver.jpeg,pria,malam;ibadah,"Gaharu dan kasturi yang bersih, sejuk seperti logam perak. Tegas tapi tenang."
+regular,soft,Soft,Parfum & Wewangian,amber,oud,4000,1500,,,soft,Soft,soft.jpeg,unisex,harian;santai;ibadah,"Ambar dan gaharu yang lembut dan hangat. Tidak menyengat, nyaman dipakai lama."
+regular,strawberry,Strawberry,Parfum & Wewangian,fruity,sweet,3000,1500,,,strawberry,Strawberry,strawberry.jpeg,wanita,santai,Stroberi manis yang segar dan ceria.
+regular,sulthan,Sulthan,Parfum & Wewangian,oud,woody,4000,1500,,,sulthan,Sulthan,sulthan.jpeg,pria,malam;acara;ibadah,"Gaharu dan kayu yang pekat. Tegas dan berwibawa, cocok untuk acara malam."
+regular,ungu-anggrek,Ungu Anggrek,Parfum & Wewangian,musk,woody,3000,1500,,,ungu-anggrek,Ungu Anggrek,ungu-anggrek.jpg,wanita,harian;kantor;santai;ibadah,"Lavender dan bunga anggrek di atas kasturi dan kayu. Lembut, bersih, dan feminin."
+regular,ungu-beri,Ungu Beri,Parfum & Wewangian,sweet,aromatic,3000,1500,,,ungu-beri,Ungu Beri,ungu-beri.jpg,wanita,harian;malam;santai,"Buah beri dan apel yang manis, dengan bunga lembut dan vanila. Manis dan hangat."
+regular,ungu-blackcurrant,Ungu Blackcurrant,Parfum & Wewangian,sweet,fresh,3000,1500,,,ungu-blackcurrant,Ungu Blackcurrant,ungu-blackcurrant.jpg,wanita,kantor;malam;acara,"Buah blackcurrant dan mawar, lalu vanila dan kayu yang hangat. Anggun dan percaya diri."
+regular,ungu-cendana,Ungu Cendana,Parfum & Wewangian,sweet,woody,3000,1500,,,ungu-cendana,Ungu Cendana,ungu-cendana.jpg,wanita,kantor;malam;acara,"Lavender yang lembut bertemu vanila dan kayu cendana. Manis, hangat, dan elegan untuk malam hari."
+regular,ungu-ceri,Ungu Ceri,Parfum & Wewangian,sweet,musk,3000,1500,,,ungu-ceri,Ungu Ceri,ungu-ceri.jpg,wanita,malam;acara;santai,"Ceri gelap dan plum yang manis, dengan anggrek dan vanila. Manis menggoda untuk malam hari."
+regular,vanilla-coconut,Vanilla Coconut,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-coconut,Coconut,vanilla: coconut & vanilla ice & popcorn.jpeg,wanita,santai,"Vanila lembut dengan kelapa yang creamy, seperti santan manis."
+regular,vanilla-ice,Vanilla Ice,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-vanilla-ice,Vanilla Ice,vanilla: coconut & vanilla ice & popcorn.jpeg,wanita,santai,"Vanila yang lembut dan dingin, seperti es krim."
+regular,vanilla-popcorn,Vanilla Popcorn,Parfum & Wewangian,creamy,sweet,3000,1500,,,vanilla-popcorn,Popcorn,vanilla: coconut & vanilla ice & popcorn.jpeg,wanita,santai,Vanila hangat dengan karamel dan popcorn yang gurih manis.

@@ -145,7 +145,7 @@ def keputusan(status, dipilih, setuju, lama, lap, label):
     if status == "aman":
         return None
     if setuju not in ("ya", "ganti"):
-        lap.peringatan.append(f"{label}: belum diputuskan (kolom Setuju? kosong), nama lama dipakai dulu")
+        lap.peringatan.append(f"{label}: belum diputuskan (kolom Setuju? kosong), nama di CSV tidak diubah")
         return None
     if not dipilih or norm(dipilih) == norm(lama):
         return None
@@ -153,6 +153,14 @@ def keputusan(status, dipilih, setuju, lama, lap, label):
         lap.galat.append(f"{label}: nama {dipilih!r} belum lengkap")
         return None
     return " ".join(dipilih.split())
+
+
+def rantai(peta, code):
+    dilewati = set()
+    while code in peta and code not in dilewati:
+        dilewati.add(code)
+        code = peta[code]
+    return code
 
 
 def cocok_untuk(row, lap, label):
@@ -192,6 +200,7 @@ def main():
             wangian.header.append(h)
 
     lap = Laporan()
+    riwayat = {r["code_lama"]: r["code_baru"] for r in ganti.rows if r.get("jenis") == "produk"}
     by_name = {}
     for r in wangian.rows:
         by_name.setdefault((norm(r["group"]), norm(r["grade"])), []).append(r)
@@ -205,14 +214,21 @@ def main():
         no, lama, grade = nomor(x.get("no.")), x.get("nama sekarang", ""), norm(x.get("grade"))
         label = f"No. {no} {lama}"
         rows = by_name.get((norm(lama), grade))
+        if not rows:
+            awal = [slugify(lama) + "-exclusive", slugify(lama)] if grade == "exclusive" else [slugify(lama)]
+            for c in awal:
+                kini = rantai(riwayat, c)
+                rows = [r for r in wangian.rows if r["group_code"] == kini and norm(r["grade"]) == grade] if kini != c else []
+                if rows:
+                    break
         baru = keputusan(x.get("status nama"), x.get("nama dipilih"), x.get("setuju"), lama, lap, label)
         if norm(x.get("setuju")) in ("ya", "ganti"):
             diputuskan += 1
         if not rows and baru:
             rows = by_name.get((norm(baru), grade))
-            if rows:
-                lap.info.append(f"{label}: sudah bernama {baru!r} di wangian.csv")
-                baru = None
+        if rows and baru and norm(baru) == norm(rows[0]["group"]):
+            lap.info.append(f"{label}: sudah bernama {baru!r} di wangian.csv")
+            baru = None
         if not rows:
             lap.galat.append(f"{label} ({grade}): tidak ditemukan di wangian.csv")
             continue
@@ -243,8 +259,8 @@ def main():
         if not code:
             lap.galat.append(f"{label}: nama baru {baru!r} tidak menghasilkan code")
             continue
-        r = rows[0]
-        produk_ganti.append((label, r["group_code"], code, "perfume"))
+        if code != rows[0]["group_code"]:
+            produk_ganti.append((label, rows[0]["group_code"], code, "perfume"))
         for r in rows:
             scent = code if len(rows) == 1 else f"{code}-{slugify(r['varian'])}"
             if r["code"] != scent:
@@ -267,6 +283,14 @@ def main():
         if not baru:
             continue
         codes = umum_by_name.get(norm(lama))
+        if not codes:
+            kini = rantai(riwayat, slugify(lama))
+            nama_kini = {norm(r["product_name"]) for r in umum.rows if r["product_code"] == kini}
+            if kini != slugify(lama) and nama_kini:
+                codes = {kini}
+                if norm(baru) in nama_kini:
+                    lap.info.append(f"{label}: sudah bernama {baru!r} di produk_umum.csv")
+                    continue
         if not codes and umum_by_name.get(norm(baru)):
             lap.info.append(f"{label}: sudah bernama {baru!r} di produk_umum.csv")
             continue
@@ -278,6 +302,11 @@ def main():
             lap.galat.append(f"{label}: nama baru {baru!r} masih memuat kata dari nama lama: {', '.join(sorted(bocor))}")
             continue
         lama_code, code = next(iter(codes)), slugify(baru)
+        if code == lama_code:
+            for r in umum.rows:
+                if r["product_code"] == lama_code:
+                    r["product_name"] = baru
+            continue
         for r in umum.rows:
             if r["product_code"] == lama_code:
                 r["product_code"], r["product_name"] = code, baru

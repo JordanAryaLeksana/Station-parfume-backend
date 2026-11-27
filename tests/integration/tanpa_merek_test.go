@@ -84,7 +84,10 @@ func TestAudienceOccasions(t *testing.T) {
 	r = call(t, "GET", "/api/v1/products/lavender", "", nil)
 	check(t, "seed mengisi untuk, cocok untuk, deskripsi dari CSV", r.Data()["audience"] == "unisex" &&
 		slices.Equal(strs(r.Data()["occasions"]), []string{"santai", "ibadah"}) && r.Data()["description"] == desc, string(r.Raw))
-	if _, err := seeders.SeedCatalog(config.DB, seedData(t), false); err != nil {
+	data = seedData(t)
+	row = scentRow(t, data, "lavender")
+	row.Audience, row.Occasions, row.Description = nil, nil, nil
+	if _, err := seeders.SeedCatalog(config.DB, data, false); err != nil {
 		t.Fatal(err)
 	}
 	r = call(t, "GET", "/api/v1/products/lavender", "", nil)
